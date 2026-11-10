@@ -405,7 +405,7 @@ private fun ScannerOverlay(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Align barcode inside frame to scan & fetch data",
+                        text = "Align barcode inside frame to scan exact barcode number",
                         color = Color.White,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold
@@ -454,4 +454,56 @@ private fun ScannerOverlay(
             }
         }
     }
+}
+
+/**
+ * Accurately extracts the exact digits / characters printed on the physical barcode.
+ * Handles UPC-E expansion suppression, UPC-A 12-digit preservation, EAN-13 padding avoidance,
+ * and Code 128 / Code 39 formatting.
+ */
+internal fun extractExactBarcodeNumber(barcode: Barcode): String? {
+    val display = barcode.displayValue?.trim()
+    val raw = barcode.rawValue?.trim()
+
+    val candidate = when (barcode.format) {
+        Barcode.FORMAT_UPC_E -> {
+            // UPC-E is printed with 8 digits (or 6 digits compressed) on retail packaging.
+            // ML Kit displayValue holds the exact digits physically printed on the package.
+            if (!display.isNullOrBlank() && (display.length == 8 || display.length == 6)) {
+                display
+            } else if (!raw.isNullOrBlank() && (raw.length == 8 || raw.length == 6)) {
+                raw
+            } else {
+                display?.ifBlank { null } ?: raw
+            }
+        }
+        Barcode.FORMAT_UPC_A -> {
+            // Standard UPC-A is 12 digits.
+            // If ML Kit or system bridge promoted it to 13 digits with a leading "0", preserve the exact 12-digit UPC.
+            if (raw != null && raw.length == 13 && raw.startsWith("0")) {
+                raw.substring(1)
+            } else if (display != null && display.length == 13 && display.startsWith("0")) {
+                display.substring(1)
+            } else {
+                display?.ifBlank { null } ?: raw
+            }
+        }
+        Barcode.FORMAT_EAN_13 -> {
+            // If display is 12 digits (UPC-A) while raw was padded with leading 0 to 13 digits,
+            // the printed barcode is the 12-digit UPC-A.
+            if (!display.isNullOrBlank() && display.length == 12 && raw != null && raw.length == 13 && raw.startsWith("0")) {
+                display
+            } else {
+                display?.ifBlank { null } ?: raw
+            }
+        }
+        Barcode.FORMAT_EAN_8 -> {
+            display?.ifBlank { null } ?: raw
+        }
+        else -> {
+            display?.ifBlank { null } ?: raw
+        }
+    }
+
+    return candidate?.trim()?.ifBlank { null }
 }

@@ -431,11 +431,10 @@ fun InventoryDashboardScreen(
                             ScannerTarget.DASHBOARD_SCAN -> {
                                 val cleanSku = scannedSku.trim()
                                 val cleanNoZeros = cleanSku.trimStart('0')
-                                val localMatch = uiState.products.find { p ->
-                                    val pSku = p.sku.trim()
-                                    pSku.equals(cleanSku, ignoreCase = true) ||
-                                            (cleanNoZeros.isNotBlank() && pSku.trimStart('0').equals(cleanNoZeros, ignoreCase = true))
-                                }
+                                val exactMatch = uiState.products.find { it.sku.trim().equals(cleanSku, ignoreCase = true) }
+                                val localMatch = exactMatch ?: if (cleanNoZeros.isNotBlank()) {
+                                    uiState.products.find { it.sku.trim().trimStart('0').equals(cleanNoZeros, ignoreCase = true) }
+                                } else null
                                 viewModel.onSkuScanned(scannedSku)
                                 scannerTarget = ScannerTarget.NONE
 

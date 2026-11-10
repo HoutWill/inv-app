@@ -32,11 +32,14 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -320,10 +323,24 @@ fun ProductDetailsBottomSheet(
                 }
 
                 // Fields
+                val isEditNameError = editName.isBlank()
                 OutlinedTextField(
                     value = editName,
                     onValueChange = { editName = it },
-                    label = { Text("Product Name *") },
+                    label = {
+                        Text(
+                            buildAnnotatedString {
+                                append("Product Name ")
+                                withStyle(SpanStyle(color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)) {
+                                    append("*")
+                                }
+                            }
+                        )
+                    },
+                    isError = isEditNameError,
+                    supportingText = if (isEditNameError) {
+                        { Text("Product Name is required *", color = Color(0xFFEF4444), style = MaterialTheme.typography.labelSmall) }
+                    } else null,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true

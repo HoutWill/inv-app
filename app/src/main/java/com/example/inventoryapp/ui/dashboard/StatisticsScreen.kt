@@ -149,67 +149,36 @@ fun StatisticsScreen(
         }
     }
 
-    // Dynamic Sales, Spend, and Units
-    val (dynamicSales, dynamicSpend, itemsSold) = remember(periodTransactions, dateFilterType, totalValue, productMap, productSkuMap) {
+    // Dynamic Sales, Spend, and Units from real transactions
+    val (dynamicSales, dynamicSpend, itemsSold) = remember(periodTransactions, productMap, productSkuMap) {
         val salesFromTx = periodTransactions
             .filter { it.quantityDelta < 0 || it.transactionType.contains("OUT", ignoreCase = true) }
             .sumOf { tx ->
                 val prod = productMap[tx.productId] ?: productSkuMap[tx.sku]
-                val unitPrice = if (prod != null && prod.sellingPrice > 0) prod.sellingPrice else 19.99
+                val unitPrice = prod?.sellingPrice ?: 0.0
                 abs(tx.quantityDelta) * unitPrice
             }
         val spendFromTx = periodTransactions
             .filter { it.quantityDelta > 0 || it.transactionType.contains("IN", ignoreCase = true) }
             .sumOf { tx ->
                 val prod = productMap[tx.productId] ?: productSkuMap[tx.sku]
-                val unitCost = if (prod != null && prod.costPrice > 0) prod.costPrice else 12.00
+                val unitCost = prod?.costPrice ?: 0.0
                 abs(tx.quantityDelta) * unitCost
             }
         val unitsSoldFromTx = periodTransactions
             .filter { it.quantityDelta < 0 || it.transactionType.contains("OUT", ignoreCase = true) }
             .sumOf { abs(it.quantityDelta) }
 
-        when (dateFilterType) {
-            DateFilterType.ALL_TIME -> {
-                val s = if (salesFromTx > 0) salesFromTx else (totalValue * 1.5).coerceAtLeast(14500.0)
-                val sp = if (spendFromTx > 0) spendFromTx else 4200.00
-                val u = if (unitsSoldFromTx > 0) unitsSoldFromTx else (totalItems * 3).coerceAtLeast(450)
-                Triple(s, sp, u)
-            }
-            DateFilterType.TODAY -> {
-                val s = if (salesFromTx > 0) salesFromTx else 420.50
-                val sp = if (spendFromTx > 0) spendFromTx else 110.00
-                val u = if (unitsSoldFromTx > 0) unitsSoldFromTx else 18
-                Triple(s, sp, u)
-            }
-            DateFilterType.CUSTOM_DATE -> {
-                val s = if (salesFromTx > 0) salesFromTx else 315.00
-                val sp = if (spendFromTx > 0) spendFromTx else 90.00
-                val u = if (unitsSoldFromTx > 0) unitsSoldFromTx else 14
-                Triple(s, sp, u)
-            }
-            DateFilterType.THIS_WEEK -> {
-                val s = 2450.00 + salesFromTx
-                val sp = 680.00 + spendFromTx
-                val u = 104 + unitsSoldFromTx
-                Triple(s, sp, u)
-            }
-            DateFilterType.THIS_MONTH -> {
-                val s = 6280.50 + salesFromTx
-                val sp = 1530.00 + spendFromTx
-                val u = 276 + unitsSoldFromTx
-                Triple(s, sp, u)
-            }
-        }
+        Triple(salesFromTx, spendFromTx, unitsSoldFromTx)
     }
 
-    // Filtered & Sorted Expense Items
-    val periodExpenses = remember(periodTransactions, selectedCalendar.timeInMillis, dateFilterType, productMap, productSkuMap) {
-        val expenses = periodTransactions
+    // Filtered & Sorted Expense Items from real transactions
+    val periodExpenses = remember(periodTransactions, productMap, productSkuMap) {
+        periodTransactions
             .filter { it.quantityDelta > 0 || it.transactionType.contains("IN", ignoreCase = true) }
             .map { tx ->
                 val prod = productMap[tx.productId] ?: productSkuMap[tx.sku]
-                val unitCost = if (prod != null && prod.costPrice > 0) prod.costPrice else 12.00
+                val unitCost = prod?.costPrice ?: 0.0
                 val totalExpense = abs(tx.quantityDelta) * unitCost
                 ExpenseReportItem(
                     id = tx.id,
@@ -222,41 +191,6 @@ fun StatisticsScreen(
                     note = tx.note
                 )
             }
-
-        if (expenses.isEmpty()) {
-            val baseTime = selectedCalendar.timeInMillis
-            listOf(
-                ExpenseReportItem(
-                    id = "seed_exp_1",
-                    productName = "The Compound Effect",
-                    category = "Books",
-                    quantity = 15,
-                    unitCost = 12.00,
-                    totalExpense = 180.00,
-                    timestamp = baseTime - 3600000L * 2
-                ),
-                ExpenseReportItem(
-                    id = "seed_exp_2",
-                    productName = "Paper Towels Ultra",
-                    category = "Cleaning",
-                    quantity = 20,
-                    unitCost = 16.50,
-                    totalExpense = 330.00,
-                    timestamp = baseTime - 3600000L * 8
-                ),
-                ExpenseReportItem(
-                    id = "seed_exp_3",
-                    productName = "Cooking Oil 5L Cans",
-                    category = "Pantry",
-                    quantity = 8,
-                    unitCost = 28.00,
-                    totalExpense = 224.00,
-                    timestamp = baseTime - 3600000L * 22
-                )
-            )
-        } else {
-            expenses
-        }
     }
 
     val sortedExpenses = remember(periodExpenses, expenseSortDescending) {
@@ -268,7 +202,7 @@ fun StatisticsScreen(
     }
 
     // Dynamic Chart Points (Adapts to All Date Filters: Weekly, Monthly, All Dates, Today)
-    val chartPoints = remember(transactions, selectedCalendar.timeInMillis, dateFilterType) {
+    val chartPoints = remember(transactions, selectedCalendar.timeInMillis, dateFilterType, productMap) {
         val cal = (selectedCalendar.clone() as Calendar)
         val points = mutableListOf<DayExpenseSalesPoint>()
         var maxSpend = 1.0
@@ -296,16 +230,15 @@ fun StatisticsScreen(
                                 txCal.get(Calendar.DAY_OF_YEAR) == dayCal.get(Calendar.DAY_OF_YEAR)
                     }
 
-                    var daySpend = dayTx.filter { it.quantityDelta > 0 }.sumOf { it.quantityDelta * 12.0 }
-                    var daySales = dayTx.filter { it.quantityDelta < 0 }.sumOf { abs(it.quantityDelta) * 19.99 }
-                    val realSalesCount = dayTx.count { it.quantityDelta < 0 || it.transactionType.contains("OUT", ignoreCase = true) }
-
-                    if (daySpend == 0.0 && daySales == 0.0) {
-                        daySpend = listOf(140.0, 320.0, 95.0, 480.0, 260.0, 520.0, 180.0)[i]
-                        daySales = listOf(350.0, 580.0, 290.0, 720.0, 490.0, 890.0, 410.0)[i]
+                    val daySpend = dayTx.filter { it.quantityDelta > 0 }.sumOf {
+                        val cost = productMap[it.productId]?.costPrice ?: 0.0
+                        it.quantityDelta * cost
                     }
-
-                    val finalSalesCount = if (realSalesCount > 0) realSalesCount else listOf(2, 4, 1, 5, 3, 6, 2)[i]
+                    val daySales = dayTx.filter { it.quantityDelta < 0 }.sumOf {
+                        val price = productMap[it.productId]?.sellingPrice ?: 0.0
+                        abs(it.quantityDelta) * price
+                    }
+                    val realSalesCount = dayTx.count { it.quantityDelta < 0 || it.transactionType.contains("OUT", ignoreCase = true) }
 
                     if (daySpend > maxSpend) maxSpend = daySpend
                     if (daySales > maxSales) maxSales = daySales
@@ -318,7 +251,7 @@ fun StatisticsScreen(
                             salesAmount = daySales,
                             spendFraction = 0f,
                             salesFraction = 0f,
-                            salesCount = finalSalesCount,
+                            salesCount = realSalesCount,
                             isHighlighted = isCurrentOrSelected
                         )
                     )
@@ -343,7 +276,7 @@ fun StatisticsScreen(
                     weekBuckets.add(Triple("W5", "29-$maxDaysInMonth", 29..maxDaysInMonth))
                 }
 
-                weekBuckets.forEachIndexed { idx, (wLabel, dateRangeStr, range) ->
+                weekBuckets.forEach { (wLabel, dateRangeStr, range) ->
                     val isHighlighted = isCurrentMonth && currentDayOfMonth in range
 
                     val weekTx = transactions.filter { tx ->
@@ -353,46 +286,31 @@ fun StatisticsScreen(
                                 txCal.get(Calendar.DAY_OF_MONTH) in range
                     }
 
-                    var weekSpend = weekTx.filter { it.quantityDelta > 0 }.sumOf { it.quantityDelta * 12.0 }
-                    var weekSales = weekTx.filter { it.quantityDelta < 0 }.sumOf { abs(it.quantityDelta) * 19.99 }
-                    val realSalesCount = weekTx.count { it.quantityDelta < 0 || it.transactionType.contains("OUT", ignoreCase = true) }
-
-                    if (weekSpend == 0.0 && weekSales == 0.0) {
-                        val seedSpends = listOf(380.0, 520.0, 410.0, 680.0, 310.0)
-                        val seedSales = listOf(1250.0, 1840.0, 1420.0, 2180.0, 950.0)
-                        val seedCounts = listOf(14, 22, 18, 28, 12)
-                        weekSpend = seedSpends.getOrElse(idx) { 350.0 }
-                        weekSales = seedSales.getOrElse(idx) { 1100.0 }
-                        val seedCount = seedCounts.getOrElse(idx) { 15 }
-                        points.add(
-                            DayExpenseSalesPoint(
-                                dayLabel = wLabel,
-                                dateLabel = dateRangeStr,
-                                spendAmount = weekSpend,
-                                salesAmount = weekSales,
-                                spendFraction = 0f,
-                                salesFraction = 0f,
-                                salesCount = if (realSalesCount > 0) realSalesCount else seedCount,
-                                isHighlighted = isHighlighted
-                            )
-                        )
-                    } else {
-                        points.add(
-                            DayExpenseSalesPoint(
-                                dayLabel = wLabel,
-                                dateLabel = dateRangeStr,
-                                spendAmount = weekSpend,
-                                salesAmount = weekSales,
-                                spendFraction = 0f,
-                                salesFraction = 0f,
-                                salesCount = realSalesCount,
-                                isHighlighted = isHighlighted
-                            )
-                        )
+                    val weekSpend = weekTx.filter { it.quantityDelta > 0 }.sumOf {
+                        val cost = productMap[it.productId]?.costPrice ?: 0.0
+                        it.quantityDelta * cost
                     }
+                    val weekSales = weekTx.filter { it.quantityDelta < 0 }.sumOf {
+                        val price = productMap[it.productId]?.sellingPrice ?: 0.0
+                        abs(it.quantityDelta) * price
+                    }
+                    val realSalesCount = weekTx.count { it.quantityDelta < 0 || it.transactionType.contains("OUT", ignoreCase = true) }
 
                     if (weekSpend > maxSpend) maxSpend = weekSpend
                     if (weekSales > maxSales) maxSales = weekSales
+
+                    points.add(
+                        DayExpenseSalesPoint(
+                            dayLabel = wLabel,
+                            dateLabel = dateRangeStr,
+                            spendAmount = weekSpend,
+                            salesAmount = weekSales,
+                            spendFraction = 0f,
+                            salesFraction = 0f,
+                            salesCount = realSalesCount,
+                            isHighlighted = isHighlighted
+                        )
+                    )
                 }
             }
 
@@ -415,52 +333,35 @@ fun StatisticsScreen(
                         txCal.get(Calendar.YEAR) == mYear && txCal.get(Calendar.MONTH) == mMonth
                     }
 
-                    var mSpend = mTx.filter { it.quantityDelta > 0 }.sumOf { it.quantityDelta * 12.0 }
-                    var mSales = mTx.filter { it.quantityDelta < 0 }.sumOf { abs(it.quantityDelta) * 19.99 }
-                    val realSalesCount = mTx.count { it.quantityDelta < 0 || it.transactionType.contains("OUT", ignoreCase = true) }
-
-                    if (mSpend == 0.0 && mSales == 0.0) {
-                        val seedSpends = listOf(1200.0, 1650.0, 1400.0, 1850.0, 2100.0, 1530.0)
-                        val seedSales = listOf(4500.0, 5800.0, 5100.0, 6900.0, 7800.0, 6280.0)
-                        val seedCounts = listOf(58, 74, 66, 89, 95, 82)
-                        val idx = 5 - offset
-                        mSpend = seedSpends.getOrElse(idx) { 1500.0 }
-                        mSales = seedSales.getOrElse(idx) { 5500.0 }
-                        val seedCount = seedCounts.getOrElse(idx) { 70 }
-                        points.add(
-                            DayExpenseSalesPoint(
-                                dayLabel = mLabel,
-                                dateLabel = yrLabel,
-                                spendAmount = mSpend,
-                                salesAmount = mSales,
-                                spendFraction = 0f,
-                                salesFraction = 0f,
-                                salesCount = if (realSalesCount > 0) realSalesCount else seedCount,
-                                isHighlighted = isCurrent
-                            )
-                        )
-                    } else {
-                        points.add(
-                            DayExpenseSalesPoint(
-                                dayLabel = mLabel,
-                                dateLabel = yrLabel,
-                                spendAmount = mSpend,
-                                salesAmount = mSales,
-                                spendFraction = 0f,
-                                salesFraction = 0f,
-                                salesCount = realSalesCount,
-                                isHighlighted = isCurrent
-                            )
-                        )
+                    val mSpend = mTx.filter { it.quantityDelta > 0 }.sumOf {
+                        val cost = productMap[it.productId]?.costPrice ?: 0.0
+                        it.quantityDelta * cost
                     }
+                    val mSales = mTx.filter { it.quantityDelta < 0 }.sumOf {
+                        val price = productMap[it.productId]?.sellingPrice ?: 0.0
+                        abs(it.quantityDelta) * price
+                    }
+                    val realSalesCount = mTx.count { it.quantityDelta < 0 || it.transactionType.contains("OUT", ignoreCase = true) }
 
                     if (mSpend > maxSpend) maxSpend = mSpend
                     if (mSales > maxSales) maxSales = mSales
+
+                    points.add(
+                        DayExpenseSalesPoint(
+                            dayLabel = mLabel,
+                            dateLabel = yrLabel,
+                            spendAmount = mSpend,
+                            salesAmount = mSales,
+                            spendFraction = 0f,
+                            salesFraction = 0f,
+                            salesCount = realSalesCount,
+                            isHighlighted = isCurrent
+                        )
+                    )
                 }
             }
 
             DateFilterType.TODAY, DateFilterType.CUSTOM_DATE -> {
-                // Breakdown into 5 time windows across the selected day:
                 val targetYear = cal.get(Calendar.YEAR)
                 val targetDay = cal.get(Calendar.DAY_OF_YEAR)
                 val timeWindows = listOf(
@@ -479,59 +380,45 @@ fun StatisticsScreen(
                                 txCal.get(Calendar.HOUR_OF_DAY) in hourRange
                     }
 
-                    var slotSpend = slotTx.filter { it.quantityDelta > 0 }.sumOf { it.quantityDelta * 12.0 }
-                    var slotSales = slotTx.filter { it.quantityDelta < 0 }.sumOf { abs(it.quantityDelta) * 19.99 }
-                    val realSalesCount = slotTx.count { it.quantityDelta < 0 || it.transactionType.contains("OUT", ignoreCase = true) }
-
-                    if (slotSpend == 0.0 && slotSales == 0.0) {
-                        val seedSpends = listOf(35.0, 90.0, 20.0, 110.0, 45.0)
-                        val seedSales = listOf(85.0, 160.0, 120.0, 240.0, 95.0)
-                        val seedCounts = listOf(1, 3, 2, 4, 2)
-                        slotSpend = seedSpends[idx]
-                        slotSales = seedSales[idx]
-                        points.add(
-                            DayExpenseSalesPoint(
-                                dayLabel = timeLabel,
-                                dateLabel = descLabel,
-                                spendAmount = slotSpend,
-                                salesAmount = slotSales,
-                                spendFraction = 0f,
-                                salesFraction = 0f,
-                                salesCount = if (realSalesCount > 0) realSalesCount else seedCounts[idx],
-                                isHighlighted = idx == 2
-                            )
-                        )
-                    } else {
-                        points.add(
-                            DayExpenseSalesPoint(
-                                dayLabel = timeLabel,
-                                dateLabel = descLabel,
-                                spendAmount = slotSpend,
-                                salesAmount = slotSales,
-                                spendFraction = 0f,
-                                salesFraction = 0f,
-                                salesCount = realSalesCount,
-                                isHighlighted = idx == 2
-                            )
-                        )
+                    val slotSpend = slotTx.filter { it.quantityDelta > 0 }.sumOf {
+                        val cost = productMap[it.productId]?.costPrice ?: 0.0
+                        it.quantityDelta * cost
                     }
+                    val slotSales = slotTx.filter { it.quantityDelta < 0 }.sumOf {
+                        val price = productMap[it.productId]?.sellingPrice ?: 0.0
+                        abs(it.quantityDelta) * price
+                    }
+                    val realSalesCount = slotTx.count { it.quantityDelta < 0 || it.transactionType.contains("OUT", ignoreCase = true) }
 
                     if (slotSpend > maxSpend) maxSpend = slotSpend
                     if (slotSales > maxSales) maxSales = slotSales
+
+                    points.add(
+                        DayExpenseSalesPoint(
+                            dayLabel = timeLabel,
+                            dateLabel = descLabel,
+                            spendAmount = slotSpend,
+                            salesAmount = slotSales,
+                            spendFraction = 0f,
+                            salesFraction = 0f,
+                            salesCount = realSalesCount,
+                            isHighlighted = idx == 2
+                        )
+                    )
                 }
             }
         }
 
-        val maxVal = maxOf(maxSpend, maxSales, 100.0)
+        val maxVal = maxOf(maxSpend, maxSales, 1.0)
         points.map { p ->
             p.copy(
-                spendFraction = (p.spendAmount / maxVal).toFloat().coerceIn(0.12f, 1f),
-                salesFraction = (p.salesAmount / maxVal).toFloat().coerceIn(0.12f, 1f)
+                spendFraction = if (maxVal > 0 && p.spendAmount > 0) (p.spendAmount / maxVal).toFloat().coerceIn(0.05f, 1f) else 0f,
+                salesFraction = if (maxVal > 0 && p.salesAmount > 0) (p.salesAmount / maxVal).toFloat().coerceIn(0.05f, 1f) else 0f
             )
         }
     }
 
-    val targetProgress = if (salesTarget > 0) (dynamicSales / salesTarget).toFloat().coerceIn(0f, 1f) else 0f
+    val targetProgress = if (salesTarget > 0 && dynamicSales > 0) (dynamicSales / salesTarget).toFloat().coerceIn(0f, 1f) else 0f
     val targetPercentage = if (salesTarget > 0) ((dynamicSales / salesTarget) * 100).toInt() else 0
     val targetStatus = when {
         targetPercentage >= 100 -> "Achieved 🎉"
@@ -544,14 +431,10 @@ fun StatisticsScreen(
         else -> NawanoRose
     }
 
-    // ABC Categorization
+    // ABC Categorization from real inventory products
     val abcItems = remember(products) {
         if (products.isEmpty()) {
-            listOf(
-                AbcItemData("Class A", "The Compound Effect", "Darren Hardy", "41 pcs", "$819.59", false),
-                AbcItemData("Class B", "Paper towels Ultra", "Paseo Cleaning", "10 pcs", "$299.90", true),
-                AbcItemData("Class C", "Coca-Cola Classic Can", "Beverage Corp", "48 pcs", "$95.52", false)
-            )
+            emptyList<AbcItemData>()
         } else {
             val sorted = products.sortedByDescending { it.quantity * it.sellingPrice }
             val totalCatValue = sorted.sumOf { it.quantity * it.sellingPrice }.coerceAtLeast(1.0)
@@ -1000,9 +883,18 @@ fun StatisticsScreen(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 // Compact List of Expense Items (No Visual Overload)
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    sortedExpenses.take(3).forEach { expense ->
-                        MinimalExpenseRowItem(expense = expense)
+                if (sortedExpenses.isEmpty()) {
+                    Text(
+                        text = "No expense activity recorded for this period.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        sortedExpenses.take(3).forEach { expense ->
+                            MinimalExpenseRowItem(expense = expense)
+                        }
                     }
                 }
             }
@@ -1040,14 +932,31 @@ fun StatisticsScreen(
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            abcItems.take(6).forEach { item ->
-                AbcAnalysisCard(item = item)
+        if (abcItems.isEmpty()) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "No products registered for ABC analysis yet.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp),
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                abcItems.take(6).forEach { item ->
+                    AbcAnalysisCard(item = item)
+                }
             }
         }
 

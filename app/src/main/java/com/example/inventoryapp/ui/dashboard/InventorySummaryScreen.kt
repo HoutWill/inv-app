@@ -226,7 +226,7 @@ fun InventorySummaryScreen(
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        val displayQty = if (totalItems > 0) totalItems else 1842
+                        val displayQty = totalItems
                         Text(
                             text = String.format(Locale.US, "%,d Pcs", displayQty),
                             style = MaterialTheme.typography.titleLarge,
@@ -291,7 +291,7 @@ fun InventorySummaryScreen(
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        val displayVal = if (totalValue > 0) totalValue else 28450.0
+                        val displayVal = totalValue
                         Text(
                             text = String.format(Locale.US, "$%,.2f", displayVal),
                             style = MaterialTheme.typography.titleLarge,
@@ -320,8 +320,16 @@ fun InventorySummaryScreen(
             }
 
             // ----------------------------------------------------
-            // 2. 3 Best Selling Items (Canvas Donut Chart)
+            // 2. Top Stock Items (Canvas Donut Chart)
             // ----------------------------------------------------
+            val topProducts = remember(products) {
+                products.sortedByDescending { it.quantity }.take(3)
+            }
+            val topTotalQty = remember(topProducts) {
+                topProducts.sumOf { it.quantity }
+            }
+            val sliceColors = listOf(Color(0xFF7871F8), Color(0xFFD6A5FD), Color(0xFF67E8F9))
+
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(22.dp),
@@ -337,7 +345,7 @@ fun InventorySummaryScreen(
                     ) {
                         Column {
                             Text(
-                                text = "3 Best Selling Items",
+                                text = "Top Stock Items",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -367,100 +375,93 @@ fun InventorySummaryScreen(
 
                     Spacer(modifier = Modifier.height(18.dp))
 
-                    // Donut Chart + Legend Container
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Canvas Donut Chart
+                    if (topProducts.isEmpty()) {
                         Box(
                             modifier = Modifier
-                                .size(130.dp)
-                                .padding(4.dp),
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Canvas(modifier = Modifier.fillMaxSize()) {
-                                val strokeWidth = 22.dp.toPx()
-                                val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
-                                val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
-
-                                // Slices: Karaage (50% = 180 deg), Beef Gyudon (28% = 100.8 deg), Chicken Katsu (22% = 79.2 deg)
-                                // S1: Chicken Karaage (Violet #7871F8)
-                                drawArc(
-                                    color = Color(0xFF7871F8),
-                                    startAngle = -90f,
-                                    sweepAngle = 176f,
-                                    useCenter = false,
-                                    topLeft = topLeft,
-                                    size = arcSize,
-                                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                                )
-
-                                // S2: Beef Gyudon (Light Purple #D6A5FD)
-                                drawArc(
-                                    color = Color(0xFFD6A5FD),
-                                    startAngle = 90f,
-                                    sweepAngle = 98f,
-                                    useCenter = false,
-                                    topLeft = topLeft,
-                                    size = arcSize,
-                                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                                )
-
-                                // S3: Chicken Katsu (Cyan #67E8F9)
-                                drawArc(
-                                    color = Color(0xFF67E8F9),
-                                    startAngle = 192f,
-                                    sweepAngle = 74f,
-                                    useCenter = false,
-                                    topLeft = topLeft,
-                                    size = arcSize,
-                                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                                )
-                            }
-
-                            // Center label
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Top 3",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = "100%",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
+                            Text(
+                                text = "No products registered yet.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        // Donut Chart Legend
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                    } else {
+                        // Donut Chart + Legend Container
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            DonutLegendItem(
-                                color = Color(0xFF7871F8),
-                                title = "Chicken Karaage",
-                                percentage = "50%",
-                                units = "920 sold"
-                            )
-                            DonutLegendItem(
-                                color = Color(0xFFD6A5FD),
-                                title = "Beef Gyudon",
-                                percentage = "28%",
-                                units = "516 sold"
-                            )
-                            DonutLegendItem(
-                                color = Color(0xFF67E8F9),
-                                title = "Chicken Katsu",
-                                percentage = "22%",
-                                units = "406 sold"
-                            )
+                            // Canvas Donut Chart
+                            Box(
+                                modifier = Modifier
+                                    .size(130.dp)
+                                    .padding(4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Canvas(modifier = Modifier.fillMaxSize()) {
+                                    val strokeWidth = 22.dp.toPx()
+                                    val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
+                                    val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
+
+                                    var currentAngle = -90f
+                                    val totalQty = topTotalQty.coerceAtLeast(1)
+
+                                    topProducts.forEachIndexed { index, item ->
+                                        val sweep = (item.quantity.toFloat() / totalQty) * 360f
+                                        val color = sliceColors.getOrElse(index) { NawanoPrimary200 }
+                                        if (sweep > 0f) {
+                                            drawArc(
+                                                color = color,
+                                                startAngle = currentAngle,
+                                                sweepAngle = (sweep - 4f).coerceAtLeast(1f),
+                                                useCenter = false,
+                                                topLeft = topLeft,
+                                                size = arcSize,
+                                                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                                            )
+                                            currentAngle += sweep
+                                        }
+                                    }
+                                }
+
+                                // Center label
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "Top ${topProducts.size}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "$topTotalQty",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(16.dp))
+
+                            // Donut Chart Legend
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                val totalQty = topTotalQty.coerceAtLeast(1)
+                                topProducts.forEachIndexed { index, item ->
+                                    val pct = ((item.quantity.toDouble() / totalQty) * 100).toInt()
+                                    DonutLegendItem(
+                                        color = sliceColors.getOrElse(index) { NawanoPrimary200 },
+                                        title = item.name,
+                                        percentage = "$pct%",
+                                        units = "${item.quantity} in stock"
+                                    )
+                                }
+                            }
                         }
                     }
                 }

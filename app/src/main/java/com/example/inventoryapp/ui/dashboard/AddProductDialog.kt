@@ -22,9 +22,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.data.remote.BarcodeLookupService
@@ -75,6 +79,7 @@ fun AddProductDialog(
     var imageUri by remember { mutableStateOf(initialDraft.imageUri) }
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var hasAttemptedSubmit by remember { mutableStateOf(false) }
     var isFetchingOnline by remember { mutableStateOf(false) }
     var onlineFetchSuccessNote by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
@@ -231,7 +236,38 @@ fun AddProductDialog(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Required Fields Indicator Note
+            Surface(
+                color = Color(0xFFEF4444).copy(alpha = 0.08f),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.25f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "*",
+                        color = Color(0xFFEF4444),
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 16.sp
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Required fields are marked with red asterisk (*)",
+                        color = Color(0xFFDC2626),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Online Fetching Spinner Banner
             if (isFetchingOnline) {
@@ -468,6 +504,8 @@ fun AddProductDialog(
             )
             Spacer(modifier = Modifier.height(14.dp))
 
+            val isSkuError = hasAttemptedSubmit && sku.isBlank()
+
             // SKU Field with Camera Scan and Online Fetch buttons
             OutlinedTextField(
                 value = sku,
@@ -476,7 +514,20 @@ fun AddProductDialog(
                     errorMessage = null
                     onlineFetchSuccessNote = null
                 },
-                label = { Text("SKU Barcode Code *") },
+                label = {
+                    Text(
+                        buildAnnotatedString {
+                            append("SKU Barcode Code ")
+                            withStyle(SpanStyle(color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)) {
+                                append("*")
+                            }
+                        }
+                    )
+                },
+                isError = isSkuError,
+                supportingText = if (isSkuError) {
+                    { Text("SKU Barcode is required *", color = Color(0xFFEF4444), style = MaterialTheme.typography.labelSmall) }
+                } else null,
                 placeholder = { Text("e.g. 049000000443 or SKU-1001") },
                 leadingIcon = {
                     Icon(Icons.Default.QrCode, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -513,6 +564,8 @@ fun AddProductDialog(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            val isNameError = hasAttemptedSubmit && name.isBlank()
+
             // Product Name Field
             OutlinedTextField(
                 value = name,
@@ -520,7 +573,20 @@ fun AddProductDialog(
                     name = it
                     errorMessage = null
                 },
-                label = { Text("Product Name *") },
+                label = {
+                    Text(
+                        buildAnnotatedString {
+                            append("Product Name ")
+                            withStyle(SpanStyle(color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)) {
+                                append("*")
+                            }
+                        }
+                    )
+                },
+                isError = isNameError,
+                supportingText = if (isNameError) {
+                    { Text("Product Name is required *", color = Color(0xFFEF4444), style = MaterialTheme.typography.labelSmall) }
+                } else null,
                 placeholder = { Text("e.g. Coca-Cola Classic, Wireless Mouse") },
                 leadingIcon = {
                     Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -547,7 +613,16 @@ fun AddProductDialog(
                         value = category,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Category") },
+                        label = {
+                            Text(
+                                buildAnnotatedString {
+                                    append("Category ")
+                                    withStyle(SpanStyle(color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)) {
+                                        append("*")
+                                    }
+                                }
+                            )
+                        },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) },
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
@@ -662,6 +737,8 @@ fun AddProductDialog(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            val isSellingPriceError = hasAttemptedSubmit && sellingPriceText.isNotBlank() && sellingPriceText.toDoubleOrNull() == null
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -669,7 +746,20 @@ fun AddProductDialog(
                 OutlinedTextField(
                     value = sellingPriceText,
                     onValueChange = { sellingPriceText = it },
-                    label = { Text("Selling Price ($)") },
+                    label = {
+                        Text(
+                            buildAnnotatedString {
+                                append("Selling Price ($) ")
+                                withStyle(SpanStyle(color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)) {
+                                    append("*")
+                                }
+                            }
+                        )
+                    },
+                    isError = isSellingPriceError,
+                    supportingText = if (isSellingPriceError) {
+                        { Text("Invalid price *", color = Color(0xFFEF4444), style = MaterialTheme.typography.labelSmall) }
+                    } else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.weight(1f),
@@ -696,7 +786,16 @@ fun AddProductDialog(
                 OutlinedTextField(
                     value = quantityText,
                     onValueChange = { quantityText = it },
-                    label = { Text("Initial Stock") },
+                    label = {
+                        Text(
+                            buildAnnotatedString {
+                                append("Initial Stock ")
+                                withStyle(SpanStyle(color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)) {
+                                    append("*")
+                                }
+                            }
+                        )
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.weight(1f),
@@ -746,6 +845,7 @@ fun AddProductDialog(
 
                 Button(
                     onClick = {
+                        hasAttemptedSubmit = true
                         if (sku.isBlank()) {
                             errorMessage = "Please enter or scan a valid SKU barcode."
                             return@Button

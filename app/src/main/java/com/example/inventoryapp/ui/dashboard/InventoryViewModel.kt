@@ -162,15 +162,14 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             ProductSortOption.PRICE_HIGH_TO_LOW -> filtered.sortedByDescending { it.sellingPrice }
         }
 
-        // Match scanned SKU locally with flexible matching (handling leading zeros and whitespace)
+        // Match scanned SKU locally with exact match priority, falling back to flexible matching
         val matched = scanSku?.let { rawSku ->
             val clean = rawSku.trim()
             val cleanNoZeros = clean.trimStart('0')
-            products.find { p ->
-                val pSku = p.sku.trim()
-                pSku.equals(clean, ignoreCase = true) ||
-                        (cleanNoZeros.isNotBlank() && pSku.trimStart('0').equals(cleanNoZeros, ignoreCase = true))
-            }
+            val exact = products.find { it.sku.trim().equals(clean, ignoreCase = true) }
+            exact ?: if (cleanNoZeros.isNotBlank()) {
+                products.find { it.sku.trim().trimStart('0').equals(cleanNoZeros, ignoreCase = true) }
+            } else null
         }
 
         // If an item was scanned and matched, ensure it appears at the very top of the list!
@@ -229,14 +228,13 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         _selectedCategory.value = "All"
         _onlineProduct.value = null
 
-        // Check if item exists in local database
+        // Check if item exists in local database with exact match priority
         val currentProducts = uiState.value.products
         val cleanNoZeros = cleanSku.trimStart('0')
-        val localMatch = currentProducts.find { p ->
-            val pSku = p.sku.trim()
-            pSku.equals(cleanSku, ignoreCase = true) ||
-                    (cleanNoZeros.isNotBlank() && pSku.trimStart('0').equals(cleanNoZeros, ignoreCase = true))
-        }
+        val exactMatch = currentProducts.find { it.sku.trim().equals(cleanSku, ignoreCase = true) }
+        val localMatch = exactMatch ?: if (cleanNoZeros.isNotBlank()) {
+            currentProducts.find { it.sku.trim().trimStart('0').equals(cleanNoZeros, ignoreCase = true) }
+        } else null
 
         if (localMatch != null) {
             _isFetchingOnline.value = false
