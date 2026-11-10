@@ -49,17 +49,42 @@ enum class DateFilterType(val label: String) {
     TODAY("Today"),
     THIS_WEEK("This Week"),
     THIS_MONTH("This Month"),
-    CUSTOM_DATE("Custom Date")
+    CUSTOM_DATE("Custom")
 }
+
+data class ExpenseReportItem(
+    val id: String,
+    val productName: String,
+    val category: String,
+    val quantity: Int,
+    val unitCost: Double,
+    val totalExpense: Double,
+    val timestamp: Long,
+    val note: String? = null
+)
+
+data class DayExpenseSalesPoint(
+    val dayLabel: String,
+    val dateLabel: String,
+    val spendAmount: Double,
+    val salesAmount: Double,
+    val spendFraction: Float,
+    val salesFraction: Float,
+    val isHighlighted: Boolean = false
+)
 
 /**
  * Enhanced Nawano Statistics Screen (Behance: 174422339 Slide 6 & 7).
  * Features:
- * - Interactive Calendar View with date selection & transaction activity dots.
- * - Dynamic report recalculation matching the selected calendar date/period.
- * - Target Setting for Inventory Overview with circular progress ring & achievement status.
+ * - Sleek, redesigned Segmented Date Filter Bar (no visual clutter, clean pill controls).
+ * - Full Date Picker BottomSheet for custom date selection with activity dots.
+ * - Always sorted & date-filtered Expense & Sales reports.
+ * - Dynamic Spend vs Sales Bar Chart matching the filtered period.
+ * - Date-Sorted Expense Activity Log (Newest / Oldest First toggle).
+ * - Target Setting for Inventory Overview with circular progress ring & status badges.
  * - Dynamic ABC Inventory Categorization analysis and educational guide dialog.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatisticsScreen(
     totalSkus: Int,
@@ -73,9 +98,8 @@ fun StatisticsScreen(
 ) {
     // 1. Calendar & Date Range State
     var dateFilterType by remember { mutableStateOf(DateFilterType.THIS_MONTH) }
-    var isCalendarExpanded by remember { mutableStateOf(false) }
     var selectedCalendar by remember { mutableStateOf(Calendar.getInstance()) }
-    var calendarViewMonth by remember { mutableStateOf(Calendar.getInstance()) }
+    var showDatePickerSheet by remember { mutableStateOf(false) }
 
     // 2. Inventory Target State
     var salesTarget by remember { mutableDoubleStateOf(7500.0) }
@@ -84,9 +108,16 @@ fun StatisticsScreen(
     // 3. ABC Analysis Guide State
     var showAbcGuideDialog by remember { mutableStateOf(false) }
 
-    // 4. Dynamic Report Calculations based on Selected Date / Period
+    // 4. Expense Sorting State
+    var expenseSortDescending by remember { mutableStateOf(true) }
+
+    // Formatters
     val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy", Locale.US) }
     val monthFormat = remember { SimpleDateFormat("MMMM yyyy", Locale.US) }
+
+    // Product Lookup Maps for unit prices & costs
+    val productMap = remember(products) { products.associateBy { it.id } }
+    val productSkuMap = remember(products) { products.associateBy { it.sku } }
 
     // Filter transactions occurring in the selected time window
     val periodTransactions = remember(transactions, dateFilterType, selectedCalendar.timeInMillis) {
@@ -117,15 +148,23 @@ fun StatisticsScreen(
     }
 
     // Dynamic Sales, Spend, and Units for the selected period
-    val (dynamicSales, dynamicSpend, itemsSold) = remember(periodTransactions, dateFilterType, totalValue) {
+    val (dynamicSales, dynamicSpend, itemsSold) = remember(periodTransactions, dateFilterType, totalValue, productMap, productSkuMap) {
         val salesFromTx = periodTransactions
-            .filter { it.quantityDelta < 0 }
-            .sumOf { abs(it.quantityDelta) * 19.99 } // using average unit sale price
+            .filter { it.quantityDelta < 0 || it.transactionType.contains("OUT", ignoreCase = true) }
+            .sumOf { tx ->
+                val prod = productMap[tx.productId] ?: productSkuMap[tx.sku]
+                val unitPrice = if (prod != null && prod.sellingPrice > 0) prod.sellingPrice else 19.99
+                abs(tx.quantityDelta) * unitPrice
+            }
         val spendFromTx = periodTransactions
-            .filter { it.quantityDelta > 0 }
-            .sumOf { it.quantityDelta * 12.00 }
+            .filter { it.quantityDelta > 0 || it.transactionType.contains("IN", ignoreCase = true) }
+            .sumOf { tx ->
+                val prod = productMap[tx.productId] ?: productSkuMap[tx.sku]
+                val unitCost = if (prod != null && prod.costPrice > 0) prod.costPrice else 12.00
+                abs(tx.quantityDelta) * unitCost
+            }
         val unitsSoldFromTx = periodTransactions
-            .filter { it.quantityDelta < 0 }
+            .filter { it.quantityDelta < 0 || it.transactionType.contains("OUT", ignoreCase = true) }
             .sumOf { abs(it.quantityDelta) }
 
         // Blend with design system base figures if database has only a few transactions
@@ -154,6 +193,138 @@ fun StatisticsScreen(
                 val u = 276 + unitsSoldFromTx
                 Triple(s, sp, u)
             }
+        }
+    }
+
+    // Filtered & Sorted Expense Items for the Expense Report
+    val periodExpenses = remember(periodTransactions, selectedCalendar.timeInMillis, dateFilterType, productMap, productSkuMap) {
+        val expenses = periodTransactions
+            .filter { it.quantityDelta > 0 || it.transactionType.contains("IN", ignoreCase = true) }
+            .map { tx ->
+                val prod = productMap[tx.productId] ?: productSkuMap[tx.sku]
+                val unitCost = if (prod != null && prod.costPrice > 0) prod.costPrice else 12.00
+                val totalExpense = abs(tx.quantityDelta) * unitCost
+                ExpenseReportItem(
+                    id = tx.id,
+                    productName = tx.productName,
+                    category = prod?.category?.ifBlank { "Restock" } ?: "Inventory Restock",
+                    quantity = abs(tx.quantityDelta),
+                    unitCost = unitCost,
+                    totalExpense = totalExpense,
+                    timestamp = tx.timestamp,
+                    note = tx.note
+                )
+            }
+
+        if (expenses.isEmpty()) {
+            val baseTime = selectedCalendar.timeInMillis
+            listOf(
+                ExpenseReportItem(
+                    id = "seed_exp_1",
+                    productName = "The Compound Effect (Hardcover)",
+                    category = "Books",
+                    quantity = 15,
+                    unitCost = 12.00,
+                    totalExpense = 180.00,
+                    timestamp = baseTime - 3600000L * 2,
+                    note = "Weekly vendor replenishment"
+                ),
+                ExpenseReportItem(
+                    id = "seed_exp_2",
+                    productName = "Ultra Clean Paper Towels 12-pk",
+                    category = "Cleaning Supplies",
+                    quantity = 20,
+                    unitCost = 16.50,
+                    totalExpense = 330.00,
+                    timestamp = baseTime - 3600000L * 8,
+                    note = "Bulk safety stock order"
+                ),
+                ExpenseReportItem(
+                    id = "seed_exp_3",
+                    productName = "Refined Cooking Oil 5L Cans",
+                    category = "Pantry",
+                    quantity = 8,
+                    unitCost = 28.00,
+                    totalExpense = 224.00,
+                    timestamp = baseTime - 3600000L * 22,
+                    note = "Supplier restock"
+                )
+            )
+        } else {
+            expenses
+        }
+    }
+
+    // Always sort expense items by date
+    val sortedExpenses = remember(periodExpenses, expenseSortDescending) {
+        if (expenseSortDescending) {
+            periodExpenses.sortedByDescending { it.timestamp }
+        } else {
+            periodExpenses.sortedBy { it.timestamp }
+        }
+    }
+
+    // Dynamic 7-Day Chart Data Points calculated from actual date window
+    val chartPoints = remember(transactions, selectedCalendar.timeInMillis, dateFilterType) {
+        val cal = (selectedCalendar.clone() as Calendar)
+        val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+        // Find Monday of the selected calendar's week
+        val mondayCal = (cal.clone() as Calendar).apply {
+            set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+        }
+
+        val points = mutableListOf<DayExpenseSalesPoint>()
+        var maxSpend = 1.0
+        var maxSales = 1.0
+
+        for (i in 0 until 7) {
+            val dayCal = (mondayCal.clone() as Calendar).apply {
+                add(Calendar.DAY_OF_MONTH, i)
+            }
+            val dLabel = days[i]
+            val dateNumStr = String.format(Locale.US, "%02d", dayCal.get(Calendar.DAY_OF_MONTH))
+            val isCurrentOrSelected = (dayCal.get(Calendar.DAY_OF_YEAR) == cal.get(Calendar.DAY_OF_YEAR) &&
+                    dayCal.get(Calendar.YEAR) == cal.get(Calendar.YEAR))
+
+            // Sum spend & sales for this specific day
+            val dayTx = transactions.filter { tx ->
+                val txCal = Calendar.getInstance().apply { timeInMillis = tx.timestamp }
+                txCal.get(Calendar.YEAR) == dayCal.get(Calendar.YEAR) &&
+                        txCal.get(Calendar.DAY_OF_YEAR) == dayCal.get(Calendar.DAY_OF_YEAR)
+            }
+
+            var daySpend = dayTx.filter { it.quantityDelta > 0 }.sumOf { it.quantityDelta * 12.0 }
+            var daySales = dayTx.filter { it.quantityDelta < 0 }.sumOf { abs(it.quantityDelta) * 19.99 }
+
+            // If empty, supply realistic baseline values
+            if (daySpend == 0.0 && daySales == 0.0) {
+                daySpend = listOf(140.0, 320.0, 95.0, 480.0, 260.0, 520.0, 180.0)[i]
+                daySales = listOf(350.0, 580.0, 290.0, 720.0, 490.0, 890.0, 410.0)[i]
+            }
+
+            if (daySpend > maxSpend) maxSpend = daySpend
+            if (daySales > maxSales) maxSales = daySales
+
+            points.add(
+                DayExpenseSalesPoint(
+                    dayLabel = dLabel,
+                    dateLabel = dateNumStr,
+                    spendAmount = daySpend,
+                    salesAmount = daySales,
+                    spendFraction = 0f,
+                    salesFraction = 0f,
+                    isHighlighted = isCurrentOrSelected
+                )
+            )
+        }
+
+        val maxVal = maxOf(maxSpend, maxSales, 100.0)
+        points.map { p ->
+            p.copy(
+                spendFraction = (p.spendAmount / maxVal).toFloat().coerceIn(0.12f, 1f),
+                salesFraction = (p.salesAmount / maxVal).toFloat().coerceIn(0.12f, 1f)
+            )
         }
     }
 
@@ -215,177 +386,128 @@ fun StatisticsScreen(
         Spacer(modifier = Modifier.height(14.dp))
 
         // =========================================================================
-        // 1. INTERACTIVE CALENDAR & PERIOD SELECTOR
+        // 1. SLEEK REDESIGNED DATE FILTER (Segmented Pill Bar)
         // =========================================================================
         Surface(
-            shape = RoundedCornerShape(22.dp),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-            shadowElevation = 2.dp,
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                // Top Header: Active Period Label + Calendar Toggle Button
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            modifier = Modifier.size(34.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                DateFilterType.values().forEach { filter ->
+                    val isSelected = dateFilterType == filter
+                    Surface(
+                        onClick = {
+                            dateFilterType = filter
+                            if (filter == DateFilterType.CUSTOM_DATE) {
+                                showDatePickerSheet = true
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSelected) NawanoPrimary200 else Color.Transparent,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(vertical = 9.dp)
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.CalendarMonth,
-                                    contentDescription = null,
-                                    tint = NawanoPrimary200,
-                                    modifier = Modifier.size(18.dp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                if (filter == DateFilterType.CUSTOM_DATE) {
+                                    Icon(
+                                        imageVector = Icons.Default.CalendarToday,
+                                        contentDescription = null,
+                                        tint = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(11.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                }
+                                Text(
+                                    text = filter.label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    textAlign = TextAlign.Center
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            val activePeriodTitle = when (dateFilterType) {
-                                DateFilterType.TODAY -> "Today • ${dateFormat.format(Date())}"
-                                DateFilterType.THIS_WEEK -> "This Week • 7 Days"
-                                DateFilterType.THIS_MONTH -> monthFormat.format(selectedCalendar.time)
-                                DateFilterType.CUSTOM_DATE -> "Date: ${dateFormat.format(selectedCalendar.time)}"
-                            }
-                            Text(
-                                text = activePeriodTitle,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "${periodTransactions.size} inventory activities in range",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    // Expand / Collapse Full Calendar Grid
-                    Surface(
-                        onClick = { isCalendarExpanded = !isCalendarExpanded },
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isCalendarExpanded) NawanoPrimary200 else MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.size(34.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = if (isCalendarExpanded) Icons.Default.ExpandLess else Icons.Default.CalendarViewMonth,
-                                contentDescription = "Toggle Calendar Grid",
-                                tint = if (isCalendarExpanded) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Quick Filter Chips Row (Today, This Week, This Month, Pick Date)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    DateFilterType.values().forEach { filter ->
-                        val isSelected = dateFilterType == filter
-                        Surface(
-                            onClick = {
-                                dateFilterType = filter
-                                if (filter == DateFilterType.CUSTOM_DATE) {
-                                    isCalendarExpanded = true
-                                }
-                            },
-                            shape = RoundedCornerShape(14.dp),
-                            color = if (isSelected) NawanoPrimary200 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            border = BorderStroke(
-                                1.dp,
-                                if (isSelected) NawanoPrimary200 else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
-                            )
-                        ) {
-                            Text(
-                                text = filter.label,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                            )
-                        }
-                    }
-                }
-
-                // Expandable Visual Monthly Calendar Grid
-                AnimatedVisibility(
-                    visible = isCalendarExpanded,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    Column(modifier = Modifier.padding(top = 14.dp)) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Month Navigator: < Month Year > + Jump to Today
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(
-                                onClick = {
-                                    calendarViewMonth = (calendarViewMonth.clone() as Calendar).apply {
-                                        add(Calendar.MONTH, -1)
-                                    }
-                                },
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Prev Month", modifier = Modifier.size(16.dp))
-                            }
-
-                            Text(
-                                text = monthFormat.format(calendarViewMonth.time),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-
-                            IconButton(
-                                onClick = {
-                                    calendarViewMonth = (calendarViewMonth.clone() as Calendar).apply {
-                                        add(Calendar.MONTH, 1)
-                                    }
-                                },
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next Month", modifier = Modifier.size(16.dp))
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Calendar Month Grid View
-                        NawanoInteractiveCalendarGrid(
-                            viewMonth = calendarViewMonth,
-                            selectedDate = selectedCalendar,
-                            transactions = transactions,
-                            onDateSelected = { clickedCal ->
-                                selectedCalendar = clickedCal
-                                dateFilterType = DateFilterType.CUSTOM_DATE
-                            }
-                        )
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        // Active Date Indicator & Sheet Trigger Pill
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(NawanoEmerald)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                val activePeriodTitle = when (dateFilterType) {
+                    DateFilterType.TODAY -> "Today • ${dateFormat.format(Date())}"
+                    DateFilterType.THIS_WEEK -> "This Week • Mon - Sun"
+                    DateFilterType.THIS_MONTH -> monthFormat.format(selectedCalendar.time)
+                    DateFilterType.CUSTOM_DATE -> "Custom • ${dateFormat.format(selectedCalendar.time)}"
+                }
+                Text(
+                    text = activePeriodTitle,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = " (${periodTransactions.size} activities)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Surface(
+                onClick = { showDatePickerSheet = true },
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarMonth,
+                        contentDescription = "Pick Date",
+                        tint = NawanoPrimary200,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Pick Date",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = NawanoPrimary200
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         // =========================================================================
         // 2. INVENTORY OVERVIEW CARD WITH USER TARGET SETTING
@@ -596,7 +718,7 @@ fun StatisticsScreen(
         Spacer(modifier = Modifier.height(18.dp))
 
         // =========================================================================
-        // 3. EXPENSE REPORT CARD (Weekly Bar Chart matching selected range)
+        // 3. EXPENSE REPORT CARD (Filtered & Sorted by Date)
         // =========================================================================
         Surface(
             shape = RoundedCornerShape(22.dp),
@@ -606,18 +728,34 @@ fun StatisticsScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
+                // Header with Spend / Sales Legend
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text(
-                            text = "Expense Report",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Expense Report",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = NawanoPrimary200.copy(alpha = 0.12f)
+                            ) {
+                                Text(
+                                    text = "Date Filtered",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = NawanoPrimary200,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                         Text(
                             text = "Daily spend vs. sales distribution",
                             style = MaterialTheme.typography.labelSmall,
@@ -643,10 +781,111 @@ fun StatisticsScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // Weekly Bar Chart Canvas (Tue, Wed, Thu, Fri, Sat, Sun, Mon)
-                WeeklyBarChartCanvas(selectedCalendar = selectedCalendar)
+                // KPI Mini Bar: Total Spend for Period | Purchases Count | Avg Daily
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Total Period Spend", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "$${String.format(Locale.US, "%,.2f", dynamicSpend)}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black,
+                                color = NawanoPrimary200
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Restock Orders", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "${sortedExpenses.size} Entries",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Avg. Daily Spend", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            val avgSpend = dynamicSpend / 7.0
+                            Text(
+                                "$${String.format(Locale.US, "%,.2f", avgSpend)}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Dynamic Weekly Bar Chart Canvas (Tue, Wed, Thu, Fri, Sat, Sun, Mon)
+                WeeklyBarChartCanvas(points = chartPoints)
+
+                Spacer(modifier = Modifier.height(18.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Sorted Expense Activity Log Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Expense Activity Log (${sortedExpenses.size})",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    // Date Sort Toggle Button
+                    Surface(
+                        onClick = { expenseSortDescending = !expenseSortDescending },
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (expenseSortDescending) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
+                                contentDescription = "Toggle Date Sort",
+                                tint = NawanoPrimary200,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (expenseSortDescending) "Newest First" else "Oldest First",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // List of Sorted Expense Items
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    sortedExpenses.take(5).forEach { expense ->
+                        ExpenseActivityRowItem(expense = expense)
+                    }
+                }
             }
         }
 
@@ -709,8 +948,21 @@ fun StatisticsScreen(
     }
 
     // =========================================================================
-    // DIALOGS: TARGET SETTING & ABC EXPLANATION
+    // BOTTOMSHEETS & DIALOGS
     // =========================================================================
+
+    // Clean DatePicker ModalBottomSheet
+    if (showDatePickerSheet) {
+        NawanoDatePickerBottomSheet(
+            selectedDate = selectedCalendar,
+            transactions = transactions,
+            onDateSelected = { clickedCal ->
+                selectedCalendar = clickedCal
+                dateFilterType = DateFilterType.CUSTOM_DATE
+            },
+            onDismiss = { showDatePickerSheet = false }
+        )
+    }
 
     if (showSetTargetDialog) {
         SetTargetDialog(
@@ -729,6 +981,148 @@ fun StatisticsScreen(
 }
 
 // =========================================================================
+// REFINED DATE PICKER BOTTOM SHEET
+// =========================================================================
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NawanoDatePickerBottomSheet(
+    selectedDate: Calendar,
+    transactions: List<StockTransactionEntity>,
+    onDateSelected: (Calendar) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var currentViewMonth by remember {
+        mutableStateOf((selectedDate.clone() as Calendar).apply { set(Calendar.DAY_OF_MONTH, 1) })
+    }
+    val monthFormat = remember { SimpleDateFormat("MMMM yyyy", Locale.US) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = {
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                modifier = Modifier
+                    .padding(vertical = 10.dp)
+                    .size(width = 40.dp, height = 4.dp)
+            ) {}
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 6.dp)
+                .padding(bottom = 28.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Select Specific Date",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Sort and filter reports & expenses to this day",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Surface(
+                    onClick = {
+                        val today = Calendar.getInstance()
+                        onDateSelected(today)
+                        onDismiss()
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Text(
+                        text = "Today",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = NawanoPrimary200,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Month Navigator: < Month Year >
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = {
+                        currentViewMonth = (currentViewMonth.clone() as Calendar).apply {
+                            add(Calendar.MONTH, -1)
+                        }
+                    },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Previous Month", modifier = Modifier.size(18.dp))
+                }
+
+                Text(
+                    text = monthFormat.format(currentViewMonth.time),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                IconButton(
+                    onClick = {
+                        currentViewMonth = (currentViewMonth.clone() as Calendar).apply {
+                            add(Calendar.MONTH, 1)
+                        }
+                    },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next Month", modifier = Modifier.size(18.dp))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Calendar Grid with activity dots
+            NawanoInteractiveCalendarGrid(
+                viewMonth = currentViewMonth,
+                selectedDate = selectedDate,
+                transactions = transactions,
+                onDateSelected = { clickedCal ->
+                    onDateSelected(clickedCal)
+                    onDismiss()
+                }
+            )
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            OutlinedButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Close", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+// =========================================================================
 // CALENDAR GRID COMPONENT
 // =========================================================================
 
@@ -741,17 +1135,15 @@ private fun NawanoInteractiveCalendarGrid(
 ) {
     val dayNames = listOf("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
 
-    // Calculate month parameters
     val cal = (viewMonth.clone() as Calendar).apply {
         set(Calendar.DAY_OF_MONTH, 1)
     }
-    val firstDayOfWeek = cal.get(Calendar.DAY_OF_WEEK) - 1 // 0-based Sunday
+    val firstDayOfWeek = cal.get(Calendar.DAY_OF_WEEK) - 1
     val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
 
     val currentYear = viewMonth.get(Calendar.YEAR)
     val currentMonth = viewMonth.get(Calendar.MONTH)
 
-    // Dates with recorded transaction activity
     val datesWithActivity = remember(transactions, currentYear, currentMonth) {
         val daysSet = mutableSetOf<Int>()
         transactions.forEach { tx ->
@@ -764,7 +1156,6 @@ private fun NawanoInteractiveCalendarGrid(
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        // Weekday header letters
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceAround
@@ -775,7 +1166,7 @@ private fun NawanoInteractiveCalendarGrid(
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.width(32.dp),
+                    modifier = Modifier.width(34.dp),
                     textAlign = TextAlign.Center
                 )
             }
@@ -783,7 +1174,6 @@ private fun NawanoInteractiveCalendarGrid(
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        // Days Grid
         val totalSlots = firstDayOfWeek + daysInMonth
         val rows = (totalSlots + 6) / 7
 
@@ -828,7 +1218,7 @@ private fun NawanoInteractiveCalendarGrid(
                                 shape = CircleShape,
                                 color = if (isSelected) NawanoPrimary200 else Color.Transparent,
                                 border = if (isToday && !isSelected) BorderStroke(1.5.dp, NawanoPrimary200) else null,
-                                modifier = Modifier.size(26.dp)
+                                modifier = Modifier.size(28.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Text(
@@ -840,7 +1230,6 @@ private fun NawanoInteractiveCalendarGrid(
                                 }
                             }
 
-                            // Dot indicator for activity on this day
                             Spacer(modifier = Modifier.height(2.dp))
                             if (hasActivity) {
                                 Box(
@@ -857,6 +1246,92 @@ private fun NawanoInteractiveCalendarGrid(
                         Spacer(modifier = Modifier.width(34.dp))
                     }
                 }
+            }
+        }
+    }
+}
+
+// =========================================================================
+// EXPENSE ACTIVITY ROW ITEM
+// =========================================================================
+
+@Composable
+private fun ExpenseActivityRowItem(expense: ExpenseReportItem) {
+    val timeFormat = remember { SimpleDateFormat("MMM dd, hh:mm a", Locale.US) }
+
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = NawanoRose.copy(alpha = 0.12f),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowDownward,
+                            contentDescription = null,
+                            tint = NawanoRose,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = expense.productName,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = expense.category,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = " • ",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = timeFormat.format(Date(expense.timestamp)),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "-$${String.format(Locale.US, "%,.2f", expense.totalExpense)}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = NawanoRose
+                )
+                Text(
+                    text = "+${expense.quantity} Pcs @ $${String.format(Locale.US, "%.2f", expense.unitCost)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
@@ -915,7 +1390,6 @@ private fun SetTargetDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Custom Target Input
                 OutlinedTextField(
                     value = targetInput,
                     onValueChange = { targetInput = it.filter { char -> char.isDigit() } },
@@ -929,7 +1403,6 @@ private fun SetTargetDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Quick Preset Chips
                 Text(
                     text = "Quick Presets:",
                     style = MaterialTheme.typography.labelSmall,
@@ -966,7 +1439,6 @@ private fun SetTargetDialog(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Action Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
@@ -1010,7 +1482,6 @@ private fun AbcAnalysisGuideDialog(onDismiss: () -> Unit) {
                     .padding(22.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                // Header
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
@@ -1045,7 +1516,6 @@ private fun AbcAnalysisGuideDialog(onDismiss: () -> Unit) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Class A Card
                 AbcGuideClassCard(
                     tier = "Class A",
                     badgeColor = NawanoPrimary200,
@@ -1056,7 +1526,6 @@ private fun AbcAnalysisGuideDialog(onDismiss: () -> Unit) {
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Class B Card
                 AbcGuideClassCard(
                     tier = "Class B",
                     badgeColor = NawanoAmber,
@@ -1067,7 +1536,6 @@ private fun AbcAnalysisGuideDialog(onDismiss: () -> Unit) {
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Class C Card
                 AbcGuideClassCard(
                     tier = "Class C",
                     badgeColor = Color(0xFF06B6D4),
@@ -1180,19 +1648,7 @@ private fun MetricMiniPill(label: String, value: String, color: Color) {
 }
 
 @Composable
-private fun WeeklyBarChartCanvas(selectedCalendar: Calendar) {
-    val days = listOf("Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon")
-    // Pairs of (SpendFraction, SalesFraction) normalized 0.0 to 1.0
-    val data = listOf(
-        Pair(0.40f, 0.65f),
-        Pair(0.55f, 0.85f),
-        Pair(0.30f, 0.50f),
-        Pair(0.70f, 0.90f),
-        Pair(0.45f, 0.75f),
-        Pair(0.80f, 0.95f),
-        Pair(0.35f, 0.60f)
-    )
-
+private fun WeeklyBarChartCanvas(points: List<DayExpenseSalesPoint>) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Canvas(
             modifier = Modifier
@@ -1201,7 +1657,7 @@ private fun WeeklyBarChartCanvas(selectedCalendar: Calendar) {
         ) {
             val totalWidth = size.width
             val chartHeight = size.height
-            val barGroupWidth = totalWidth / days.size
+            val barGroupWidth = totalWidth / points.size.coerceAtLeast(1)
             val barWidth = 10.dp.toPx()
 
             // Draw horizontal guide lines
@@ -1209,7 +1665,7 @@ private fun WeeklyBarChartCanvas(selectedCalendar: Calendar) {
             for (i in 0..steps) {
                 val y = chartHeight * (i.toFloat() / steps)
                 drawLine(
-                    color = Color.LightGray.copy(alpha = 0.25f),
+                    color = Color.LightGray.copy(alpha = 0.2f),
                     start = Offset(0f, y),
                     end = Offset(totalWidth, y),
                     strokeWidth = 1.dp.toPx()
@@ -1217,11 +1673,11 @@ private fun WeeklyBarChartCanvas(selectedCalendar: Calendar) {
             }
 
             // Draw paired bars
-            data.forEachIndexed { index, (spend, sales) ->
+            points.forEachIndexed { index, point ->
                 val centerX = barGroupWidth * index + barGroupWidth / 2
 
                 // Spend bar (Left)
-                val spendHeight = chartHeight * spend
+                val spendHeight = chartHeight * point.spendFraction
                 val spendLeft = centerX - barWidth - 2.dp.toPx()
                 drawRoundRect(
                     color = NawanoPrimary200,
@@ -1231,7 +1687,7 @@ private fun WeeklyBarChartCanvas(selectedCalendar: Calendar) {
                 )
 
                 // Sales bar (Right)
-                val salesHeight = chartHeight * sales
+                val salesHeight = chartHeight * point.salesFraction
                 val salesLeft = centerX + 2.dp.toPx()
                 drawRoundRect(
                     color = NawanoPrimary100,
@@ -1244,18 +1700,28 @@ private fun WeeklyBarChartCanvas(selectedCalendar: Calendar) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Days of week row
+        // Days of week row with dates
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceAround
         ) {
-            days.forEach { day ->
-                Text(
-                    text = day,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 11.sp
-                )
+            points.forEach { point ->
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = point.dayLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = if (point.isHighlighted) FontWeight.Bold else FontWeight.Normal,
+                        color = if (point.isHighlighted) NawanoPrimary200 else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp
+                    )
+                    Text(
+                        text = point.dateLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = if (point.isHighlighted) FontWeight.ExtraBold else FontWeight.Medium,
+                        color = if (point.isHighlighted) NawanoPrimary200 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        fontSize = 9.sp
+                    )
+                }
             }
         }
     }
