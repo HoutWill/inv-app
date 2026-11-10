@@ -524,6 +524,8 @@ fun InventoryDashboardScreen(
                                 totalValue = uiState.totalInventoryValue,
                                 lowStockCount = uiState.lowStockCount,
                                 outOfStockCount = uiState.products.count { it.quantity <= 0 },
+                                products = uiState.products,
+                                transactions = uiState.transactions,
                                 modifier = Modifier.padding(bottom = 88.dp)
                             )
                         }
