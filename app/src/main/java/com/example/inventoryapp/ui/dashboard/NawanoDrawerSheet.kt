@@ -118,33 +118,6 @@ fun NawanoDrawerSheet(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Live Status Pill
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = NawanoEmerald.copy(alpha = 0.12f)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(7.dp)
-                                    .clip(CircleShape)
-                                    .background(NawanoEmerald)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Active Sync • $totalSkus SKUs",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF047857)
-                            )
-                        }
-                    }
                 }
             }
 

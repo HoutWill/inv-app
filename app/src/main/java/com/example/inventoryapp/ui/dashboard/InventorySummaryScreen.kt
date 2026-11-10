@@ -60,7 +60,7 @@ fun InventorySummaryScreen(
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategoryFilter by remember { mutableStateOf("All") }
-    val categories = listOf("All", "Meat & Poultry", "Pantry", "Beverages", "Electronics", "Low Stock")
+    val categories = listOf("All", "Meat & Poultry", "Pantry", "Beverages", "Electronics", "Other", "Low Stock")
 
     val filteredProducts = remember(products, searchQuery, selectedCategoryFilter) {
         products.filter { product ->
@@ -70,6 +70,9 @@ fun InventorySummaryScreen(
             val matchesCategory = when (selectedCategoryFilter) {
                 "All" -> true
                 "Low Stock" -> product.quantity <= product.reorderLevel
+                "Other" -> product.category.equals("Other", ignoreCase = true) ||
+                        product.category.isBlank() ||
+                        !listOf("Meat & Poultry", "Pantry", "Beverages", "Electronics").any { it.equals(product.category, ignoreCase = true) }
                 else -> product.category.equals(selectedCategoryFilter, ignoreCase = true)
             }
             matchesSearch && matchesCategory

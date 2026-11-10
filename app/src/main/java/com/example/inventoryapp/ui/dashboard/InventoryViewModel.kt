@@ -140,6 +140,9 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             val matchesCategory = when (category) {
                 "All" -> true
                 "Low Stock" -> item.quantity <= item.reorderLevel
+                "Other" -> item.category.equals("Other", ignoreCase = true) ||
+                        item.category.isBlank() ||
+                        !CategoryHierarchy.HIERARCHY.keys.any { it != "Other" && it.equals(item.category, ignoreCase = true) }
                 else -> item.category.equals(category, ignoreCase = true)
             }
 

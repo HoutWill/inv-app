@@ -133,7 +133,7 @@ fun InventoryDashboardScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var drawerDestination by remember { mutableStateOf<DrawerDestination?>(null) }
 
-    val categoryList = listOf("All", "Electronics", "Accessories", "Furniture", "Hardware", "Grocery", "Low Stock")
+    val categoryList = listOf("All", "Electronics", "Accessories", "Furniture", "Hardware", "Grocery", "Other", "Low Stock")
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -2688,6 +2688,7 @@ internal fun getCategoryIcon(category: String): ImageVector {
         "furniture" -> Icons.Default.Chair
         "hardware" -> Icons.Default.Build
         "grocery" -> Icons.Default.ShoppingBasket
+        "other" -> Icons.Default.Category
         else -> Icons.Default.Category
     }
 }
