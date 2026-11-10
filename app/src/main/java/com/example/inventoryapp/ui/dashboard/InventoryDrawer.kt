@@ -1,7 +1,6 @@
 package com.example.inventoryapp.ui.dashboard
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -15,15 +14,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.inventoryapp.ui.theme.*
+import com.example.inventoryapp.ui.theme.NawanoPrimary200
 
+/**
+ * Destinations accessible from the Navigation Drawer.
+ */
 enum class DrawerDestination {
     DASHBOARD,
     ITEMS,
@@ -35,12 +36,44 @@ enum class DrawerDestination {
 }
 
 /**
+ * Complete Navigation Drawer wrapper that wraps the content in a [ModalNavigationDrawer].
+ */
+@Composable
+fun InventoryNavigationDrawer(
+    drawerState: DrawerState,
+    currentDestination: DrawerDestination,
+    onDestinationSelected: (DrawerDestination) -> Unit,
+    onCloseDrawer: () -> Unit,
+    isDarkTheme: Boolean,
+    onToggleTheme: () -> Unit,
+    totalSkus: Int,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    ModalNavigationDrawer(
+        modifier = modifier,
+        drawerState = drawerState,
+        drawerContent = {
+            InventoryDrawerSheet(
+                currentDestination = currentDestination,
+                onDestinationSelected = onDestinationSelected,
+                onCloseDrawer = onCloseDrawer,
+                isDarkTheme = isDarkTheme,
+                onToggleTheme = onToggleTheme,
+                totalSkus = totalSkus
+            )
+        },
+        content = content
+    )
+}
+
+/**
  * Authentic Nawano Navigation Drawer Sheet (Behance UI Kit).
  * Organizes core screens, auxiliary static screens (Inventory Summary, Movement List),
  * and dedicated Stock Audit Logs into a unified navigation hub.
  */
 @Composable
-fun NawanoDrawerSheet(
+fun InventoryDrawerSheet(
     currentDestination: DrawerDestination,
     onDestinationSelected: (DrawerDestination) -> Unit,
     onCloseDrawer: () -> Unit,
@@ -250,8 +283,30 @@ fun NawanoDrawerSheet(
     }
 }
 
+/**
+ * Backward-compatibility alias for [InventoryDrawerSheet].
+ */
 @Composable
-private fun DrawerNavRow(
+fun NawanoDrawerSheet(
+    currentDestination: DrawerDestination,
+    onDestinationSelected: (DrawerDestination) -> Unit,
+    onCloseDrawer: () -> Unit,
+    isDarkTheme: Boolean,
+    onToggleTheme: () -> Unit,
+    totalSkus: Int,
+    modifier: Modifier = Modifier
+) = InventoryDrawerSheet(
+    currentDestination = currentDestination,
+    onDestinationSelected = onDestinationSelected,
+    onCloseDrawer = onCloseDrawer,
+    isDarkTheme = isDarkTheme,
+    onToggleTheme = onToggleTheme,
+    totalSkus = totalSkus,
+    modifier = modifier
+)
+
+@Composable
+fun DrawerNavRow(
     icon: ImageVector,
     label: String,
     isSelected: Boolean,

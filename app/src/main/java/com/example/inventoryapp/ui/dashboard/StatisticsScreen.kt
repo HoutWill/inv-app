@@ -46,6 +46,7 @@ import java.util.Locale
 import kotlin.math.abs
 
 enum class DateFilterType(val label: String) {
+    ALL_TIME("All Dates"),
     TODAY("Today"),
     THIS_WEEK("This Week"),
     THIS_MONTH("This Month"),
@@ -130,6 +131,7 @@ fun StatisticsScreen(
             val txCal = Calendar.getInstance().apply { timeInMillis = tx.timestamp }
             val txYear = txCal.get(Calendar.YEAR)
             when (dateFilterType) {
+                DateFilterType.ALL_TIME -> true
                 DateFilterType.TODAY -> {
                     val nowCal = Calendar.getInstance()
                     txYear == nowCal.get(Calendar.YEAR) && txCal.get(Calendar.DAY_OF_YEAR) == nowCal.get(Calendar.DAY_OF_YEAR)
@@ -168,6 +170,12 @@ fun StatisticsScreen(
             .sumOf { abs(it.quantityDelta) }
 
         when (dateFilterType) {
+            DateFilterType.ALL_TIME -> {
+                val s = if (salesFromTx > 0) salesFromTx else (totalValue * 1.5).coerceAtLeast(14500.0)
+                val sp = if (spendFromTx > 0) spendFromTx else 4200.00
+                val u = if (unitsSoldFromTx > 0) unitsSoldFromTx else (totalItems * 3).coerceAtLeast(450)
+                Triple(s, sp, u)
+            }
             DateFilterType.TODAY -> {
                 val s = if (salesFromTx > 0) salesFromTx else 420.50
                 val sp = if (spendFromTx > 0) spendFromTx else 110.00
@@ -259,60 +267,259 @@ fun StatisticsScreen(
         }
     }
 
-    // Dynamic 7-Day Chart Points with Sales Count per day
+    // Dynamic Chart Points (Adapts to All Date Filters: Weekly, Monthly, All Dates, Today)
     val chartPoints = remember(transactions, selectedCalendar.timeInMillis, dateFilterType) {
         val cal = (selectedCalendar.clone() as Calendar)
-        val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-
-        val mondayCal = (cal.clone() as Calendar).apply {
-            set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
-        }
-
         val points = mutableListOf<DayExpenseSalesPoint>()
         var maxSpend = 1.0
         var maxSales = 1.0
 
-        for (i in 0 until 7) {
-            val dayCal = (mondayCal.clone() as Calendar).apply {
-                add(Calendar.DAY_OF_MONTH, i)
+        when (dateFilterType) {
+            DateFilterType.THIS_WEEK -> {
+                // 7 days: Mon to Sun
+                val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+                val mondayCal = (cal.clone() as Calendar).apply {
+                    set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+                }
+                for (i in 0 until 7) {
+                    val dayCal = (mondayCal.clone() as Calendar).apply {
+                        add(Calendar.DAY_OF_MONTH, i)
+                    }
+                    val dLabel = days[i]
+                    val dateNumStr = String.format(Locale.US, "%02d", dayCal.get(Calendar.DAY_OF_MONTH))
+                    val isCurrentOrSelected = (dayCal.get(Calendar.DAY_OF_YEAR) == cal.get(Calendar.DAY_OF_YEAR) &&
+                            dayCal.get(Calendar.YEAR) == cal.get(Calendar.YEAR))
+
+                    val dayTx = transactions.filter { tx ->
+                        val txCal = Calendar.getInstance().apply { timeInMillis = tx.timestamp }
+                        txCal.get(Calendar.YEAR) == dayCal.get(Calendar.YEAR) &&
+                                txCal.get(Calendar.DAY_OF_YEAR) == dayCal.get(Calendar.DAY_OF_YEAR)
+                    }
+
+                    var daySpend = dayTx.filter { it.quantityDelta > 0 }.sumOf { it.quantityDelta * 12.0 }
+                    var daySales = dayTx.filter { it.quantityDelta < 0 }.sumOf { abs(it.quantityDelta) * 19.99 }
+                    val realSalesCount = dayTx.count { it.quantityDelta < 0 || it.transactionType.contains("OUT", ignoreCase = true) }
+
+                    if (daySpend == 0.0 && daySales == 0.0) {
+                        daySpend = listOf(140.0, 320.0, 95.0, 480.0, 260.0, 520.0, 180.0)[i]
+                        daySales = listOf(350.0, 580.0, 290.0, 720.0, 490.0, 890.0, 410.0)[i]
+                    }
+
+                    val finalSalesCount = if (realSalesCount > 0) realSalesCount else listOf(2, 4, 1, 5, 3, 6, 2)[i]
+
+                    if (daySpend > maxSpend) maxSpend = daySpend
+                    if (daySales > maxSales) maxSales = daySales
+
+                    points.add(
+                        DayExpenseSalesPoint(
+                            dayLabel = dLabel,
+                            dateLabel = dateNumStr,
+                            spendAmount = daySpend,
+                            salesAmount = daySales,
+                            spendFraction = 0f,
+                            salesFraction = 0f,
+                            salesCount = finalSalesCount,
+                            isHighlighted = isCurrentOrSelected
+                        )
+                    )
+                }
             }
-            val dLabel = days[i]
-            val dateNumStr = String.format(Locale.US, "%02d", dayCal.get(Calendar.DAY_OF_MONTH))
-            val isCurrentOrSelected = (dayCal.get(Calendar.DAY_OF_YEAR) == cal.get(Calendar.DAY_OF_YEAR) &&
-                    dayCal.get(Calendar.YEAR) == cal.get(Calendar.YEAR))
 
-            val dayTx = transactions.filter { tx ->
-                val txCal = Calendar.getInstance().apply { timeInMillis = tx.timestamp }
-                txCal.get(Calendar.YEAR) == dayCal.get(Calendar.YEAR) &&
-                        txCal.get(Calendar.DAY_OF_YEAR) == dayCal.get(Calendar.DAY_OF_YEAR)
+            DateFilterType.THIS_MONTH -> {
+                // Breakdown into 5 weeks of the month: W1 (01-07), W2 (08-14), W3 (15-21), W4 (22-28), W5 (29-end)
+                val targetMonth = cal.get(Calendar.MONTH)
+                val targetYear = cal.get(Calendar.YEAR)
+                val maxDaysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+                val currentDayOfMonth = Calendar.getInstance().get(Calendar.DAY_OF_MONTH)
+                val isCurrentMonth = (Calendar.getInstance().get(Calendar.MONTH) == targetMonth &&
+                        Calendar.getInstance().get(Calendar.YEAR) == targetYear)
+
+                val weekBuckets = mutableListOf<Triple<String, String, IntRange>>()
+                weekBuckets.add(Triple("W1", "01-07", 1..7))
+                weekBuckets.add(Triple("W2", "08-14", 8..14))
+                weekBuckets.add(Triple("W3", "15-21", 15..21))
+                weekBuckets.add(Triple("W4", "22-28", 22..28))
+                if (maxDaysInMonth > 28) {
+                    weekBuckets.add(Triple("W5", "29-$maxDaysInMonth", 29..maxDaysInMonth))
+                }
+
+                weekBuckets.forEachIndexed { idx, (wLabel, dateRangeStr, range) ->
+                    val isHighlighted = isCurrentMonth && currentDayOfMonth in range
+
+                    val weekTx = transactions.filter { tx ->
+                        val txCal = Calendar.getInstance().apply { timeInMillis = tx.timestamp }
+                        txCal.get(Calendar.YEAR) == targetYear &&
+                                txCal.get(Calendar.MONTH) == targetMonth &&
+                                txCal.get(Calendar.DAY_OF_MONTH) in range
+                    }
+
+                    var weekSpend = weekTx.filter { it.quantityDelta > 0 }.sumOf { it.quantityDelta * 12.0 }
+                    var weekSales = weekTx.filter { it.quantityDelta < 0 }.sumOf { abs(it.quantityDelta) * 19.99 }
+                    val realSalesCount = weekTx.count { it.quantityDelta < 0 || it.transactionType.contains("OUT", ignoreCase = true) }
+
+                    if (weekSpend == 0.0 && weekSales == 0.0) {
+                        val seedSpends = listOf(380.0, 520.0, 410.0, 680.0, 310.0)
+                        val seedSales = listOf(1250.0, 1840.0, 1420.0, 2180.0, 950.0)
+                        val seedCounts = listOf(14, 22, 18, 28, 12)
+                        weekSpend = seedSpends.getOrElse(idx) { 350.0 }
+                        weekSales = seedSales.getOrElse(idx) { 1100.0 }
+                        val seedCount = seedCounts.getOrElse(idx) { 15 }
+                        points.add(
+                            DayExpenseSalesPoint(
+                                dayLabel = wLabel,
+                                dateLabel = dateRangeStr,
+                                spendAmount = weekSpend,
+                                salesAmount = weekSales,
+                                spendFraction = 0f,
+                                salesFraction = 0f,
+                                salesCount = if (realSalesCount > 0) realSalesCount else seedCount,
+                                isHighlighted = isHighlighted
+                            )
+                        )
+                    } else {
+                        points.add(
+                            DayExpenseSalesPoint(
+                                dayLabel = wLabel,
+                                dateLabel = dateRangeStr,
+                                spendAmount = weekSpend,
+                                salesAmount = weekSales,
+                                spendFraction = 0f,
+                                salesFraction = 0f,
+                                salesCount = realSalesCount,
+                                isHighlighted = isHighlighted
+                            )
+                        )
+                    }
+
+                    if (weekSpend > maxSpend) maxSpend = weekSpend
+                    if (weekSales > maxSales) maxSales = weekSales
+                }
             }
 
-            var daySpend = dayTx.filter { it.quantityDelta > 0 }.sumOf { it.quantityDelta * 12.0 }
-            var daySales = dayTx.filter { it.quantityDelta < 0 }.sumOf { abs(it.quantityDelta) * 19.99 }
-            val realSalesCount = dayTx.count { it.quantityDelta < 0 || it.transactionType.contains("OUT", ignoreCase = true) }
+            DateFilterType.ALL_TIME -> {
+                // Past 6 months: e.g. Jun, Jul, Aug, Sep, Oct, Nov
+                val monthNames = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+                val nowCal = Calendar.getInstance()
+                for (offset in 5 downTo 0) {
+                    val mCal = (nowCal.clone() as Calendar).apply {
+                        add(Calendar.MONTH, -offset)
+                    }
+                    val mYear = mCal.get(Calendar.YEAR)
+                    val mMonth = mCal.get(Calendar.MONTH)
+                    val mLabel = monthNames[mMonth]
+                    val yrLabel = "'${(mYear % 100).toString().padStart(2, '0')}"
+                    val isCurrent = offset == 0
 
-            if (daySpend == 0.0 && daySales == 0.0) {
-                daySpend = listOf(140.0, 320.0, 95.0, 480.0, 260.0, 520.0, 180.0)[i]
-                daySales = listOf(350.0, 580.0, 290.0, 720.0, 490.0, 890.0, 410.0)[i]
+                    val mTx = transactions.filter { tx ->
+                        val txCal = Calendar.getInstance().apply { timeInMillis = tx.timestamp }
+                        txCal.get(Calendar.YEAR) == mYear && txCal.get(Calendar.MONTH) == mMonth
+                    }
+
+                    var mSpend = mTx.filter { it.quantityDelta > 0 }.sumOf { it.quantityDelta * 12.0 }
+                    var mSales = mTx.filter { it.quantityDelta < 0 }.sumOf { abs(it.quantityDelta) * 19.99 }
+                    val realSalesCount = mTx.count { it.quantityDelta < 0 || it.transactionType.contains("OUT", ignoreCase = true) }
+
+                    if (mSpend == 0.0 && mSales == 0.0) {
+                        val seedSpends = listOf(1200.0, 1650.0, 1400.0, 1850.0, 2100.0, 1530.0)
+                        val seedSales = listOf(4500.0, 5800.0, 5100.0, 6900.0, 7800.0, 6280.0)
+                        val seedCounts = listOf(58, 74, 66, 89, 95, 82)
+                        val idx = 5 - offset
+                        mSpend = seedSpends.getOrElse(idx) { 1500.0 }
+                        mSales = seedSales.getOrElse(idx) { 5500.0 }
+                        val seedCount = seedCounts.getOrElse(idx) { 70 }
+                        points.add(
+                            DayExpenseSalesPoint(
+                                dayLabel = mLabel,
+                                dateLabel = yrLabel,
+                                spendAmount = mSpend,
+                                salesAmount = mSales,
+                                spendFraction = 0f,
+                                salesFraction = 0f,
+                                salesCount = if (realSalesCount > 0) realSalesCount else seedCount,
+                                isHighlighted = isCurrent
+                            )
+                        )
+                    } else {
+                        points.add(
+                            DayExpenseSalesPoint(
+                                dayLabel = mLabel,
+                                dateLabel = yrLabel,
+                                spendAmount = mSpend,
+                                salesAmount = mSales,
+                                spendFraction = 0f,
+                                salesFraction = 0f,
+                                salesCount = realSalesCount,
+                                isHighlighted = isCurrent
+                            )
+                        )
+                    }
+
+                    if (mSpend > maxSpend) maxSpend = mSpend
+                    if (mSales > maxSales) maxSales = mSales
+                }
             }
 
-            val finalSalesCount = if (realSalesCount > 0) realSalesCount else listOf(2, 4, 1, 5, 3, 6, 2)[i]
-
-            if (daySpend > maxSpend) maxSpend = daySpend
-            if (daySales > maxSales) maxSales = daySales
-
-            points.add(
-                DayExpenseSalesPoint(
-                    dayLabel = dLabel,
-                    dateLabel = dateNumStr,
-                    spendAmount = daySpend,
-                    salesAmount = daySales,
-                    spendFraction = 0f,
-                    salesFraction = 0f,
-                    salesCount = finalSalesCount,
-                    isHighlighted = isCurrentOrSelected
+            DateFilterType.TODAY, DateFilterType.CUSTOM_DATE -> {
+                // Breakdown into 5 time windows across the selected day:
+                val targetYear = cal.get(Calendar.YEAR)
+                val targetDay = cal.get(Calendar.DAY_OF_YEAR)
+                val timeWindows = listOf(
+                    Triple("08:00", "Morn", 6..9),
+                    Triple("11:00", "Noon", 10..12),
+                    Triple("14:00", "Aft", 13..15),
+                    Triple("17:00", "Late", 16..18),
+                    Triple("20:00", "Eve", 19..23)
                 )
-            )
+
+                timeWindows.forEachIndexed { idx, (timeLabel, descLabel, hourRange) ->
+                    val slotTx = transactions.filter { tx ->
+                        val txCal = Calendar.getInstance().apply { timeInMillis = tx.timestamp }
+                        txCal.get(Calendar.YEAR) == targetYear &&
+                                txCal.get(Calendar.DAY_OF_YEAR) == targetDay &&
+                                txCal.get(Calendar.HOUR_OF_DAY) in hourRange
+                    }
+
+                    var slotSpend = slotTx.filter { it.quantityDelta > 0 }.sumOf { it.quantityDelta * 12.0 }
+                    var slotSales = slotTx.filter { it.quantityDelta < 0 }.sumOf { abs(it.quantityDelta) * 19.99 }
+                    val realSalesCount = slotTx.count { it.quantityDelta < 0 || it.transactionType.contains("OUT", ignoreCase = true) }
+
+                    if (slotSpend == 0.0 && slotSales == 0.0) {
+                        val seedSpends = listOf(35.0, 90.0, 20.0, 110.0, 45.0)
+                        val seedSales = listOf(85.0, 160.0, 120.0, 240.0, 95.0)
+                        val seedCounts = listOf(1, 3, 2, 4, 2)
+                        slotSpend = seedSpends[idx]
+                        slotSales = seedSales[idx]
+                        points.add(
+                            DayExpenseSalesPoint(
+                                dayLabel = timeLabel,
+                                dateLabel = descLabel,
+                                spendAmount = slotSpend,
+                                salesAmount = slotSales,
+                                spendFraction = 0f,
+                                salesFraction = 0f,
+                                salesCount = if (realSalesCount > 0) realSalesCount else seedCounts[idx],
+                                isHighlighted = idx == 2
+                            )
+                        )
+                    } else {
+                        points.add(
+                            DayExpenseSalesPoint(
+                                dayLabel = timeLabel,
+                                dateLabel = descLabel,
+                                spendAmount = slotSpend,
+                                salesAmount = slotSales,
+                                spendFraction = 0f,
+                                salesFraction = 0f,
+                                salesCount = realSalesCount,
+                                isHighlighted = idx == 2
+                            )
+                        )
+                    }
+
+                    if (slotSpend > maxSpend) maxSpend = slotSpend
+                    if (slotSales > maxSales) maxSales = slotSales
+                }
+            }
         }
 
         val maxVal = maxOf(maxSpend, maxSales, 100.0)
@@ -417,6 +624,7 @@ fun StatisticsScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         val filterLabel = when (dateFilterType) {
+                            DateFilterType.ALL_TIME -> "All Dates"
                             DateFilterType.TODAY -> "Today"
                             DateFilterType.THIS_WEEK -> "This Week"
                             DateFilterType.THIS_MONTH -> "This Month"
@@ -445,6 +653,18 @@ fun StatisticsScreen(
                     containerColor = MaterialTheme.colorScheme.surface,
                     tonalElevation = 6.dp
                 ) {
+                    DropdownMenuItem(
+                        text = { Text("All Dates", fontWeight = if (dateFilterType == DateFilterType.ALL_TIME) FontWeight.Bold else FontWeight.Normal) },
+                        onClick = {
+                            dateFilterType = DateFilterType.ALL_TIME
+                            filterDropdownExpanded = false
+                        },
+                        leadingIcon = {
+                            if (dateFilterType == DateFilterType.ALL_TIME) {
+                                Icon(Icons.Default.Check, contentDescription = null, tint = NawanoPrimary200, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text("Today", fontWeight = if (dateFilterType == DateFilterType.TODAY) FontWeight.Bold else FontWeight.Normal) },
                         onClick = {
@@ -697,8 +917,15 @@ fun StatisticsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val activityTitle = when (dateFilterType) {
+                        DateFilterType.ALL_TIME -> "All-Time Activity"
+                        DateFilterType.THIS_WEEK -> "Weekly Activity"
+                        DateFilterType.THIS_MONTH -> "Monthly Activity"
+                        DateFilterType.TODAY -> "Today's Activity"
+                        DateFilterType.CUSTOM_DATE -> "${dateFormat.format(selectedCalendar.time)} Activity"
+                    }
                     Text(
-                        text = "Weekly Activity",
+                        text = activityTitle,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -1440,8 +1667,14 @@ private fun WeeklyBarChartCanvas(points: List<DayExpenseSalesPoint>) {
         ) {
             val totalWidth = size.width
             val chartHeight = size.height
-            val barGroupWidth = totalWidth / points.size.coerceAtLeast(1)
-            val barWidth = 9.dp.toPx()
+            val count = points.size.coerceAtLeast(1)
+            val barGroupWidth = totalWidth / count
+            val barWidth = when {
+                count <= 5 -> 12.dp.toPx()
+                count <= 6 -> 10.dp.toPx()
+                count <= 7 -> 9.dp.toPx()
+                else -> 7.dp.toPx()
+            }
 
             val steps = 3
             for (i in 0..steps) {
@@ -1481,26 +1714,31 @@ private fun WeeklyBarChartCanvas(points: List<DayExpenseSalesPoint>) {
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        // Days row: Day Name + Date Number + Sales Count (e.g. "Mon / 09 / 2 sales")
+        // Days row: Day/Period Name + Date Range/Number + Sales Count (e.g. "Mon / 09 / 2 sales" or "W1 / 01-07 / 14 sales")
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceAround
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             points.forEach { point ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Text(
                         text = point.dayLabel,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = if (point.isHighlighted) FontWeight.Bold else FontWeight.Normal,
                         color = if (point.isHighlighted) NawanoPrimary200 else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 10.sp
+                        fontSize = 10.sp,
+                        textAlign = TextAlign.Center
                     )
                     Text(
                         text = point.dateLabel,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = if (point.isHighlighted) FontWeight.ExtraBold else FontWeight.Medium,
                         color = if (point.isHighlighted) NawanoPrimary200 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                        fontSize = 9.sp
+                        fontSize = 9.sp,
+                        textAlign = TextAlign.Center
                     )
                     Text(
                         text = "${point.salesCount} ${if (point.salesCount == 1) "sale" else "sales"}",
@@ -1508,7 +1746,8 @@ private fun WeeklyBarChartCanvas(points: List<DayExpenseSalesPoint>) {
                         fontWeight = if (point.isHighlighted) FontWeight.Bold else FontWeight.Normal,
                         color = if (point.isHighlighted) NawanoPrimary200 else MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
                         fontSize = 8.sp,
-                        maxLines = 1
+                        maxLines = 1,
+                        textAlign = TextAlign.Center
                     )
                 }
             }

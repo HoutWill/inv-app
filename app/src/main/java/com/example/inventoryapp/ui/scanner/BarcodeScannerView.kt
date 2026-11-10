@@ -2,6 +2,8 @@ package com.example.inventoryapp.ui.scanner
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -197,17 +199,38 @@ private fun CameraPreview(
                         if (hasDispatchedBarcode) return@MlKitAnalyzer
                         val barcodes = result?.getValue(barcodeScanner)
                         if (!barcodes.isNullOrEmpty()) {
-                            val barcode = barcodes.firstOrNull()
-                            val rawCode = barcode?.rawValue?.trim() ?: barcode?.displayValue?.trim()
-                            if (!rawCode.isNullOrBlank() && !hasDispatchedBarcode) {
+                            // Target the barcode closest to the viewfinder center
+                            val targetBarcode = if (barcodes.size > 1) {
+                                barcodes.minByOrNull { b ->
+                                    val box = b.boundingBox
+                                    if (box != null) {
+                                        val cx = box.centerX()
+                                        val cy = box.centerY()
+                                        cx * cx + cy * cy
+                                    } else {
+                                        Int.MAX_VALUE
+                                    }
+                                } ?: barcodes.first()
+                            } else {
+                                barcodes.first()
+                            }
+
+                            val exactCode = extractExactBarcodeNumber(targetBarcode)
+                            if (!exactCode.isNullOrBlank() && !hasDispatchedBarcode) {
                                 hasDispatchedBarcode = true
                                 mainExecutor.execute {
+                                    try {
+                                        val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 70)
+                                        toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 100)
+                                    } catch (e: Exception) {
+                                        // Ignore tone generator errors if unsupported or muted
+                                    }
                                     try {
                                         cameraProvider.unbindAll()
                                     } catch (e: Exception) {
                                         Log.e("CameraPreview", "Error unbinding camera upon scan", e)
                                     }
-                                    currentOnBarcodeScanned(rawCode)
+                                    currentOnBarcodeScanned(exactCode)
                                 }
                             }
                         }

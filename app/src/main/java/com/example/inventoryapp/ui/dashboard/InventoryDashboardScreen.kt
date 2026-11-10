@@ -61,53 +61,6 @@ enum class ScannerTarget {
     ADD_PRODUCT_SKU
 }
 
-@Composable
-fun NawanoLogoBadge(modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier.size(38.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.primaryContainer,
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize().padding(7.dp)) {
-            val w = size.width
-            val h = size.height
-            // Draw left ribbon
-            val pathLeft = Path().apply {
-                moveTo(w * 0.42f, 0f)
-                lineTo(w * 0.08f, h * 0.22f)
-                lineTo(w * 0.08f, h * 0.78f)
-                lineTo(w * 0.42f, h)
-                lineTo(w * 0.42f, h * 0.65f)
-                lineTo(w * 0.24f, h * 0.52f)
-                lineTo(w * 0.24f, h * 0.32f)
-                lineTo(w * 0.42f, h * 0.20f)
-                close()
-            }
-            // Draw right ribbon
-            val pathRight = Path().apply {
-                moveTo(w * 0.58f, 0f)
-                lineTo(w * 0.92f, h * 0.22f)
-                lineTo(w * 0.92f, h * 0.78f)
-                lineTo(w * 0.58f, h)
-                lineTo(w * 0.58f, h * 0.65f)
-                lineTo(w * 0.76f, h * 0.52f)
-                lineTo(w * 0.76f, h * 0.32f)
-                lineTo(w * 0.58f, h * 0.20f)
-                close()
-            }
-            val brush = Brush.linearGradient(
-                colors = listOf(NawanoGradientStart, Color(0xFFB57BF8), NawanoGradientEnd),
-                start = Offset(0f, 0f),
-                end = Offset(w, h)
-            )
-            drawPath(pathLeft, brush)
-            drawPath(pathRight, brush)
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InventoryDashboardScreen(
@@ -135,148 +88,61 @@ fun InventoryDashboardScreen(
 
     val categoryList = listOf("All", "Electronics", "Accessories", "Furniture", "Hardware", "Grocery", "Other", "Low Stock")
 
-    ModalNavigationDrawer(
+    InventoryNavigationDrawer(
         drawerState = drawerState,
-        drawerContent = {
-            NawanoDrawerSheet(
-                currentDestination = drawerDestination ?: when (activeTab) {
-                    0 -> DrawerDestination.DASHBOARD
-                    1 -> DrawerDestination.ITEMS
-                    2 -> DrawerDestination.STATISTICS
-                    else -> DrawerDestination.DASHBOARD
-                },
-                onDestinationSelected = { dest ->
-                    scope.launch { drawerState.close() }
-                    when (dest) {
-                        DrawerDestination.DASHBOARD -> {
-                            drawerDestination = null
-                            activeTab = 0
-                        }
-                        DrawerDestination.ITEMS -> {
-                            drawerDestination = null
-                            activeTab = 1
-                        }
-                        DrawerDestination.STATISTICS -> {
-                            drawerDestination = null
-                            activeTab = 2
-                        }
-                        DrawerDestination.INVENTORY_SUMMARY -> {
-                            drawerDestination = DrawerDestination.INVENTORY_SUMMARY
-                        }
-                        DrawerDestination.MOVEMENT_LIST -> {
-                            drawerDestination = DrawerDestination.MOVEMENT_LIST
-                        }
-                        DrawerDestination.AUDIT_LOGS -> {
-                            drawerDestination = DrawerDestination.AUDIT_LOGS
-                        }
-                        DrawerDestination.SETTINGS -> {
-                            drawerDestination = DrawerDestination.SETTINGS
-                        }
-                    }
-                },
-                onCloseDrawer = { scope.launch { drawerState.close() } },
-                isDarkTheme = isDarkTheme,
-                onToggleTheme = onToggleTheme,
-                totalSkus = uiState.totalSkus
-            )
-        }
+        currentDestination = drawerDestination ?: when (activeTab) {
+            0 -> DrawerDestination.DASHBOARD
+            1 -> DrawerDestination.ITEMS
+            2 -> DrawerDestination.STATISTICS
+            else -> DrawerDestination.DASHBOARD
+        },
+        onDestinationSelected = { dest ->
+            scope.launch { drawerState.close() }
+            when (dest) {
+                DrawerDestination.DASHBOARD -> {
+                    drawerDestination = null
+                    activeTab = 0
+                }
+                DrawerDestination.ITEMS -> {
+                    drawerDestination = null
+                    activeTab = 1
+                }
+                DrawerDestination.STATISTICS -> {
+                    drawerDestination = null
+                    activeTab = 2
+                }
+                DrawerDestination.INVENTORY_SUMMARY -> {
+                    drawerDestination = DrawerDestination.INVENTORY_SUMMARY
+                }
+                DrawerDestination.MOVEMENT_LIST -> {
+                    drawerDestination = DrawerDestination.MOVEMENT_LIST
+                }
+                DrawerDestination.AUDIT_LOGS -> {
+                    drawerDestination = DrawerDestination.AUDIT_LOGS
+                }
+                DrawerDestination.SETTINGS -> {
+                    drawerDestination = DrawerDestination.SETTINGS
+                }
+            }
+        },
+        onCloseDrawer = { scope.launch { drawerState.close() } },
+        isDarkTheme = isDarkTheme,
+        onToggleTheme = onToggleTheme,
+        totalSkus = uiState.totalSkus
     ) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
-                TopAppBar(
-                    navigationIcon = {
-                        IconButton(
-                            onClick = { scope.launch { drawerState.open() } },
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = "Open Navigation Menu",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    },
-                    title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    ) {
-                        NawanoLogoBadge()
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "Nawano",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(1.dp))
-                            Text(
-                                text = "Smart Stock Manager • ${uiState.totalSkus} SKUs",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                },
-                actions = {
-                    // Dark / Light Mode Toggle Button
-                    IconButton(
-                        onClick = onToggleTheme,
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
-                            contentDescription = if (isDarkTheme) "Switch to Light Mode" else "Switch to Dark Mode",
-                            tint = if (isDarkTheme) Color(0xFFFBBF24) else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    // Notification Bell with Stock Alert Badge
-                    val lowStockCount = uiState.lowStockCount
-                    IconButton(
-                        onClick = { isNotificationsOpen = true },
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        BadgedBox(
-                            badge = {
-                                if (lowStockCount > 0) {
-                                    Badge(
-                                        containerColor = Color(0xFFEF4444),
-                                        contentColor = Color.White
-                                    ) {
-                                        Text(
-                                            text = if (lowStockCount > 99) "99+" else lowStockCount.toString(),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        ) {
-                            Icon(
-                                imageVector = if (lowStockCount > 0) Icons.Default.Notifications else Icons.Outlined.Notifications,
-                                contentDescription = "Notifications & Alerts",
-                                tint = if (lowStockCount > 0) NawanoPrimary200 else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(21.dp)
-                            )
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                InventoryTopBar(
+                    totalSkus = uiState.totalSkus,
+                    lowStockCount = uiState.lowStockCount,
+                    isDarkTheme = isDarkTheme,
+                    onOpenDrawer = { scope.launch { drawerState.open() } },
+                    onToggleTheme = onToggleTheme,
+                    onOpenNotifications = { isNotificationsOpen = true }
                 )
-            )
-        }
-    ) { innerPadding ->
+            }
+        ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -542,7 +408,7 @@ fun InventoryDashboardScreen(
                 }
 
                 // Floating Bottom Navigation Bar (handles system bars padding safely)
-                FloatingInventoryBottomBar(
+                InventoryBottomBar(
                     selectedTab = activeTab,
                     onTabSelected = { tab ->
                         drawerDestination = null
@@ -1230,179 +1096,6 @@ private fun InventoryItemsCatalogTab(
     }
 }
 
-/**
- * Modern Floating Bottom Navigation Bar with elevated pop-up scan button.
- */
-@Composable
-private fun FloatingInventoryBottomBar(
-    selectedTab: Int,
-    onTabSelected: (Int) -> Unit,
-    onScanClicked: () -> Unit,
-    totalItemCount: Int,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier.padding(top = 18.dp),
-        contentAlignment = Alignment.BottomCenter
-    ) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(32.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp,
-            shadowElevation = 8.dp,
-            border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.20f))
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceAround,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Tab 0: Home (Official Nawano Bottom Bar)
-                FloatingNavItem(
-                    title = "Home",
-                    icon = if (selectedTab == 0) Icons.Default.Home else Icons.Outlined.Home,
-                    isSelected = selectedTab == 0,
-                    onClick = { onTabSelected(0) }
-                )
-
-                // Tab 1: Items
-                FloatingNavItem(
-                    title = "Items",
-                    icon = if (selectedTab == 1) Icons.Default.Inventory2 else Icons.Outlined.Inventory2,
-                    isSelected = selectedTab == 1,
-                    onClick = { onTabSelected(1) }
-                )
-
-                // Center placeholder space for the elevated pop-up scan button
-                Spacer(modifier = Modifier.width(56.dp))
-
-                // Tab 2: Stats (Analytics & Logs)
-                FloatingNavItem(
-                    title = "Stats",
-                    icon = if (selectedTab == 2) Icons.Default.BarChart else Icons.Outlined.BarChart,
-                    isSelected = selectedTab == 2,
-                    onClick = { onTabSelected(2) }
-                )
-
-                // Tab 3: Settings (Settings & Preferences)
-                FloatingNavItem(
-                    title = "Settings",
-                    icon = if (selectedTab == 3) Icons.Default.Settings else Icons.Outlined.Settings,
-                    isSelected = selectedTab == 3,
-                    onClick = { onTabSelected(3) }
-                )
-            }
-        }
-
-        // Center Popped-Up Floating Scan Button (Elevated above bar with Nawano gradient & white QR icon)
-        FloatingScanButton(
-            onClick = onScanClicked,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .offset(y = (-18).dp)
-        )
-    }
-}
-
-@Composable
-private fun FloatingNavItem(
-    title: String,
-    icon: ImageVector,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val activeColor = NawanoPrimary200
-    val inactiveColor = MaterialTheme.colorScheme.onSurfaceVariant
-
-    val animatedBgColor by animateColorAsState(
-        targetValue = if (isSelected) activeColor.copy(alpha = 0.14f) else Color.Transparent,
-        animationSpec = tween(220, easing = FastOutSlowInEasing),
-        label = "NavBgColor"
-    )
-    val animatedIconTint by animateColorAsState(
-        targetValue = if (isSelected) activeColor else inactiveColor,
-        animationSpec = tween(200, easing = FastOutSlowInEasing),
-        label = "NavIconTint"
-    )
-    val animatedScale by animateFloatAsState(
-        targetValue = if (isSelected) 1.08f else 1.0f,
-        animationSpec = spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMedium),
-        label = "NavScale"
-    )
-
-    Column(
-        modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .graphicsLayer {
-                    scaleX = animatedScale
-                    scaleY = animatedScale
-                }
-                .clip(CircleShape)
-                .background(animatedBgColor),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = title,
-                tint = animatedIconTint,
-                modifier = Modifier.size(22.dp)
-            )
-        }
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            color = animatedIconTint
-        )
-    }
-}
-
-@Composable
-private fun FloatingScanButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        onClick = onClick,
-        shape = CircleShape,
-        color = Color.Transparent,
-        tonalElevation = 8.dp,
-        shadowElevation = 12.dp,
-        border = BorderStroke(4.dp, MaterialTheme.colorScheme.surface),
-        modifier = modifier.size(58.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = listOf(NawanoGradientStart, NawanoGradientEnd)
-                    )
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.QrCodeScanner,
-                contentDescription = "Quick Scan Barcode",
-                tint = Color.White,
-                modifier = Modifier.size(28.dp)
-            )
-        }
-    }
-}
-
 @Composable
 private fun QuickActionButton(
     title: String,
@@ -1813,11 +1506,11 @@ private fun NawanoIncomingGoodsSection(
     onViewAll: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Collect all activities (merging real Room transactions with Behance seed demo activities)
+    // Collect all activities from real Room transactions
     val allActivities = remember(transactions) {
         val list = mutableListOf<NawanoDashboardActivity>()
 
-        // 1. Map real transactions first (most recent on top)
+        // Map real transactions (most recent on top)
         transactions.forEach { tx ->
             val isInbound = tx.quantityDelta > 0 || tx.transactionType == "STOCK_IN" || tx.transactionType == "NEW_ITEM"
             val isRequisition = tx.transactionType.contains("REQ", ignoreCase = true) ||
@@ -1855,76 +1548,6 @@ private fun NawanoIncomingGoodsSection(
                     isPositive = tx.quantityDelta >= 0
                 )
             )
-        }
-
-        // 2. Curated Behance UI Kit activities
-        val sampleActivities = listOf(
-            NawanoDashboardActivity(
-                id = "demo-req-1",
-                sku = "#REQ-0412",
-                title = "Restock Requisition - Central Kitchen",
-                type = "INCOMING",
-                badgeText = "Incoming Req",
-                badgeColor = Color(0xFF8B5CF6),
-                arrivalTime = "Est. arrival: Today • 10:45 AM",
-                reference = "Ref: REQ-2024-0412 (Hub Requisition)",
-                quantityChange = "+310 units",
-                isPositive = true
-            ),
-            NawanoDashboardActivity(
-                id = "demo-in-1",
-                sku = "#MOV-0891",
-                title = "Wholesale Inbound Delivery - Fresh Cargo",
-                type = "INBOUND",
-                badgeText = "Goods Inbound",
-                badgeColor = Color(0xFF10B981),
-                arrivalTime = "Est. arrival: Today • 11:30 AM",
-                reference = "Ref: MOV-2024-0891 (Tokyo Fresh Dist)",
-                quantityChange = "+240 units",
-                isPositive = true
-            ),
-            NawanoDashboardActivity(
-                id = "demo-out-1",
-                sku = "#ORD-1104",
-                title = "Store Dispatch Order - Outlet #2",
-                type = "OUTBOUND",
-                badgeText = "Goods Outbound",
-                badgeColor = Color(0xFFEF4444),
-                arrivalTime = "Departed: Today • 01:15 PM",
-                reference = "Ref: ORD-2024-1104 (Downtown Outlet)",
-                quantityChange = "-85 units",
-                isPositive = false
-            ),
-            NawanoDashboardActivity(
-                id = "demo-in-2",
-                sku = "#MOV-0870",
-                title = "Cold Chain Poultry Cargo Restock",
-                type = "INBOUND",
-                badgeText = "Goods Inbound",
-                badgeColor = Color(0xFF10B981),
-                arrivalTime = "Yesterday • 04:20 PM",
-                reference = "Ref: MOV-2024-0870 (Green Valley)",
-                quantityChange = "+150 units",
-                isPositive = true
-            ),
-            NawanoDashboardActivity(
-                id = "demo-out-2",
-                sku = "#ORD-1088",
-                title = "POS Counter Restock Order",
-                type = "OUTBOUND",
-                badgeText = "Goods Outbound",
-                badgeColor = Color(0xFFEF4444),
-                arrivalTime = "Yesterday • 02:00 PM",
-                reference = "Ref: ORD-2024-1088 (Westside Franchise)",
-                quantityChange = "-120 units",
-                isPositive = false
-            )
-        )
-
-        sampleActivities.forEach { sample ->
-            if (list.none { it.id == sample.id }) {
-                list.add(sample)
-            }
         }
         list
     }

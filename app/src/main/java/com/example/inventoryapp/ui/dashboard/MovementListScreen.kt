@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -72,85 +73,23 @@ fun MovementListScreen(
     var searchQuery by remember { mutableStateOf("") }
     var showCreateDialog by remember { mutableStateOf(false) }
 
-    // Seed mock and real activities
+    // Map real activities from stock transactions
     val sampleActivities = remember(stockTransactions) {
-        val list = mutableListOf(
-            MovementActivityItem(
-                id = "1",
-                type = MovementType.INBOUND,
-                referenceCode = "MOV-2024-0891",
-                title = "Wholesale Inbound Delivery",
-                partnerOrLocation = "Supplier: Tokyo Fresh Distribution",
-                timestamp = System.currentTimeMillis() - 3600_000 * 2,
-                itemsCount = 6,
-                totalQty = 240,
-                status = MovementStatus.COMPLETED
-            ),
-            MovementActivityItem(
-                id = "2",
-                type = MovementType.OUTBOUND,
-                referenceCode = "ORD-2024-1104",
-                title = "Store Dispatch Order",
-                partnerOrLocation = "Destination: Downtown Outlet #2",
-                timestamp = System.currentTimeMillis() - 3600_000 * 5,
-                itemsCount = 4,
-                totalQty = 85,
-                status = MovementStatus.IN_DELIVERY
-            ),
-            MovementActivityItem(
-                id = "3",
-                type = MovementType.INCOMING_REQ,
-                referenceCode = "REQ-2024-0412",
-                title = "Restock Requisition",
-                partnerOrLocation = "Branch: Central Kitchen Hub",
-                timestamp = System.currentTimeMillis() - 3600_000 * 24,
-                itemsCount = 8,
-                totalQty = 310,
-                status = MovementStatus.PENDING
-            ),
-            MovementActivityItem(
-                id = "4",
-                type = MovementType.INBOUND,
-                referenceCode = "MOV-2024-0870",
-                title = "Cold Chain Poultry Cargo",
-                partnerOrLocation = "Supplier: Green Valley Meats",
-                timestamp = System.currentTimeMillis() - 3600_000 * 48,
-                itemsCount = 3,
-                totalQty = 150,
-                status = MovementStatus.COMPLETED
-            ),
-            MovementActivityItem(
-                id = "5",
-                type = MovementType.OUTBOUND,
-                referenceCode = "ORD-2024-1088",
-                title = "POS Counter Restock",
-                partnerOrLocation = "Destination: Westside Franchise",
-                timestamp = System.currentTimeMillis() - 3600_000 * 72,
-                itemsCount = 5,
-                totalQty = 120,
-                status = MovementStatus.COMPLETED
-            )
-        )
-
-        // Augment with recent stock transactions if available
-        stockTransactions.take(5).forEachIndexed { idx, tx ->
+        stockTransactions.map { tx ->
             val isStockIn = tx.quantityDelta > 0
             val codeSuffix = if (tx.id.length >= 6) tx.id.take(6).uppercase() else tx.id.uppercase()
-            list.add(
-                MovementActivityItem(
-                    id = "tx_${tx.id}",
-                    type = if (isStockIn) MovementType.INBOUND else MovementType.OUTBOUND,
-                    referenceCode = "TX-$codeSuffix",
-                    title = "${if (isStockIn) "Stock In" else "Stock Out"}: ${tx.productName}",
-                    partnerOrLocation = if (!tx.note.isNullOrBlank()) tx.note else "Quick adjustment",
-                    timestamp = tx.timestamp,
-                    itemsCount = 1,
-                    totalQty = kotlin.math.abs(tx.quantityDelta),
-                    status = MovementStatus.COMPLETED
-                )
+            MovementActivityItem(
+                id = "tx_${tx.id}",
+                type = if (isStockIn) MovementType.INBOUND else MovementType.OUTBOUND,
+                referenceCode = "TX-$codeSuffix",
+                title = "${if (isStockIn) "Stock In" else "Stock Out"}: ${tx.productName}",
+                partnerOrLocation = if (!tx.note.isNullOrBlank()) tx.note else "Direct stock adjustment",
+                timestamp = tx.timestamp,
+                itemsCount = 1,
+                totalQty = kotlin.math.abs(tx.quantityDelta),
+                status = MovementStatus.COMPLETED
             )
         }
-        list
     }
 
     val filteredActivities = remember(sampleActivities, selectedFilterIndex, searchQuery) {
@@ -324,8 +263,42 @@ fun MovementListScreen(
             )
 
             // Activity Cards List
-            filteredActivities.forEach { item ->
-                MovementCard(item = item)
+            if (filteredActivities.isEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.SwapHoriz,
+                            contentDescription = null,
+                            tint = NawanoPrimary200,
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "No Movement Records",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Logistics activities and stock adjustments will appear here.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                filteredActivities.forEach { item ->
+                    MovementCard(item = item)
+                }
             }
         }
     }
