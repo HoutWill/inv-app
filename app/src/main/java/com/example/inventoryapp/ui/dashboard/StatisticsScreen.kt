@@ -515,7 +515,7 @@ private fun AbcAnalysisCard(
         Column(modifier = Modifier.padding(12.dp)) {
             Surface(
                 shape = RoundedCornerShape(6.dp),
-                color = if (isAlert) NawanoRose.copy(alpha = 0.12f) else NawanoPrimary50
+                color = if (isAlert) NawanoRose.copy(alpha = 0.12f) else MaterialTheme.colorScheme.primaryContainer
             ) {
                 Text(
                     text = classification,

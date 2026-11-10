@@ -120,8 +120,8 @@ fun InventorySummaryScreen(
                     Surface(
                         onClick = { weekDropdownExpanded = true },
                         shape = RoundedCornerShape(20.dp),
-                        color = NawanoPrimary50,
-                        border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.35f))
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -348,7 +348,7 @@ fun InventorySummaryScreen(
 
                         Surface(
                             shape = CircleShape,
-                            color = NawanoPrimary50,
+                            color = MaterialTheme.colorScheme.primaryContainer,
                             modifier = Modifier.size(32.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {

@@ -333,8 +333,8 @@ fun AddProductDialog(
             if (!imageUri.isNullOrBlank()) {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = NawanoPrimary50,
-                    border = BorderStroke(1.dp, NawanoPrimary100.copy(alpha = 0.6f)),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 6.dp)
@@ -391,8 +391,8 @@ fun AddProductDialog(
             } else {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = NawanoPrimary50,
-                    border = BorderStroke(1.dp, NawanoPrimary100.copy(alpha = 0.8f)),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 4.dp)

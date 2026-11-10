@@ -65,9 +65,9 @@ fun NawanoDrawerSheet(
             // Profile & Branding Header
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = NawanoPrimary50,
+                color = MaterialTheme.colorScheme.primaryContainer,
                 shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.dp, NawanoPrimary100.copy(alpha = 0.6f))
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
@@ -289,8 +289,8 @@ private fun DrawerNavRow(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
-        color = if (isSelected) NawanoPrimary50 else Color.Transparent,
-        border = if (isSelected) BorderStroke(1.dp, NawanoPrimary100.copy(alpha = 0.7f)) else null,
+        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)) else null,
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 3.dp)

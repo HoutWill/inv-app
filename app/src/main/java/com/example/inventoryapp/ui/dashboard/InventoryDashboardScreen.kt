@@ -66,9 +66,9 @@ fun NawanoLogoBadge(modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier.size(38.dp),
         shape = RoundedCornerShape(12.dp),
-        color = NawanoPrimary50,
+        color = MaterialTheme.colorScheme.primaryContainer,
         shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, NawanoPrimary100.copy(alpha = 0.6f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
     ) {
         Canvas(modifier = Modifier.fillMaxSize().padding(7.dp)) {
             val w = size.width
@@ -2383,9 +2383,9 @@ private fun ScannedSkuBanner(
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         Surface(
-                            color = NawanoPrimary50,
+                            color = MaterialTheme.colorScheme.primaryContainer,
                             shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, NawanoPrimary100.copy(alpha = 0.5f))
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
                         ) {
                             Text(
                                 text = "#${matchedItem.sku}",
@@ -2432,9 +2432,9 @@ private fun ScannedSkuBanner(
                         )
                     } else {
                         Surface(
-                            color = NawanoPrimary50,
+                            color = MaterialTheme.colorScheme.primaryContainer,
                             shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, NawanoPrimary100.copy(alpha = 0.35f)),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
                             modifier = Modifier.size(52.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
@@ -2521,7 +2521,7 @@ private fun ScannedSkuBanner(
         // Lookup / Unmatched State
         val containerColor = when {
             isFetchingOnline -> MaterialTheme.colorScheme.secondaryContainer
-            onlineProduct != null -> NawanoPrimary50
+            onlineProduct != null -> MaterialTheme.colorScheme.primaryContainer
             else -> MaterialTheme.colorScheme.errorContainer
         }
 
@@ -2725,9 +2725,9 @@ private fun InventoryItemCard(
             // Scanned Highlight Banner inside the card (Nawano Primary highlight)
             if (isHighlighted) {
                 Surface(
-                    color = NawanoPrimary50,
+                    color = MaterialTheme.colorScheme.primaryContainer,
                     shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, NawanoPrimary100.copy(alpha = 0.5f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 10.dp)
@@ -2777,9 +2777,9 @@ private fun InventoryItemCard(
                     )
                 } else {
                     Surface(
-                        color = NawanoPrimary50,
+                        color = MaterialTheme.colorScheme.primaryContainer,
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, NawanoPrimary100.copy(alpha = 0.4f)),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
                         modifier = Modifier.size(54.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -2849,9 +2849,9 @@ private fun InventoryItemCard(
                     ) {
                         // Monospace SKU Chip
                         Surface(
-                            color = NawanoPrimary50,
+                            color = MaterialTheme.colorScheme.primaryContainer,
                             shape = RoundedCornerShape(6.dp),
-                            border = BorderStroke(1.dp, NawanoPrimary100.copy(alpha = 0.4f))
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
                         ) {
                             Text(
                                 text = "#${item.sku}",
@@ -2865,7 +2865,7 @@ private fun InventoryItemCard(
 
                         // Hierarchical Category > Subcategory Pill
                         Surface(
-                            color = NawanoPrimary50,
+                            color = MaterialTheme.colorScheme.primaryContainer,
                             shape = RoundedCornerShape(6.dp)
                         ) {
                             val catBreadcrumb = if (item.subcategory.isNotBlank()) "${item.category} > ${item.subcategory}" else item.category
@@ -2939,9 +2939,9 @@ private fun InventoryItemCard(
                     )
 
                     Surface(
-                        color = NawanoPrimary50,
+                        color = MaterialTheme.colorScheme.primaryContainer,
                         shape = RoundedCornerShape(20.dp),
-                        border = BorderStroke(1.dp, NawanoPrimary100.copy(alpha = 0.6f))
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,

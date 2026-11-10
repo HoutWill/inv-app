@@ -25,6 +25,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
+import com.example.inventoryapp.ui.theme.NawanoPrimary200
 import java.util.Locale
 
 @Composable
@@ -71,11 +72,11 @@ fun StockNotificationsDialog(
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = if (lowStockProducts.isNotEmpty()) Color(0xFFEF4444).copy(alpha = 0.12f)
-                            else Color(0xFF2563EB).copy(alpha = 0.12f),
+                            else NawanoPrimary200.copy(alpha = 0.15f),
                             border = BorderStroke(
                                 1.dp,
                                 if (lowStockProducts.isNotEmpty()) Color(0xFFEF4444).copy(alpha = 0.3f)
-                                else Color(0xFF2563EB).copy(alpha = 0.3f)
+                                else NawanoPrimary200.copy(alpha = 0.35f)
                             ),
                             modifier = Modifier.size(40.dp)
                         ) {
@@ -83,7 +84,7 @@ fun StockNotificationsDialog(
                                 Icon(
                                     imageVector = if (lowStockProducts.isNotEmpty()) Icons.Default.Warning else Icons.Default.Notifications,
                                     contentDescription = null,
-                                    tint = if (lowStockProducts.isNotEmpty()) Color(0xFFEF4444) else Color(0xFF2563EB),
+                                    tint = if (lowStockProducts.isNotEmpty()) Color(0xFFEF4444) else NawanoPrimary200,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -287,7 +288,7 @@ fun StockNotificationsDialog(
                                                             text = product.sku,
                                                             style = MaterialTheme.typography.labelSmall,
                                                             fontFamily = FontFamily.Monospace,
-                                                            color = Color(0xFF2563EB)
+                                                            color = NawanoPrimary200
                                                         )
                                                         Text(
                                                             text = "•",
@@ -310,7 +311,7 @@ fun StockNotificationsDialog(
                                             Button(
                                                 onClick = { onRestock(product, 10) },
                                                 colors = ButtonDefaults.buttonColors(
-                                                    containerColor = Color(0xFF2563EB),
+                                                    containerColor = NawanoPrimary200,
                                                     contentColor = Color.White
                                                 ),
                                                 shape = RoundedCornerShape(10.dp),
@@ -357,7 +358,7 @@ fun StockNotificationsDialog(
                                 items(recentTransactions.take(20), key = { it.id }) { tx ->
                                     val isStockIn = tx.transactionType == "STOCK_IN"
                                     val isStockOut = tx.transactionType == "STOCK_OUT"
-                                    val txColor = if (isStockIn) Color(0xFF10B981) else if (isStockOut) Color(0xFFEF4444) else Color(0xFF2563EB)
+                                    val txColor = if (isStockIn) Color(0xFF10B981) else if (isStockOut) Color(0xFFEF4444) else NawanoPrimary200
 
                                     Surface(
                                         shape = RoundedCornerShape(14.dp),
@@ -443,7 +444,7 @@ fun StockNotificationsDialog(
                         },
                         modifier = Modifier.weight(1.3f),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                        colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200)
                     ) {
                         Text("View Catalog", fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.width(4.dp))

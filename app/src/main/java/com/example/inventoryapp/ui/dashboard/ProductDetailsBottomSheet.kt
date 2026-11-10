@@ -172,9 +172,9 @@ fun ProductDetailsBottomSheet(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
-                        color = NawanoPrimary50,
+                        color = MaterialTheme.colorScheme.primaryContainer,
                         shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, NawanoPrimary100.copy(alpha = 0.5f))
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
                     ) {
                         val categoryBreadcrumb = if (product.subcategory.isNotBlank()) {
                             "${product.category.uppercase(Locale.ROOT)} > ${product.subcategory.uppercase(Locale.ROOT)}"
@@ -530,9 +530,9 @@ fun ProductDetailsBottomSheet(
                             )
                         } else {
                             Surface(
-                                color = NawanoPrimary50,
+                                color = MaterialTheme.colorScheme.primaryContainer,
                                 shape = RoundedCornerShape(18.dp),
-                                border = BorderStroke(1.dp, NawanoPrimary100.copy(alpha = 0.5f)),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 Box(contentAlignment = Alignment.Center) {

@@ -439,7 +439,7 @@ private fun MovementCard(item: MovementActivityItem) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = NawanoPrimary50
+                        color = MaterialTheme.colorScheme.primaryContainer
                     ) {
                         Text(
                             text = "${item.itemsCount} SKUs",
@@ -454,7 +454,7 @@ private fun MovementCard(item: MovementActivityItem) {
 
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = NawanoPrimary50
+                        color = MaterialTheme.colorScheme.primaryContainer
                     ) {
                         Text(
                             text = "${item.totalQty} Units",
