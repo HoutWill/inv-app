@@ -41,6 +41,7 @@ import com.example.inventoryapp.data.local.entity.PurchaseOrderItemEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
 import com.example.inventoryapp.data.local.entity.UserEntity
 import com.example.inventoryapp.data.repository.OrderWithItems
+import com.example.inventoryapp.ui.dashboard.FloatingNavItem
 import com.example.inventoryapp.ui.scanner.BarcodeScannerScreen
 import com.example.inventoryapp.ui.theme.*
 import kotlinx.coroutines.launch
@@ -157,25 +158,25 @@ fun SupplierOrdersScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
         ) {
-            // Header Top Bar
+            // Header Top Bar (Matches Middleman InventoryTopBar design)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(12.dp))
                             .background(
                                 Brush.linearGradient(
-                                    listOf(NawanoPrimary200, Color(0xFFC084FC))
+                                    listOf(NawanoGradientStart, NawanoGradientEnd)
                                 )
                             ),
                         contentAlignment = Alignment.Center
@@ -183,7 +184,7 @@ fun SupplierOrdersScreen(
                         Text(
                             text = initials,
                             color = Color.White,
-                            fontSize = 15.sp,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Black
                         )
                     }
@@ -191,78 +192,66 @@ fun SupplierOrdersScreen(
                     Column {
                         Text(
                             text = user.fullName.replace(" (Supplier)", ""),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = textPrimary
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = if (activeViewTab == 0) "Supplier Orders" else "Wholesale Catalog",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = textSecondary
+                            text = if (activeViewTab == 0) "Supplier Portal • ${orders.size} Orders" else "Wholesale Catalog • ${products.size} SKUs",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Theme Toggle (Light / Dark mode)
-                    Surface(
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Dark / Light Mode Toggle Button (Identical to Middleman)
+                    IconButton(
                         onClick = onToggleTheme,
-                        shape = RoundedCornerShape(12.dp),
-                        color = cardBg,
-                        border = BorderStroke(1.dp, cardBorder),
-                        shadowElevation = if (isDarkTheme) 0.dp else 1.dp,
                         modifier = Modifier.size(38.dp)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
-                                contentDescription = "Toggle Theme",
-                                tint = if (isDarkTheme) NawanoAmber else NawanoPrimary200,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                            contentDescription = if (isDarkTheme) "Switch to Light Mode" else "Switch to Dark Mode",
+                            tint = if (isDarkTheme) Color(0xFFFBBF24) else textSecondary,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
 
                     // Add Button (+)
-                    Surface(
+                    IconButton(
                         onClick = {
                             if (activeViewTab == 0) showCreateDialog = true
                             else showAddCatalogItemDialog = true
                         },
-                        shape = RoundedCornerShape(12.dp),
-                        color = cardBg,
-                        border = BorderStroke(1.dp, cardBorder),
-                        shadowElevation = if (isDarkTheme) 0.dp else 1.dp,
                         modifier = Modifier.size(38.dp)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Add",
-                                tint = NawanoPrimary200,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Default.AddCircleOutline,
+                            contentDescription = "New Order",
+                            tint = NawanoPrimary200,
+                            modifier = Modifier.size(21.dp)
+                        )
                     }
 
                     // Exit / Logout Button
-                    Surface(
+                    IconButton(
                         onClick = onLogout,
-                        shape = RoundedCornerShape(12.dp),
-                        color = cardBg,
-                        border = BorderStroke(1.dp, cardBorder),
-                        shadowElevation = if (isDarkTheme) 0.dp else 1.dp,
                         modifier = Modifier.size(38.dp)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                                contentDescription = "Exit",
-                                tint = textSecondary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                            contentDescription = "Logout",
+                            tint = textSecondary,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
             }
@@ -614,108 +603,21 @@ fun SupplierOrdersScreen(
             }
         }
 
-        // Floating Bottom Navigation Dock (Matching Middleman Dashboard)
-        Surface(
+        // Floating Bottom Navigation Bar (Matches Middleman InventoryBottomBar design)
+        SupplierBottomBar(
+            activeViewTab = activeViewTab,
+            onTabSelected = { activeViewTab = it },
+            onAddClicked = {
+                if (activeViewTab == 0) showCreateDialog = true
+                else showAddCatalogItemDialog = true
+            },
+            onLogout = onLogout,
+            isDarkTheme = isDarkTheme,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(76.dp),
-            color = if (isDarkTheme) NawanoDark400.copy(alpha = 0.95f) else Color.White.copy(alpha = 0.96f),
-            border = BorderStroke(1.dp, cardBorder),
-            shadowElevation = if (isDarkTheme) 0.dp else 8.dp
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Orders (Home)
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.clickable { activeViewTab = 0 }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Inventory2,
-                        contentDescription = "Orders",
-                        tint = if (activeViewTab == 0) NawanoPrimary200 else textSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = "Orders",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (activeViewTab == 0) NawanoPrimary200 else textSecondary
-                    )
-                }
-
-                // Center Floating Glow Action Button (+ New)
-                Box(modifier = Modifier.offset(y = (-14).dp)) {
-                    Surface(
-                        onClick = {
-                            if (activeViewTab == 0) showCreateDialog = true
-                            else showAddCatalogItemDialog = true
-                        },
-                        shape = RoundedCornerShape(18.dp),
-                        color = NawanoPrimary200,
-                        shadowElevation = 8.dp,
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
-                        modifier = Modifier.size(50.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Add",
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
-                }
-
-                // Items / Catalog
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.clickable { activeViewTab = 1 }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Category,
-                        contentDescription = "Items",
-                        tint = if (activeViewTab == 1) NawanoPrimary200 else textSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = "Items",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (activeViewTab == 1) NawanoPrimary200 else textSecondary
-                    )
-                }
-
-                // Logout / Exit
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.clickable(onClick = onLogout)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                        contentDescription = "Exit",
-                        tint = textSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = "Exit",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = textSecondary
-                    )
-                }
-            }
-        }
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        )
     }
 
     // Modal 1: Dispatch Outbound Shipment Dialog with Carrier & Tracking Entry
@@ -901,194 +803,75 @@ private fun SupplierDashboardCard(
     onDelete: () -> Unit,
     onView: () -> Unit
 ) {
-    var isPaid by remember { mutableStateOf(false) }
-
     val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
-    val cardBorder = if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0)
+    val cardBorder = if (isDarkTheme) NawanoDarkOutline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
     val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
     val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
-    val dividerColor = if (isDarkTheme) NawanoDarkOutline.copy(alpha = 0.6f) else Color(0xFFF1F5F9)
-    val actionBtnBg = if (isDarkTheme) Color(0xFF2A2E63) else Color(0xFFEEF2FF)
-    val actionBtnText = if (isDarkTheme) Color.White else Color(0xFF4338CA)
-    val deleteBtnBg = if (isDarkTheme) Color(0xFFEF4444).copy(alpha = 0.2f) else Color(0xFFFEE2E2)
+    val dividerColor = if (isDarkTheme) NawanoDarkOutline.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
     val deleteBtnText = if (isDarkTheme) Color(0xFFF87171) else Color(0xFFDC2626)
 
     val (statusLabel, statusBg, statusFg) = if (isDarkTheme) {
         when (order.status) {
-            PurchaseOrderStatus.PENDING -> Triple("Pending", Color(0xFFF59E0B).copy(alpha = 0.2f), Color(0xFFFBBF24))
-            PurchaseOrderStatus.CONFIRMED -> Triple("Confirmed", Color(0xFF6366F1).copy(alpha = 0.2f), Color(0xFFC084FC))
-            PurchaseOrderStatus.DELIVERED -> Triple("Transit", Color(0xFF6366F1).copy(alpha = 0.2f), Color(0xFFC084FC))
-            PurchaseOrderStatus.RECEIVED -> Triple("Done", Color(0xFF10B981).copy(alpha = 0.2f), Color(0xFF34D399))
-            PurchaseOrderStatus.REJECTED -> Triple("Rejected", Color(0xFFEF4444).copy(alpha = 0.2f), Color(0xFFF87171))
-            PurchaseOrderStatus.CANCELLED -> Triple("Cancelled", Color(0xFF6B7280).copy(alpha = 0.2f), Color(0xFF9CA3AF))
+            PurchaseOrderStatus.PENDING -> Triple("Pending", Color(0xFFF59E0B).copy(alpha = 0.15f), Color(0xFFFBBF24))
+            PurchaseOrderStatus.CONFIRMED -> Triple("Confirmed", Color(0xFF6366F1).copy(alpha = 0.15f), Color(0xFFC084FC))
+            PurchaseOrderStatus.DELIVERED -> Triple("In Delivery", Color(0xFF6366F1).copy(alpha = 0.15f), Color(0xFFC084FC))
+            PurchaseOrderStatus.RECEIVED -> Triple("Completed", Color(0xFF10B981).copy(alpha = 0.15f), Color(0xFF34D399))
+            PurchaseOrderStatus.REJECTED -> Triple("Rejected", Color(0xFFEF4444).copy(alpha = 0.15f), Color(0xFFF87171))
+            PurchaseOrderStatus.CANCELLED -> Triple("Cancelled", Color(0xFF6B7280).copy(alpha = 0.15f), Color(0xFF9CA3AF))
         }
     } else {
         when (order.status) {
             PurchaseOrderStatus.PENDING -> Triple("Pending", Color(0xFFFEF3C7), Color(0xFFD97706))
             PurchaseOrderStatus.CONFIRMED -> Triple("Confirmed", Color(0xFFEDE9FE), Color(0xFF6D28D9))
-            PurchaseOrderStatus.DELIVERED -> Triple("Transit", Color(0xFFE0E7FF), Color(0xFF4338CA))
-            PurchaseOrderStatus.RECEIVED -> Triple("Done", Color(0xFFD1FAE5), Color(0xFF047857))
+            PurchaseOrderStatus.DELIVERED -> Triple("In Delivery", Color(0xFFE0E7FF), Color(0xFF4338CA))
+            PurchaseOrderStatus.RECEIVED -> Triple("Completed", Color(0xFFD1FAE5), Color(0xFF047857))
             PurchaseOrderStatus.REJECTED -> Triple("Rejected", Color(0xFFFEE2E2), Color(0xFFDC2626))
             PurchaseOrderStatus.CANCELLED -> Triple("Cancelled", Color(0xFFF3F4F6), Color(0xFF4B5563))
         }
     }
 
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        onClick = onView,
+        shape = RoundedCornerShape(18.dp),
         color = cardBg,
         border = BorderStroke(1.dp, cardBorder),
         shadowElevation = if (isDarkTheme) 0.dp else 1.5.dp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onView)
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Header Row: PO Number + Status Badge + Invoicing Status
+            // Header: Status Badge on left + Action Button on right (Exact Middleman design)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = statusBg
                 ) {
                     Text(
-                        text = order.orderNumber,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = textPrimary
-                    )
-
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = statusBg,
-                        border = BorderStroke(1.dp, statusFg.copy(alpha = 0.3f))
-                    ) {
-                        Text(
-                            text = statusLabel,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = statusFg,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-
-                    // Payment Terms & Status Pill
-                    val paidBg = if (isDarkTheme) {
-                        if (isPaid) Color(0xFF10B981).copy(alpha = 0.2f) else Color(0xFF38BDF8).copy(alpha = 0.15f)
-                    } else {
-                        if (isPaid) Color(0xFFD1FAE5) else Color(0xFFE0F2FE)
-                    }
-                    val paidBorder = if (isDarkTheme) {
-                        if (isPaid) Color(0xFF10B981) else Color(0xFF38BDF8).copy(alpha = 0.4f)
-                    } else {
-                        if (isPaid) Color(0xFF10B981).copy(alpha = 0.4f) else Color(0xFF38BDF8).copy(alpha = 0.4f)
-                    }
-                    val paidText = if (isDarkTheme) {
-                        if (isPaid) Color(0xFF34D399) else Color(0xFF7DD3FC)
-                    } else {
-                        if (isPaid) Color(0xFF047857) else Color(0xFF0284C7)
-                    }
-
-                    Surface(
-                        onClick = { isPaid = !isPaid },
-                        shape = RoundedCornerShape(6.dp),
-                        color = paidBg,
-                        border = BorderStroke(1.dp, paidBorder)
-                    ) {
-                        Text(
-                            text = if (isPaid) "Paid" else "Net 30",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = paidText,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-
-                Text(
-                    text = "$${String.format(Locale.US, "%.2f", order.totalAmount)}",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF10B981)
-                )
-            }
-
-            Spacer(Modifier.height(6.dp))
-
-            // Title & Qty Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = order.title.ifBlank { "Inbound Goods Request" },
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-
-                Text(
-                    text = "${order.totalQuantity} Qty",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = textSecondary
-                )
-            }
-
-            // Tracking row if available
-            if (order.trackingNumber.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.LocalShipping,
-                        contentDescription = null,
-                        tint = if (isDarkTheme) Color(0xFFC084FC) else Color(0xFF6366F1),
-                        modifier = Modifier.size(11.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        text = "${order.trackingNumber} • ${order.picSender.ifBlank { "Carrier" }}",
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace,
-                        color = if (isDarkTheme) Color(0xFFC084FC) else Color(0xFF6366F1)
+                        text = statusLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = statusFg,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
-            }
 
-            Spacer(Modifier.height(10.dp))
-            HorizontalDivider(color = dividerColor)
-            Spacer(Modifier.height(10.dp))
-
-            // Footer: Arrival & 1-Word Action Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Est: ${order.estArrival.ifBlank { "Today" }}",
-                    fontSize = 10.sp,
-                    color = textSecondary
-                )
-
-                // 1-Word Action Buttons with Vector Icons
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     when (order.status) {
                         PurchaseOrderStatus.PENDING -> {
                             Surface(
                                 onClick = onAccept,
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(14.dp),
                                 color = NawanoPrimary200
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Check,
@@ -1096,76 +879,25 @@ private fun SupplierDashboardCard(
                                         tint = Color.White,
                                         modifier = Modifier.size(12.dp)
                                     )
-                                    Spacer(Modifier.width(3.dp))
+                                    Spacer(Modifier.width(4.dp))
                                     Text(
                                         text = "Accept",
-                                        fontSize = 11.sp,
+                                        style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
                                     )
                                 }
                             }
-
-                            Surface(
-                                onClick = onEdit,
-                                shape = RoundedCornerShape(8.dp),
-                                color = actionBtnBg
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Edit,
-                                        contentDescription = null,
-                                        tint = actionBtnText,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Spacer(Modifier.width(3.dp))
-                                    Text(
-                                        text = "Edit",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = actionBtnText
-                                    )
-                                }
-                            }
-
-                            Surface(
-                                onClick = onDelete,
-                                shape = RoundedCornerShape(8.dp),
-                                color = deleteBtnBg
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = null,
-                                        tint = deleteBtnText,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Spacer(Modifier.width(2.dp))
-                                    Text(
-                                        text = "Del",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = deleteBtnText
-                                    )
-                                }
-                            }
                         }
-
                         PurchaseOrderStatus.CONFIRMED -> {
                             Surface(
                                 onClick = onSend,
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(14.dp),
                                 color = Color(0xFF4338CA)
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.LocalShipping,
@@ -1173,175 +905,112 @@ private fun SupplierDashboardCard(
                                         tint = Color.White,
                                         modifier = Modifier.size(12.dp)
                                     )
-                                    Spacer(Modifier.width(3.dp))
+                                    Spacer(Modifier.width(4.dp))
                                     Text(
-                                        text = "Send",
-                                        fontSize = 11.sp,
+                                        text = "Dispatch",
+                                        style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
                                     )
                                 }
                             }
-
-                            Surface(
-                                onClick = onEdit,
-                                shape = RoundedCornerShape(8.dp),
-                                color = actionBtnBg
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Edit,
-                                        contentDescription = null,
-                                        tint = actionBtnText,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Spacer(Modifier.width(3.dp))
-                                    Text(
-                                        text = "Edit",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = actionBtnText
-                                    )
-                                }
-                            }
-
-                            Surface(
-                                onClick = onDelete,
-                                shape = RoundedCornerShape(8.dp),
-                                color = deleteBtnBg
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = null,
-                                        tint = deleteBtnText,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Spacer(Modifier.width(2.dp))
-                                    Text(
-                                        text = "Del",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = deleteBtnText
-                                    )
-                                }
-                            }
                         }
-
-                        PurchaseOrderStatus.DELIVERED -> {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(end = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.LocalShipping,
-                                    contentDescription = null,
-                                    tint = if (isDarkTheme) Color(0xFFC084FC) else Color(0xFF4338CA),
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Text(
-                                    text = "In Transit",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isDarkTheme) Color(0xFFC084FC) else Color(0xFF4338CA)
-                                )
-                            }
-
-                            Surface(
-                                onClick = onView,
-                                shape = RoundedCornerShape(8.dp),
-                                color = actionBtnBg
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Visibility,
-                                        contentDescription = null,
-                                        tint = actionBtnText,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Spacer(Modifier.width(3.dp))
-                                    Text(
-                                        text = "View",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = actionBtnText
-                                    )
-                                }
-                            }
-                        }
-
-                        PurchaseOrderStatus.RECEIVED -> {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(end = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = Color(0xFF10B981),
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Text(
-                                    text = "Received",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF10B981)
-                                )
-                            }
-
-                            Surface(
-                                onClick = onView,
-                                shape = RoundedCornerShape(8.dp),
-                                color = actionBtnBg
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Visibility,
-                                        contentDescription = null,
-                                        tint = actionBtnText,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Spacer(Modifier.width(3.dp))
-                                    Text(
-                                        text = "View",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = actionBtnText
-                                    )
-                                }
-                            }
-                        }
-
                         else -> {
                             Surface(
                                 onClick = onView,
-                                shape = RoundedCornerShape(8.dp),
-                                color = actionBtnBg
+                                shape = RoundedCornerShape(14.dp),
+                                color = if (isDarkTheme) Color(0xFF2A2E63) else Color(0xFFEEF2FF)
                             ) {
                                 Text(
                                     text = "View",
-                                    fontSize = 11.sp,
+                                    style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = actionBtnText,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    color = if (isDarkTheme) Color.White else Color(0xFF4338CA),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                 )
                             }
                         }
                     }
+
+                    IconButton(
+                        onClick = onEdit,
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit",
+                            tint = textSecondary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = deleteBtnText,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Title & Arrival (Identical to Middleman layout)
+            Text(
+                text = "${order.orderNumber} - ${order.title.ifBlank { "Inbound Goods Request" }}",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Text(
+                text = "Est: ${order.estArrival.ifBlank { "Today" }} • ${order.picSender.ifBlank { "ColdFreight Express" }}",
+                style = MaterialTheme.typography.labelSmall,
+                color = textSecondary
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+            HorizontalDivider(color = dividerColor)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Footer: Terms/Tracking on Left + Amount & Qty on Right
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (order.trackingNumber.isNotBlank()) "Track: ${order.trackingNumber} • Net 30" else "Wholesale PO • Net 30",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "$${String.format(Locale.US, "%.2f", order.totalAmount)}",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF047857)
+                    )
+                    Text(
+                        text = "Total: +${order.totalQuantity} units",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = NawanoPrimary200
+                    )
                 }
             }
         }
@@ -1356,91 +1025,217 @@ private fun SupplierCatalogProductCard(
     onDelete: () -> Unit
 ) {
     val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
-    val cardBorder = if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0)
+    val cardBorder = if (isDarkTheme) NawanoDarkOutline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
     val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
     val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
-    val actionBtnBg = if (isDarkTheme) Color(0xFF2A2E63) else Color(0xFFEEF2FF)
-    val actionBtnText = if (isDarkTheme) Color.White else Color(0xFF4338CA)
-    val deleteBtnBg = if (isDarkTheme) Color(0xFFEF4444).copy(alpha = 0.2f) else Color(0xFFFEE2E2)
-    val deleteBtnText = if (isDarkTheme) Color(0xFFF87171) else Color(0xFFDC2626)
-    val badgeBg = if (isDarkTheme) NawanoPrimary200.copy(alpha = 0.2f) else Color(0xFFEDE9FE)
+    val dividerColor = if (isDarkTheme) NawanoDarkOutline.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+    val badgeBg = if (isDarkTheme) NawanoPrimary200.copy(alpha = 0.15f) else Color(0xFFEDE9FE)
     val badgeFg = if (isDarkTheme) NawanoPrimary200 else Color(0xFF6D28D9)
+    val deleteBtnText = if (isDarkTheme) Color(0xFFF87171) else Color(0xFFDC2626)
 
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        onClick = onEdit,
+        shape = RoundedCornerShape(18.dp),
         color = cardBg,
         border = BorderStroke(1.dp, cardBorder),
         shadowElevation = if (isDarkTheme) 0.dp else 1.5.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Column(modifier = Modifier.padding(14.dp)) {
+            // Header: Category Badge on left + Edit/Del on right
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = badgeBg
                 ) {
                     Text(
-                        text = product.name,
-                        fontSize = 14.sp,
+                        text = product.category.ifBlank { "General" },
+                        style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = textPrimary
+                        color = badgeFg,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = badgeBg
+                        onClick = onEdit,
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (isDarkTheme) Color(0xFF2A2E63) else Color(0xFFEEF2FF)
                     ) {
                         Text(
-                            text = product.category.ifBlank { "General" },
-                            fontSize = 10.sp,
+                            text = "Edit",
+                            style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = badgeFg,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            color = if (isDarkTheme) Color.White else Color(0xFF4338CA),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = deleteBtnText,
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
-
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "SKU: ${product.sku} • Stock: ${product.quantity} ${product.unit}",
-                    fontSize = 11.sp,
-                    color = textSecondary
-                )
-
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "Supply Price: $${String.format(Locale.US, "%.2f", product.costPrice)}",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF10B981)
-                )
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Surface(
-                    onClick = onEdit,
-                    shape = RoundedCornerShape(8.dp),
-                    color = actionBtnBg
-                ) {
-                    Box(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                        Text("Edit", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = actionBtnText)
-                    }
-                }
+            Spacer(modifier = Modifier.height(8.dp))
 
-                Surface(
-                    onClick = onDelete,
-                    shape = RoundedCornerShape(8.dp),
-                    color = deleteBtnBg
-                ) {
-                    Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
-                        Text("Del", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = deleteBtnText)
-                    }
-                }
+            // SKU & Title
+            Text(
+                text = "${product.sku} - ${product.name}",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Text(
+                text = "Wholesale Unit: ${product.unit} • Active Catalog",
+                style = MaterialTheme.typography.labelSmall,
+                color = textSecondary
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+            HorizontalDivider(color = dividerColor)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Footer: Supply Price on left + Quantity on right
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Supply Price: $${String.format(Locale.US, "%.2f", product.costPrice)}",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF047857)
+                )
+
+                Text(
+                    text = "Stock: ${product.quantity} ${product.unit}",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = NawanoPrimary200
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Modern Floating Bottom Navigation Dock for Supplier Orders & Catalog (Identical to Middleman).
+ */
+@Composable
+private fun SupplierBottomBar(
+    activeViewTab: Int,
+    onTabSelected: (Int) -> Unit,
+    onAddClicked: () -> Unit,
+    onLogout: () -> Unit,
+    isDarkTheme: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.padding(top = 18.dp),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(32.dp),
+            color = if (isDarkTheme) NawanoDark200 else Color.White,
+            tonalElevation = 6.dp,
+            shadowElevation = 8.dp,
+            border = BorderStroke(1.dp, if (isDarkTheme) NawanoDarkOutline else NawanoPrimary200.copy(alpha = 0.20f))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceAround,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Tab 0: Orders
+                FloatingNavItem(
+                    title = "Orders",
+                    icon = if (activeViewTab == 0) Icons.Default.Inventory2 else Icons.Outlined.Inventory2,
+                    isSelected = activeViewTab == 0,
+                    onClick = { onTabSelected(0) }
+                )
+
+                // Tab 1: Catalog
+                FloatingNavItem(
+                    title = "Catalog",
+                    icon = if (activeViewTab == 1) Icons.Default.Category else Icons.Outlined.Category,
+                    isSelected = activeViewTab == 1,
+                    onClick = { onTabSelected(1) }
+                )
+
+                // Center placeholder space for the elevated pop-up action button
+                Spacer(modifier = Modifier.width(56.dp))
+
+                // Tab 2: Scan / Add
+                FloatingNavItem(
+                    title = "New",
+                    icon = Icons.Outlined.AddBox,
+                    isSelected = false,
+                    onClick = onAddClicked
+                )
+
+                // Tab 3: Exit
+                FloatingNavItem(
+                    title = "Exit",
+                    icon = Icons.AutoMirrored.Filled.ExitToApp,
+                    isSelected = false,
+                    onClick = onLogout
+                )
+            }
+        }
+
+        // Center Popped-Up Floating Add Button (Exact same design as Middleman FloatingScanButton)
+        Surface(
+            onClick = onAddClicked,
+            shape = CircleShape,
+            color = Color.Transparent,
+            tonalElevation = 8.dp,
+            shadowElevation = 12.dp,
+            border = BorderStroke(4.dp, if (isDarkTheme) NawanoDark400 else MaterialTheme.colorScheme.surface),
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(y = (-18).dp)
+                .size(58.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.linearGradient(
+                            colors = listOf(NawanoGradientStart, NawanoGradientEnd)
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "New Order or Product",
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
             }
         }
     }
