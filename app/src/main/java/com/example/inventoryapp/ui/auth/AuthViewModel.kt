@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.inventoryapp.data.local.AppDatabase
 import com.example.inventoryapp.data.local.entity.UserEntity
+import com.example.inventoryapp.data.local.entity.UserRole
 import com.example.inventoryapp.data.prefs.SessionStore
 import com.example.inventoryapp.data.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -109,6 +110,25 @@ class AuthViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         errorMessage = error.message ?: "Failed to reset password"
+                    )
+                }
+            )
+        }
+    }
+
+    fun quickDemoLogin(role: UserRole, onSuccess: (UserEntity) -> Unit) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+            val result = authRepository.quickDemoLogin(role)
+            result.fold(
+                onSuccess = { user ->
+                    _uiState.value = _uiState.value.copy(isLoading = false)
+                    onSuccess(user)
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "Demo login failed"
                     )
                 }
             )

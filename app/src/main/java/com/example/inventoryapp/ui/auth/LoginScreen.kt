@@ -1,5 +1,6 @@
 package com.example.inventoryapp.ui.auth
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,12 +17,16 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,13 +46,17 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.R
 import com.example.inventoryapp.data.local.entity.UserEntity
+import com.example.inventoryapp.data.local.entity.UserRole
 import com.example.inventoryapp.ui.theme.InventoryAppTheme
 import com.example.inventoryapp.ui.theme.NawanoLightSurface
+import com.example.inventoryapp.ui.theme.NawanoPrimary100
+import com.example.inventoryapp.ui.theme.NawanoPrimary50
 import com.example.inventoryapp.ui.theme.NawanoPrimary200
 import com.example.inventoryapp.ui.theme.NawanoRose
 import com.example.inventoryapp.ui.theme.NawanoTextPrimaryLight
@@ -194,7 +203,80 @@ fun LoginScreen(
                 }
             )
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(20.dp))
+
+            // Quick Demo Login (One-Tap & Test Creds)
+            Surface(
+                color = NawanoPrimary50,
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, NawanoPrimary100),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "⚡ Quick Demo Login (One-Tap)",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = NawanoPrimary200
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.quickDemoLogin(UserRole.OWNER, onLoginSuccess)
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, NawanoPrimary200),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = NawanoLightSurface,
+                                contentColor = NawanoPrimary200
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp)
+                        ) {
+                            Text("👑 Owner", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.quickDemoLogin(UserRole.SUPPLIER, onLoginSuccess)
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, NawanoPrimary200),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = NawanoLightSurface,
+                                contentColor = NawanoPrimary200
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp)
+                        ) {
+                            Text("🚚 Supplier", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "Or tap to auto-fill: owner@nawano.com • pass: password123",
+                        fontSize = 11.sp,
+                        color = NawanoTextSecondaryLight,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.clickable {
+                            email = "owner@nawano.com"
+                            password = "password123"
+                        }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
 
             AuthOrDivider()
 

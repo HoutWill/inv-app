@@ -122,6 +122,29 @@ class AuthRepository(
         }
     }
 
+    suspend fun quickDemoLogin(role: UserRole): Result<UserEntity> = withContext(Dispatchers.IO) {
+        try {
+            val email = if (role == UserRole.OWNER) "owner@nawano.com" else "supplier@nawano.com"
+            val fullName = if (role == UserRole.OWNER) "Anthony (Owner)" else "Pacific Seafood Supply (Supplier)"
+            val defaultPassword = "password123"
+
+            var user = userDao.findByEmail(email)
+            if (user == null) {
+                user = UserEntity(
+                    fullName = fullName,
+                    email = email,
+                    passwordHash = PasswordHasher.hash(defaultPassword),
+                    role = role
+                )
+                userDao.insert(user)
+            }
+            sessionStore.setLoggedInUserId(user.id)
+            Result.success(user)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun logout() = withContext(Dispatchers.IO) {
         sessionStore.clearSession()
     }

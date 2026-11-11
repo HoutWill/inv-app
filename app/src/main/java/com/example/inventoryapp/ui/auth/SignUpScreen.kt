@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -16,6 +17,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -31,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -66,6 +70,8 @@ fun SignUpScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var isTermsAccepted by remember { mutableStateOf(false) }
+    var showTermsSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { error ->
@@ -163,22 +169,46 @@ fun SignUpScreen(
                 )
             )
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
 
-            Text(
-                text = "By clicking on \"Create Account\" you agree to Nawano's Terms & Conditions and Privacy Policy.",
-                fontSize = 12.sp,
-                lineHeight = 17.sp,
-                color = NawanoTextSecondaryLight,
-                textAlign = TextAlign.Center,
+            // Terms and Conditions agreement checkbox & clickable sheet
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp)
-            )
+                    .padding(horizontal = 2.dp)
+            ) {
+                Checkbox(
+                    checked = isTermsAccepted,
+                    onCheckedChange = { isTermsAccepted = it },
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = NawanoPrimary200,
+                        checkmarkColor = Color.White
+                    )
+                )
+                Spacer(Modifier.width(6.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "I have read & agree to the ",
+                        fontSize = 12.sp,
+                        color = NawanoTextSecondaryLight
+                    )
+                    Text(
+                        text = "Terms & Rules",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = NawanoPrimary200,
+                        modifier = Modifier.clickable { showTermsSheet = true }
+                    )
+                }
+            }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(18.dp))
 
-            val isFormValid = fullName.isNotBlank() && email.isNotBlank() && password.length >= 6
+            val isFormValid = fullName.isNotBlank() && email.isNotBlank() && password.length >= 6 && isTermsAccepted
 
             AuthPrimaryButton(
                 text = "Create Account",
@@ -220,6 +250,16 @@ fun SignUpScreen(
             )
 
             Spacer(Modifier.height(24.dp))
+        }
+
+        if (showTermsSheet) {
+            TermsAndConditionsSheet(
+                onDismiss = { showTermsSheet = false },
+                onAccept = {
+                    isTermsAccepted = true
+                    showTermsSheet = false
+                }
+            )
         }
     }
 }
