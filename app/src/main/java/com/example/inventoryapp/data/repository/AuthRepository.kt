@@ -124,11 +124,14 @@ class AuthRepository(
 
     suspend fun quickDemoLogin(role: UserRole): Result<UserEntity> = withContext(Dispatchers.IO) {
         try {
-            val email = if (role == UserRole.OWNER) "owner@nawano.com" else "supplier@nawano.com"
-            val fullName = if (role == UserRole.OWNER) "Anthony (Owner)" else "Pacific Seafood Supply (Supplier)"
+            val email = if (role == UserRole.OWNER) "middleman@nawano.com" else "supplier@nawano.com"
+            val fullName = if (role == UserRole.OWNER) "Anthony (Middle Man)" else "Pacific Seafood Supply (Supplier)"
             val defaultPassword = "password123"
 
             var user = userDao.findByEmail(email)
+            if (user == null && role == UserRole.OWNER) {
+                user = userDao.findByEmail("owner@nawano.com")
+            }
             if (user == null) {
                 user = UserEntity(
                     fullName = fullName,

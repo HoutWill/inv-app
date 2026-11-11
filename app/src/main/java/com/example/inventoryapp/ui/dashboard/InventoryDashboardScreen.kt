@@ -1,6 +1,7 @@
 package com.example.inventoryapp.ui.dashboard
 
 import android.app.Application
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.ui.graphics.graphicsLayer
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -80,7 +82,7 @@ fun InventoryDashboardScreen(
     isDarkTheme: Boolean = isSystemInDarkTheme(),
     onToggleTheme: () -> Unit = {},
     userName: String = "Anthony",
-    userRole: String = "Inventory Manager • Nawano HQ",
+    userRole: String = "Middle Man • Nawano HQ",
     onLogout: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -88,7 +90,7 @@ fun InventoryDashboardScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    var activeTab by remember { mutableIntStateOf(0) }
+    var activeTab by rememberSaveable { mutableIntStateOf(0) }
     var scannerTarget by remember { mutableStateOf(ScannerTarget.NONE) }
     var isAddProductOpen by remember { mutableStateOf(false) }
     var isNotificationsOpen by remember { mutableStateOf(false) }
@@ -155,144 +157,118 @@ fun InventoryDashboardScreen(
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
-                InventoryTopBar(
-                    totalSkus = uiState.totalSkus,
-                    lowStockCount = uiState.lowStockCount,
-                    isDarkTheme = isDarkTheme,
-                    onOpenDrawer = { scope.launch { drawerState.open() } },
-                    onToggleTheme = onToggleTheme,
-                    onOpenNotifications = { isNotificationsOpen = true }
-                )
+                if (drawerDestination == null) {
+                    InventoryTopBar(
+                        totalSkus = uiState.totalSkus,
+                        lowStockCount = uiState.lowStockCount,
+                        isDarkTheme = isDarkTheme,
+                        onOpenDrawer = { scope.launch { drawerState.open() } },
+                        onToggleTheme = onToggleTheme,
+                        onOpenNotifications = { isNotificationsOpen = true }
+                    )
+                }
             }
         ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            if (drawerDestination != null) {
-                when (drawerDestination) {
-                    DrawerDestination.INVENTORY_SUMMARY -> {
-                        InventorySummaryScreen(
-                            products = uiState.products,
-                            totalSkus = uiState.totalSkus,
-                            totalItems = uiState.totalItemsCount,
-                            totalValue = uiState.totalInventoryValue,
-                            onBack = { drawerDestination = null },
-                            onProductClick = { product -> viewingProductDetails = product }
-                        )
-                    }
-                    DrawerDestination.MOVEMENT_LIST -> {
-                        MovementListScreen(
-                            stockTransactions = uiState.transactions,
-                            onBack = { drawerDestination = null },
-                            onScanClicked = { scannerTarget = ScannerTarget.DASHBOARD_SCAN }
-                        )
-                    }
-                    DrawerDestination.SUPPLIERS -> {
-                        SuppliersManagementScreen(
-                            suppliers = uiState.suppliers,
-                            onBack = { drawerDestination = null },
-                            onSaveSupplier = { supplier -> viewModel.saveSupplier(supplier) },
-                            onToggleSupplierActive = { id, active -> viewModel.toggleSupplierActive(id, active) },
-                            onNewPurchaseOrder = { supplier ->
-                                selectedSupplierForPo = supplier
-                                showNewPoDialog = true
-                            }
-                        )
-                    }
-                    DrawerDestination.AUDIT_LOGS -> {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background)
-                        ) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.surface,
-                                tonalElevation = 2.dp,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .statusBarsPadding()
-                                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    IconButton(
-                                        onClick = { drawerDestination = null },
-                                        modifier = Modifier.size(38.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                            contentDescription = "Back",
-                                            tint = MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Stock Audit Logs",
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
-                            StockTransactionHistoryScreen(
-                                transactions = uiState.transactions,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    }
-                    DrawerDestination.SETTINGS -> {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background)
-                        ) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.surface,
-                                tonalElevation = 2.dp,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .statusBarsPadding()
-                                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    IconButton(
-                                        onClick = { drawerDestination = null },
-                                        modifier = Modifier.size(38.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                            contentDescription = "Back",
-                                            tint = MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Settings & Database",
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
-                            InventorySettingsScreen(
+            // System back button returns from full-screen drawer destination back to the dashboard
+            BackHandler(enabled = drawerDestination != null) {
+                drawerDestination = null
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(
+                        top = if (drawerDestination == null) innerPadding.calculateTopPadding() else 0.dp,
+                        bottom = if (drawerDestination == null) innerPadding.calculateBottomPadding() else 0.dp
+                    )
+            ) {
+                if (drawerDestination != null) {
+                    when (drawerDestination) {
+                        DrawerDestination.INVENTORY_SUMMARY -> {
+                            InventorySummaryScreen(
+                                products = uiState.products,
                                 totalSkus = uiState.totalSkus,
                                 totalItems = uiState.totalItemsCount,
-                                onClearAllData = { viewModel.clearAllData() },
+                                totalValue = uiState.totalInventoryValue,
+                                onBack = { drawerDestination = null },
+                                onProductClick = { product -> viewingProductDetails = product }
+                            )
+                        }
+                        DrawerDestination.MOVEMENT_LIST -> {
+                            MovementListScreen(
+                                stockTransactions = uiState.transactions,
+                                onBack = { drawerDestination = null },
+                                onScanClicked = { scannerTarget = ScannerTarget.DASHBOARD_SCAN }
+                            )
+                        }
+                        DrawerDestination.SUPPLIERS -> {
+                            SuppliersManagementScreen(
+                                suppliers = uiState.suppliers,
+                                onBack = { drawerDestination = null },
+                                onSaveSupplier = { supplier -> viewModel.saveSupplier(supplier) },
+                                onToggleSupplierActive = { id, active -> viewModel.toggleSupplierActive(id, active) },
+                                onNewPurchaseOrder = { supplier ->
+                                    selectedSupplierForPo = supplier
+                                    showNewPoDialog = true
+                                },
+                                isDarkTheme = isDarkTheme
+                            )
+                        }
+                        DrawerDestination.AUDIT_LOGS -> {
+                            StockAuditLogsScreen(
+                                transactions = uiState.transactions,
+                                onBack = { drawerDestination = null },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
+                        DrawerDestination.SETTINGS -> {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.background)
+                            ) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surface,
+                                    tonalElevation = 2.dp,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .statusBarsPadding()
+                                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        IconButton(
+                                            onClick = { drawerDestination = null },
+                                            modifier = Modifier.size(38.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                                contentDescription = "Back",
+                                                tint = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Settings & Database",
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+                                InventorySettingsScreen(
+                                    totalSkus = uiState.totalSkus,
+                                    totalItems = uiState.totalItemsCount,
+                                    onClearAllData = { viewModel.clearAllData() }
+                                )
+                            }
+                        }
+                        else -> {}
                     }
-                    else -> {}
-                }
-            } else {
-                // Main Tab Content with fluid slide & fade animation
+                } else {
+                    // Main Tab Content with fluid slide & fade animation
                 AnimatedContent(
                     targetState = activeTab,
                     transitionSpec = {
@@ -320,6 +296,7 @@ fun InventoryDashboardScreen(
                             // TAB 0: Executive Dashboard Overview
                             DashboardOverviewTab(
                                 uiState = uiState,
+                                isDarkTheme = isDarkTheme,
                                 onScanClicked = { scannerTarget = ScannerTarget.DASHBOARD_SCAN },
                                 onAddProductClicked = {
                                     addProductDraft = AddProductDraft()
@@ -527,7 +504,7 @@ fun InventoryDashboardScreen(
                     onProductAdded = { newProduct ->
                         viewModel.addProduct(newProduct)
                         isAddProductOpen = false
-                        activeTab = 1 // Switch to Items catalog so user immediately sees their added product!
+                        activeTab = 0 // Stay on Home tab
                         scope.launch {
                             snackbarHostState.showSnackbar("Product '${newProduct.name}' added to inventory!")
                         }
@@ -567,7 +544,7 @@ fun InventoryDashboardScreen(
                     onAutoImport = { online ->
                         viewModel.importOnlineProduct(online)
                         scannedNotFoundSku = null
-                        activeTab = 1
+                        activeTab = 0 // Stay on Home tab
                         scope.launch {
                             snackbarHostState.showSnackbar("Auto-imported '${online.name}' with +10 stock!")
                         }
@@ -672,6 +649,7 @@ fun InventoryDashboardScreen(
                     initialSupplier = selectedSupplierForPo,
                     suppliers = uiState.suppliers.filter { it.isActive },
                     products = uiState.products,
+                    isDarkTheme = isDarkTheme,
                     onDismiss = { showNewPoDialog = false },
                     onSubmit = { sup, title, pic, items, note, estArrival ->
                         viewModel.createPurchaseOrder(sup, title, pic, items, note, estArrival) { created ->
@@ -695,6 +673,7 @@ fun InventoryDashboardScreen(
 @Composable
 private fun DashboardOverviewTab(
     uiState: DashboardUiState,
+    isDarkTheme: Boolean = true,
     onScanClicked: () -> Unit,
     onAddProductClicked: () -> Unit,
     onNavigateToItems: () -> Unit,
@@ -740,15 +719,7 @@ private fun DashboardOverviewTab(
             NawanoHeroInventorySummaryCard(uiState = uiState)
         }
 
-        // 2. POS & Barcode Quick Actions (iconpacks.net vector icons)
-        item {
-            NawanoPosQuickActionsBar(
-                onScanBarcode = onScanClicked,
-                onOpenPosSale = onScanClicked
-            )
-        }
-
-        // 3. 4 Quick Operational Cards (Low Stock, Move Summary, Upcoming, Qty Changes)
+        // 2. 4 Quick Operational Cards (Low Stock, Move Summary, Upcoming, Qty Changes)
         item {
             NawanoOperationalCardsGrid(
                 uiState = uiState,
@@ -763,7 +734,8 @@ private fun DashboardOverviewTab(
         item {
             NawanoActivityFilterChips(
                 selectedFilter = selectedActivityFilter,
-                onFilterSelected = { selectedActivityFilter = it }
+                onFilterSelected = { selectedActivityFilter = it },
+                isDarkTheme = isDarkTheme
             )
         }
 
@@ -1395,114 +1367,6 @@ private fun NawanoHeroInventorySummaryCard(
 }
 
 @Composable
-private fun NawanoPosQuickActionsBar(
-    onScanBarcode: () -> Unit,
-    onOpenPosSale: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            // POS Sale Quick Action Button
-            Surface(
-                onClick = onOpenPosSale,
-                shape = RoundedCornerShape(14.dp),
-                color = NawanoPrimary200.copy(alpha = 0.10f),
-                border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.25f)),
-                modifier = Modifier.weight(1f)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = NawanoPrimary200,
-                        modifier = Modifier.size(34.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_pos_cart),
-                                contentDescription = "POS Sale",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = "POS Sale",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Point of sale",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            // Barcode Scanner Action Button
-            Surface(
-                onClick = onScanBarcode,
-                shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
-                modifier = Modifier.weight(1f)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(34.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_pos_barcode),
-                                contentDescription = "Scan Barcode",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = "Scan SKU",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Instant lookup",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun NawanoOperationalCardsGrid(
     uiState: DashboardUiState,
     onNavigateToLowStock: () -> Unit,
@@ -1512,11 +1376,10 @@ private fun NawanoOperationalCardsGrid(
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // Row 1: Low Stock (with cyan New badge) + Move Summary (with cyan New badge)
+        // Row 1: Low Stock + Movements
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             NawanoOperationalCard(
                 title = "Low Stock",
-                hasNewBadge = uiState.lowStockCount > 0,
                 description = "All stock items that are low inventory",
                 stat = "${uiState.lowStockCount} Items",
                 icon = Icons.Outlined.Warning,
@@ -1526,8 +1389,7 @@ private fun NawanoOperationalCardsGrid(
             )
 
             NawanoOperationalCard(
-                title = "Move Sum..",
-                hasNewBadge = uiState.transactions.isNotEmpty(),
+                title = "Movements",
                 description = "Track inventory that has moved locations",
                 stat = "${uiState.transactions.size} Orders",
                 painter = painterResource(R.drawable.ic_bus_intro),
@@ -1537,12 +1399,11 @@ private fun NawanoOperationalCardsGrid(
             )
         }
 
-        // Row 2: Upcoming Expiry + Qty Changes
+        // Row 2: Upcoming Expiry + Audits
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             val upcomingCount = uiState.products.count { it.quantity <= it.reorderLevel || it.quantity <= 5 }
             NawanoOperationalCard(
-                title = "Upcoming..",
-                hasNewBadge = upcomingCount > 0,
+                title = "Expiring",
                 description = "Items in inventory set to expire soon",
                 stat = "$upcomingCount Items",
                 icon = Icons.Outlined.Schedule,
@@ -1552,8 +1413,7 @@ private fun NawanoOperationalCardsGrid(
             )
 
             NawanoOperationalCard(
-                title = "Qty Chan..",
-                hasNewBadge = false,
+                title = "Audits",
                 description = "All inflows and outflows for an item",
                 stat = "${uiState.transactions.size} Items",
                 icon = Icons.Outlined.BarChart,
@@ -1568,7 +1428,6 @@ private fun NawanoOperationalCardsGrid(
 @Composable
 private fun NawanoOperationalCard(
     title: String,
-    hasNewBadge: Boolean,
     description: String,
     stat: String,
     icon: ImageVector? = null,
@@ -1589,46 +1448,25 @@ private fun NawanoOperationalCard(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = iconTint.copy(alpha = 0.12f),
+                modifier = Modifier.size(32.dp)
             ) {
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = iconTint.copy(alpha = 0.12f),
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        if (painter != null) {
-                            Icon(
-                                painter = painter,
-                                contentDescription = null,
-                                tint = iconTint,
-                                modifier = Modifier.size(17.dp)
-                            )
-                        } else if (icon != null) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                tint = iconTint,
-                                modifier = Modifier.size(17.dp)
-                            )
-                        }
-                    }
-                }
-
-                if (hasNewBadge) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFF0E3A4A)
-                    ) {
-                        Text(
-                            text = "New",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF67E8F9),
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                Box(contentAlignment = Alignment.Center) {
+                    if (painter != null) {
+                        Icon(
+                            painter = painter,
+                            contentDescription = null,
+                            tint = iconTint,
+                            modifier = Modifier.size(17.dp)
+                        )
+                    } else if (icon != null) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = iconTint,
+                            modifier = Modifier.size(17.dp)
                         )
                     }
                 }
@@ -1691,33 +1529,49 @@ private data class NawanoDashboardActivity(
 private fun NawanoActivityFilterChips(
     selectedFilter: String,
     onFilterSelected: (String) -> Unit,
+    isDarkTheme: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val filters = listOf("All Activity", "Incoming", "Inbound", "Outbound")
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .horizontalScroll(rememberScrollState())
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         filters.forEach { filter ->
             val isSelected = selectedFilter == filter
             Surface(
                 onClick = { onFilterSelected(filter) },
-                shape = RoundedCornerShape(16.dp),
-                color = if (isSelected) NawanoPrimary200 else MaterialTheme.colorScheme.surface,
-                border = BorderStroke(
-                    1.dp,
-                    if (isSelected) NawanoPrimary200 else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                ),
-                shadowElevation = if (isSelected) 3.dp else 0.dp
+                shape = CircleShape,
+                color = if (isSelected) {
+                    Color(0xFF6C63FF)
+                } else {
+                    if (isDarkTheme) NawanoDark200 else Color.White
+                },
+                border = if (isSelected) {
+                    null
+                } else {
+                    BorderStroke(
+                        1.dp,
+                        if (isDarkTheme) NawanoDarkOutline else Color(0xFFF1F5F9)
+                    )
+                },
+                shadowElevation = if (isSelected) 3.dp else (if (isDarkTheme) 0.dp else 1.5.dp)
             ) {
                 Text(
                     text = filter,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontSize = 13.5.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold
+                    ),
+                    color = if (isSelected) {
+                        Color.White
+                    } else {
+                        if (isDarkTheme) NawanoTextSecondaryDark else Color(0xFF5E6582)
+                    },
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
                 )
             }
         }
@@ -1959,17 +1813,30 @@ private fun NawanoGoodsReqCard(
                     shape = RoundedCornerShape(14.dp),
                     color = if (isActioned) Color(0xFFD1FAE5) else if (activity.type == "OUTBOUND") Color(0xFFEDE9FE) else NawanoPrimary200
                 ) {
-                    Text(
-                        text = if (isActioned) {
-                            if (activity.type == "OUTBOUND") "✓ Dispatched" else "✓ Accepted"
-                        } else {
-                            if (activity.type == "OUTBOUND") "Dispatch" else "Accept"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isActioned) Color(0xFF047857) else if (activity.type == "OUTBOUND") NawanoPrimary200 else Color.White,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        if (isActioned) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = Color(0xFF047857),
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        Text(
+                            text = if (isActioned) {
+                                if (activity.type == "OUTBOUND") "Dispatched" else "Accepted"
+                            } else {
+                                if (activity.type == "OUTBOUND") "Dispatch" else "Accept"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isActioned) Color(0xFF047857) else if (activity.type == "OUTBOUND") NawanoPrimary200 else Color.White
+                        )
+                    }
                 }
             }
 
@@ -2782,13 +2649,22 @@ private fun InventoryItemCard(
                         }
 
                         if (item.location.isNotBlank()) {
-                            Text(
-                                text = "📍 ${item.location}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.LocationOn,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(Modifier.width(2.dp))
+                                Text(
+                                    text = item.location,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }

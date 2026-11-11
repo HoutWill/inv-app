@@ -53,7 +53,7 @@ fun InventoryNavigationDrawer(
     onToggleTheme: () -> Unit,
     totalSkus: Int,
     userName: String = "Anthony",
-    userRole: String = "Inventory Manager • Nawano HQ",
+    userRole: String = "Middle Man • Nawano HQ",
     onLogout: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
@@ -92,7 +92,7 @@ fun InventoryDrawerSheet(
     onToggleTheme: () -> Unit,
     totalSkus: Int,
     userName: String = "Anthony",
-    userRole: String = "Inventory Manager • Nawano HQ",
+    userRole: String = "Middle Man • Nawano HQ",
     onLogout: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -336,7 +336,7 @@ fun NawanoDrawerSheet(
     onToggleTheme: () -> Unit,
     totalSkus: Int,
     userName: String = "Anthony",
-    userRole: String = "Inventory Manager • Nawano HQ",
+    userRole: String = "Middle Man • Nawano HQ",
     onLogout: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) = InventoryDrawerSheet(

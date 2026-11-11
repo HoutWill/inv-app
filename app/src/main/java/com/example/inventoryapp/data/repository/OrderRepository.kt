@@ -155,7 +155,14 @@ class OrderRepository(
         }
     }
 
-    suspend fun markDelivered(orderId: String, trackingNumber: String? = null): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun markDelivered(
+        orderId: String,
+        trackingNumber: String? = null,
+        carrier: String? = null,
+        estArrival: String? = null,
+        totalWeight: String? = null,
+        supplierNote: String? = null
+    ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val order = orderDao.getOrderById(orderId)
                 ?: return@withContext Result.failure(IllegalArgumentException("Order not found"))
@@ -166,7 +173,11 @@ class OrderRepository(
 
             val updated = order.copy(
                 status = PurchaseOrderStatus.DELIVERED,
-                trackingNumber = trackingNumber ?: order.trackingNumber,
+                trackingNumber = if (!trackingNumber.isNullOrBlank()) trackingNumber else order.trackingNumber,
+                picSender = if (!carrier.isNullOrBlank()) carrier else order.picSender,
+                estArrival = if (!estArrival.isNullOrBlank()) estArrival else order.estArrival,
+                totalWeight = if (!totalWeight.isNullOrBlank()) totalWeight else order.totalWeight,
+                supplierNote = if (!supplierNote.isNullOrBlank()) supplierNote else order.supplierNote,
                 deliveredAt = System.currentTimeMillis(),
                 updatedAt = System.currentTimeMillis()
             )
@@ -305,6 +316,39 @@ class OrderRepository(
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e("OrderRepository", "Error cancelling order", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteOrder(orderId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            orderDao.deleteOrder(orderId)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e("OrderRepository", "Error deleting order", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateOrderDetails(
+        orderId: String,
+        title: String,
+        totalQuantity: Int,
+        totalAmount: Double
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val order = orderDao.getOrderById(orderId)
+                ?: return@withContext Result.failure(IllegalArgumentException("Order not found"))
+            val updated = order.copy(
+                title = title,
+                totalQuantity = totalQuantity,
+                totalAmount = totalAmount,
+                updatedAt = System.currentTimeMillis()
+            )
+            orderDao.updateOrder(updated)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e("OrderRepository", "Error updating order details", e)
             Result.failure(e)
         }
     }

@@ -440,9 +440,18 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun markOrderDelivered(orderId: String, trackingNumber: String? = null) {
+    fun markOrderDelivered(
+        orderId: String,
+        trackingNumber: String? = null,
+        carrier: String? = null,
+        estArrival: String? = null,
+        totalWeight: String? = null,
+        supplierNote: String? = null,
+        onComplete: () -> Unit = {}
+    ) {
         viewModelScope.launch {
-            orderRepository.markDelivered(orderId, trackingNumber)
+            orderRepository.markDelivered(orderId, trackingNumber, carrier, estArrival, totalWeight, supplierNote)
+            onComplete()
         }
     }
 
@@ -455,6 +464,20 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
     suspend fun getOrderWithItems(orderId: String): OrderWithItems? {
         return orderRepository.getOrderWithItems(orderId)
+    }
+
+    fun deleteOrder(orderId: String, onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            orderRepository.deleteOrder(orderId)
+            onComplete()
+        }
+    }
+
+    fun updateOrderDetails(orderId: String, title: String, totalQuantity: Int, totalAmount: Double, onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            orderRepository.updateOrderDetails(orderId, title, totalQuantity, totalAmount)
+            onComplete()
+        }
     }
 
     fun clearAllData() {

@@ -9,6 +9,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.inventoryapp.data.local.entity.PurchaseOrderItemEntity
+import com.example.inventoryapp.data.local.entity.SupplierEntity
 import com.example.inventoryapp.data.local.entity.UserEntity
 import com.example.inventoryapp.data.local.entity.UserRole
 import com.example.inventoryapp.data.prefs.SessionStore
@@ -110,7 +112,7 @@ fun AppNavHost(
             val userRole = if (user?.role == UserRole.SUPPLIER) {
                 "Supplier • Verified Partner"
             } else {
-                "Inventory Manager • Nawano HQ"
+                "Middle Man • Nawano HQ"
             }
 
             InventoryDashboardScreen(
@@ -141,14 +143,59 @@ fun AppNavHost(
             SupplierOrdersScreen(
                 user = user,
                 orders = dashState.orders,
+                products = dashState.products,
+                isDarkTheme = isDarkTheme,
+                onToggleTheme = onToggleTheme,
                 onConfirmOrder = { orderId, note ->
                     inventoryViewModel.confirmOrder(orderId, note)
                 },
                 onRejectOrder = { orderId, reason ->
                     inventoryViewModel.rejectOrder(orderId, reason)
                 },
-                onMarkDelivered = { orderId ->
-                    inventoryViewModel.markOrderDelivered(orderId)
+                onMarkDelivered = { orderId, tracking, carrier, eta, weight, note ->
+                    inventoryViewModel.markOrderDelivered(orderId, tracking, carrier, eta, weight, note)
+                },
+                onCreateOrder = { title, qty, price, estArrival ->
+                    val defaultSupplier = dashState.suppliers.firstOrNull() ?: SupplierEntity(
+                        id = "sup_apex",
+                        name = user.fullName.replace(" (Supplier)", "").ifBlank { "Apex Supply" },
+                        contactName = "Leslie Alexander"
+                    )
+                    inventoryViewModel.createPurchaseOrder(
+                        supplier = defaultSupplier,
+                        title = title,
+                        picSender = "Leslie Alexander",
+                        items = listOf(
+                            PurchaseOrderItemEntity(
+                                orderId = "",
+                                productId = null,
+                                sku = "SKU-${System.currentTimeMillis() % 10000}",
+                                productName = title,
+                                quantity = qty,
+                                unitCost = if (qty > 0) price / qty else price
+                            )
+                        ),
+                        ownerNote = "Created via Supplier Portal",
+                        estArrival = estArrival.ifBlank { "Today" }
+                    )
+                },
+                onUpdateOrder = { orderId, title, qty, price ->
+                    inventoryViewModel.updateOrderDetails(orderId, title, qty, price)
+                },
+                onDeleteOrder = { orderId ->
+                    inventoryViewModel.deleteOrder(orderId)
+                },
+                onAddProduct = { product ->
+                    inventoryViewModel.addProduct(product)
+                },
+                onUpdateProduct = { product ->
+                    inventoryViewModel.updateProduct(product)
+                },
+                onDeleteProduct = { product ->
+                    inventoryViewModel.deleteProduct(product)
+                },
+                onLoadOrderDetails = { orderId ->
+                    inventoryViewModel.getOrderWithItems(orderId)
                 },
                 onLogout = {
                     authViewModel.logout {

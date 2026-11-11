@@ -3,6 +3,7 @@ package com.example.inventoryapp.ui.supplier
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -36,8 +37,15 @@ fun SuppliersManagementScreen(
     onSaveSupplier: (SupplierEntity) -> Unit,
     onToggleSupplierActive: (String, Boolean) -> Unit,
     onNewPurchaseOrder: (SupplierEntity) -> Unit,
+    isDarkTheme: Boolean = isSystemInDarkTheme(),
     modifier: Modifier = Modifier
 ) {
+    val bgMain = if (isDarkTheme) NawanoDark400 else NawanoNeutral50
+    val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
+    val cardBorder = if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0)
+    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
+
     var searchQuery by remember { mutableStateOf("") }
     var showAddEditDialog by remember { mutableStateOf(false) }
     var editingSupplier by remember { mutableStateOf<SupplierEntity?>(null) }
@@ -52,7 +60,7 @@ fun SuppliersManagementScreen(
     }
 
     Scaffold(
-        containerColor = NawanoLightSurface,
+        containerColor = bgMain,
         topBar = {
             TopAppBar(
                 title = {
@@ -60,7 +68,7 @@ fun SuppliersManagementScreen(
                         text = "Suppliers Directory",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = NawanoTextPrimaryLight
+                        color = textPrimary
                     )
                 },
                 navigationIcon = {
@@ -68,12 +76,12 @@ fun SuppliersManagementScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = NawanoTextPrimaryLight
+                            tint = textPrimary
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = NawanoLightSurface
+                    containerColor = bgMain
                 )
             )
         },
@@ -102,23 +110,25 @@ fun SuppliersManagementScreen(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Search supplier by name or contact...") },
+                placeholder = { Text("Search supplier by name or contact...", color = textSecondary) },
                 leadingIcon = {
-                    Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = NawanoTextSecondaryLight)
+                    Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = textSecondary)
                 },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
                         IconButton(onClick = { searchQuery = "" }) {
-                            Icon(imageVector = Icons.Default.Clear, contentDescription = "Clear")
+                            Icon(imageVector = Icons.Default.Clear, contentDescription = "Clear", tint = textSecondary)
                         }
                     }
                 },
                 shape = RoundedCornerShape(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = textPrimary,
+                    unfocusedTextColor = textPrimary,
                     focusedBorderColor = NawanoPrimary200,
-                    unfocusedBorderColor = Color(0xFFE2E8F0),
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White
+                    unfocusedBorderColor = cardBorder,
+                    focusedContainerColor = cardBg,
+                    unfocusedContainerColor = cardBg
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -142,12 +152,12 @@ fun SuppliersManagementScreen(
                             text = "No suppliers found",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = NawanoTextPrimaryLight
+                            color = textPrimary
                         )
                         Text(
                             text = "Tap the + button below to add your first supplier.",
                             fontSize = 13.sp,
-                            color = NawanoTextSecondaryLight
+                            color = textSecondary
                         )
                     }
                 }
@@ -159,6 +169,7 @@ fun SuppliersManagementScreen(
                     items(filteredSuppliers, key = { it.id }) { supplier ->
                         SupplierCard(
                             supplier = supplier,
+                            isDarkTheme = isDarkTheme,
                             onEdit = {
                                 editingSupplier = supplier
                                 showAddEditDialog = true
@@ -175,6 +186,7 @@ fun SuppliersManagementScreen(
     if (showAddEditDialog) {
         SupplierAddEditDialog(
             supplier = editingSupplier,
+            isDarkTheme = isDarkTheme,
             onDismiss = { showAddEditDialog = false },
             onConfirm = { saved ->
                 onSaveSupplier(saved)
@@ -187,15 +199,22 @@ fun SuppliersManagementScreen(
 @Composable
 private fun SupplierCard(
     supplier: SupplierEntity,
+    isDarkTheme: Boolean = false,
     onEdit: () -> Unit,
     onToggleActive: () -> Unit,
     onNewOrder: () -> Unit
 ) {
+    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
+    val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
+    val cardBorder = if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0)
+    val dividerColor = if (isDarkTheme) NawanoDarkOutline.copy(alpha = 0.6f) else Color(0xFFF1F5F9)
+
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = Color.White,
-        shadowElevation = 1.5.dp,
-        border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
+        color = cardBg,
+        shadowElevation = if (isDarkTheme) 0.dp else 1.5.dp,
+        border = BorderStroke(1.dp, cardBorder),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -225,28 +244,39 @@ private fun SupplierCard(
                             text = supplier.name,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = NawanoTextPrimaryLight
+                            color = textPrimary
                         )
                         if (supplier.contactName.isNotBlank()) {
                             Text(
                                 text = "Contact: ${supplier.contactName}",
                                 fontSize = 13.sp,
-                                color = NawanoTextSecondaryLight
+                                color = textSecondary
                             )
                         }
                     }
                 }
 
+                val activeBg = if (supplier.isActive) {
+                    if (isDarkTheme) Color(0xFF10B981).copy(alpha = 0.2f) else Color(0xFFD1FAE5)
+                } else {
+                    if (isDarkTheme) NawanoDarkCard else Color(0xFFF1F5F9)
+                }
+                val activeFg = if (supplier.isActive) {
+                    if (isDarkTheme) Color(0xFF34D399) else Color(0xFF047857)
+                } else {
+                    if (isDarkTheme) NawanoTextSecondaryDark else Color(0xFF64748B)
+                }
+
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = if (supplier.isActive) Color(0xFFD1FAE5) else Color(0xFFF1F5F9),
+                    color = activeBg,
                     modifier = Modifier.clickable { onToggleActive() }
                 ) {
                     Text(
                         text = if (supplier.isActive) "Active" else "Inactive",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (supplier.isActive) Color(0xFF047857) else Color(0xFF64748B),
+                        color = activeFg,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
@@ -254,28 +284,28 @@ private fun SupplierCard(
 
             if (supplier.phone.isNotBlank() || supplier.email.isNotBlank() || supplier.address.isNotBlank()) {
                 Spacer(Modifier.height(12.dp))
-                HorizontalDivider(color = Color(0xFFF8FAFC))
+                HorizontalDivider(color = dividerColor)
                 Spacer(Modifier.height(8.dp))
 
                 if (supplier.phone.isNotBlank()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.Phone, contentDescription = null, tint = NawanoTextSecondaryLight, modifier = Modifier.size(14.dp))
+                        Icon(imageVector = Icons.Default.Phone, contentDescription = null, tint = textSecondary, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(text = supplier.phone, fontSize = 12.sp, color = NawanoTextSecondaryLight)
+                        Text(text = supplier.phone, fontSize = 12.sp, color = textSecondary)
                     }
                 }
                 if (supplier.email.isNotBlank()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.Email, contentDescription = null, tint = NawanoTextSecondaryLight, modifier = Modifier.size(14.dp))
+                        Icon(imageVector = Icons.Default.Email, contentDescription = null, tint = textSecondary, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(text = supplier.email, fontSize = 12.sp, color = NawanoTextSecondaryLight)
+                        Text(text = supplier.email, fontSize = 12.sp, color = textSecondary)
                     }
                 }
                 if (supplier.address.isNotBlank()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.LocationOn, contentDescription = null, tint = NawanoTextSecondaryLight, modifier = Modifier.size(14.dp))
+                        Icon(imageVector = Icons.Default.LocationOn, contentDescription = null, tint = textSecondary, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(text = supplier.address, fontSize = 12.sp, color = NawanoTextSecondaryLight, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(text = supplier.address, fontSize = 12.sp, color = textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -287,9 +317,9 @@ private fun SupplierCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TextButton(onClick = onEdit) {
-                    Icon(imageVector = Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(imageVector = Icons.Outlined.Edit, contentDescription = null, tint = textSecondary, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text(text = "Edit", fontSize = 13.sp)
+                    Text(text = "Edit", fontSize = 13.sp, color = textSecondary)
                 }
 
                 Spacer(Modifier.width(8.dp))
@@ -312,9 +342,16 @@ private fun SupplierCard(
 @Composable
 fun SupplierAddEditDialog(
     supplier: SupplierEntity?,
+    isDarkTheme: Boolean = false,
     onDismiss: () -> Unit,
     onConfirm: (SupplierEntity) -> Unit
 ) {
+    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
+    val surfaceColor = if (isDarkTheme) NawanoDark200 else Color.White
+    val cardColor = if (isDarkTheme) NawanoDarkCard else Color(0xFFF8FAFC)
+    val outlineColor = if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0)
+
     var name by remember { mutableStateOf(supplier?.name ?: "") }
     var contactName by remember { mutableStateOf(supplier?.contactName ?: "") }
     var phone by remember { mutableStateOf(supplier?.phone ?: "") }
@@ -322,13 +359,26 @@ fun SupplierAddEditDialog(
     var address by remember { mutableStateOf(supplier?.address ?: "") }
     var note by remember { mutableStateOf(supplier?.note ?: "") }
 
+    val tfColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = textPrimary,
+        unfocusedTextColor = textPrimary,
+        focusedBorderColor = NawanoPrimary200,
+        unfocusedBorderColor = outlineColor,
+        focusedContainerColor = cardColor,
+        unfocusedContainerColor = cardColor,
+        focusedLabelColor = NawanoPrimary200,
+        unfocusedLabelColor = textSecondary
+    )
+
     AlertDialog(
+        containerColor = surfaceColor,
         onDismissRequest = onDismiss,
         title = {
             Text(
                 text = if (supplier == null) "Add New Supplier" else "Edit Supplier",
                 fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
+                fontSize = 18.sp,
+                color = textPrimary
             )
         },
         text = {
@@ -343,6 +393,7 @@ fun SupplierAddEditDialog(
                     onValueChange = { name = it },
                     label = { Text("Company / Supplier Name *") },
                     singleLine = true,
+                    colors = tfColors,
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -351,6 +402,7 @@ fun SupplierAddEditDialog(
                     onValueChange = { contactName = it },
                     label = { Text("Contact Person / PIC") },
                     singleLine = true,
+                    colors = tfColors,
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -359,6 +411,7 @@ fun SupplierAddEditDialog(
                     onValueChange = { phone = it },
                     label = { Text("Phone Number") },
                     singleLine = true,
+                    colors = tfColors,
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -367,6 +420,7 @@ fun SupplierAddEditDialog(
                     onValueChange = { email = it },
                     label = { Text("Email (used for supplier login)") },
                     singleLine = true,
+                    colors = tfColors,
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -374,6 +428,7 @@ fun SupplierAddEditDialog(
                     value = address,
                     onValueChange = { address = it },
                     label = { Text("Warehouse / Factory Address") },
+                    colors = tfColors,
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -381,6 +436,7 @@ fun SupplierAddEditDialog(
                     value = note,
                     onValueChange = { note = it },
                     label = { Text("Notes / Goods categories") },
+                    colors = tfColors,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -415,7 +471,7 @@ fun SupplierAddEditDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text("Cancel", color = textSecondary)
             }
         }
     )

@@ -195,6 +195,10 @@ abstract class AppDatabase : RoomDatabase() {
                 val supplierDao = database.supplierDao()
                 val orderDao = database.purchaseOrderDao()
 
+                // Purge any legacy mock orders so only real user data remains
+                orderDao.deleteOrder("po_nwnus303832049831")
+                orderDao.deleteOrder("po_lobster_0604")
+
                 // Check if Too Frozen Food supplier exists
                 var supplier = supplierDao.getSupplierByEmail("supplier@nawano.com")
                 if (supplier == null) {
@@ -224,85 +228,8 @@ abstract class AppDatabase : RoomDatabase() {
                         )
                     )
                 }
-
-                // Check if demo orders exist matching Behance mockup
-                val existingOrder = orderDao.getOrderById("po_nwnus303832049831")
-                if (existingOrder == null) {
-                    val order1 = PurchaseOrderEntity(
-                        id = "po_nwnus303832049831",
-                        orderNumber = "NWNUS303832049831",
-                        supplierId = supplier.id,
-                        supplierName = supplier.name,
-                        status = PurchaseOrderStatus.DELIVERED, // "In Delivery"
-                        totalAmount = 875.00,
-                        totalQuantity = 25,
-                        title = "0603 - Items crab in from Toronto weighing 1.5 KG",
-                        movementType = "Goods Inbound",
-                        picSender = "Leslie Alexander",
-                        trackingNumber = "TRK-TOR-0603",
-                        ownerNote = "Urgent weekend replenishment for cold storage",
-                        supplierNote = "Dispatched via refrigerated freight line 04",
-                        estArrival = "09.30 - 11.30 AM",
-                        totalWeight = "1.5 KG"
-                    )
-                    orderDao.insertOrder(order1)
-
-                    orderDao.insertOrderItems(
-                        listOf(
-                            PurchaseOrderItemEntity(
-                                orderId = order1.id,
-                                productId = null,
-                                sku = "CRB-0603",
-                                productName = "King Crab Cluster (Toronto Pack)",
-                                quantity = 15,
-                                unitCost = 35.00
-                            ),
-                            PurchaseOrderItemEntity(
-                                orderId = order1.id,
-                                productId = null,
-                                sku = "LOB-0604",
-                                productName = "Atlantic Frozen Lobster Tails",
-                                quantity = 10,
-                                unitCost = 35.00
-                            )
-                        )
-                    )
-
-                    // Add a second pending order
-                    val order2 = PurchaseOrderEntity(
-                        id = "po_lobster_0604",
-                        orderNumber = "NWNUS303832049832",
-                        supplierId = supplier.id,
-                        supplierName = supplier.name,
-                        status = PurchaseOrderStatus.CONFIRMED,
-                        totalAmount = 450.00,
-                        totalQuantity = 12,
-                        title = "0604 - Items lobster in from Nova Scotia",
-                        movementType = "Goods Inbound",
-                        picSender = "Leslie Alexander",
-                        trackingNumber = "TRK-NS-0604",
-                        ownerNote = "Regular weekly seafood shipment",
-                        supplierNote = "Packed and scheduled for pickup",
-                        estArrival = "01.00 - 03.30 PM",
-                        totalWeight = "2.2 KG"
-                    )
-                    orderDao.insertOrder(order2)
-
-                    orderDao.insertOrderItems(
-                        listOf(
-                            PurchaseOrderItemEntity(
-                                orderId = order2.id,
-                                productId = null,
-                                sku = "LOB-0604",
-                                productName = "Atlantic Frozen Lobster Tails",
-                                quantity = 12,
-                                unitCost = 37.50
-                            )
-                        )
-                    )
-                }
             } catch (e: Exception) {
-                Log.e("AppDatabase", "Error seeding default suppliers and orders", e)
+                Log.e("AppDatabase", "Error seeding default suppliers", e)
             }
         }
     }

@@ -46,9 +46,9 @@ object StockNotificationHelper {
             }
 
             val title = if (remainingQty <= 0) {
-                "🚨 Out of Stock: $productName"
+                "Out of Stock: $productName"
             } else {
-                "⚠️ Low Stock Alert: $productName"
+                "Low Stock Alert: $productName"
             }
 
             val body = if (remainingQty <= 0) {

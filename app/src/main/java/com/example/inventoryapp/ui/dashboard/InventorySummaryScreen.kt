@@ -94,7 +94,7 @@ fun InventorySummaryScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -177,9 +177,9 @@ fun InventorySummaryScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 14.dp)
-                .padding(bottom = 80.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .padding(bottom = 60.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // ----------------------------------------------------
             // 1. Two Top KPI Cards (Total Qty & Total Value)

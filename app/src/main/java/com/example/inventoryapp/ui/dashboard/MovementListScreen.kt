@@ -69,7 +69,7 @@ fun MovementListScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedFilterIndex by remember { mutableIntStateOf(0) }
-    val filterTabs = listOf("All Activity", "Incoming Req", "Inbound Goods", "Outbound Goods")
+    val filterTabs = listOf("All Activity", "Incoming", "Inbound", "Outbound")
     var searchQuery by remember { mutableStateOf("") }
     var showCreateDialog by remember { mutableStateOf(false) }
 
@@ -125,7 +125,7 @@ fun MovementListScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -169,38 +169,37 @@ fun MovementListScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 14.dp)
-                .padding(bottom = 80.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .padding(bottom = 60.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Horizontal Filter Chips
+            // Horizontal Filter Pills (User Design: Capsule shape, solid purple when active, white with slate text when inactive)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .horizontalScroll(rememberScrollState())
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 filterTabs.forEachIndexed { index, tabName ->
                     val isSelected = selectedFilterIndex == index
-                    FilterChip(
-                        selected = isSelected,
+                    Surface(
                         onClick = { selectedFilterIndex = index },
-                        label = {
-                            Text(
-                                text = tabName,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                        },
-                        shape = RoundedCornerShape(20.dp),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = NawanoPrimary200,
-                            selectedLabelColor = Color.White,
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                            labelColor = MaterialTheme.colorScheme.onSurface
-                        ),
-                        border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                    )
+                        shape = CircleShape,
+                        color = if (isSelected) Color(0xFF6C63FF) else MaterialTheme.colorScheme.surface,
+                        border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                        shadowElevation = if (isSelected) 3.dp else 1.dp
+                    ) {
+                        Text(
+                            text = tabName,
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontSize = 13.5.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold
+                            ),
+                            color = if (isSelected) Color.White else Color(0xFF5E6582),
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                        )
+                    }
                 }
             }
 

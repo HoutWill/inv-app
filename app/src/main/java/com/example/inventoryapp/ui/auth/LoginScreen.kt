@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -21,7 +22,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -115,7 +121,7 @@ fun LoginScreen(
 
             Spacer(Modifier.height(28.dp))
             Text(
-                text = "Welcome Back 👋",
+                text = "Welcome Back",
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = NawanoTextPrimaryLight
@@ -216,12 +222,24 @@ fun LoginScreen(
                     modifier = Modifier.padding(14.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = "⚡ Quick Demo Login (One-Tap)",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = NawanoPrimary200
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Bolt,
+                            contentDescription = null,
+                            tint = NawanoPrimary200,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Quick Demo Login",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = NawanoPrimary200
+                        )
+                    }
                     Spacer(Modifier.height(10.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -241,7 +259,13 @@ fun LoginScreen(
                                 .weight(1f)
                                 .height(44.dp)
                         ) {
-                            Text("👑 Owner", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Middle Man", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
 
                         OutlinedButton(
@@ -258,18 +282,24 @@ fun LoginScreen(
                                 .weight(1f)
                                 .height(44.dp)
                         ) {
-                            Text("🚚 Supplier", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Icon(
+                                imageVector = Icons.Default.LocalShipping,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Supplier", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "Or tap to auto-fill: owner@nawano.com • pass: password123",
+                        text = "Or tap to auto-fill: middleman@nawano.com • pass: password123",
                         fontSize = 11.sp,
                         color = NawanoTextSecondaryLight,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.clickable {
-                            email = "owner@nawano.com"
+                            email = "middleman@nawano.com"
                             password = "password123"
                         }
                     )

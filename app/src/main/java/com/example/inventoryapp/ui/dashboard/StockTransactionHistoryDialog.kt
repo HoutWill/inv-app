@@ -1,16 +1,22 @@
 package com.example.inventoryapp.ui.dashboard
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Inventory
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,125 +32,300 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * Redesigned, full-screen Stock Audit Logs screen.
+ * Fits edge-to-edge with compact top bar padding, interactive search, KPI metrics,
+ * and high-contrast forensic stock movement cards.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StockTransactionHistoryScreen(
+fun StockAuditLogsScreen(
     transactions: List<StockTransactionEntity>,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedFilter by remember { mutableStateOf("All") }
-    val filteredTransactions: List<StockTransactionEntity> = remember(transactions, selectedFilter) {
-        when (selectedFilter) {
-            "Inflows (+)" -> transactions.filter { it.quantityDelta > 0 }
-            "Outflows (-)" -> transactions.filter { it.quantityDelta < 0 }
-            else -> transactions
+    var searchQuery by remember { mutableStateOf("") }
+
+    val inflowsCount = remember(transactions) { transactions.count { it.quantityDelta > 0 } }
+    val outflowsCount = remember(transactions) { transactions.count { it.quantityDelta < 0 } }
+
+    val filteredTransactions: List<StockTransactionEntity> = remember(transactions, selectedFilter, searchQuery) {
+        transactions.filter { tx ->
+            val matchesFilter = when (selectedFilter) {
+                "Inflows (+)" -> tx.quantityDelta > 0
+                "Outflows (-)" -> tx.quantityDelta < 0
+                "Restock" -> tx.transactionType.contains("RESTOCK", ignoreCase = true) || tx.transactionType == "STOCK_IN"
+                else -> true
+            }
+            val matchesSearch = searchQuery.isBlank() ||
+                    tx.productName.contains(searchQuery, ignoreCase = true) ||
+                    tx.sku.contains(searchQuery, ignoreCase = true) ||
+                    (!tx.note.isNullOrBlank() && tx.note.contains(searchQuery, ignoreCase = true))
+
+            matchesFilter && matchesSearch
         }
     }
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        Text(
-            text = "Quantity Changes & Logs (${transactions.size})",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = "Full audit trail of inflows, outflows, and barcode adjustments",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Inflow / Outflow filter chips for Quantity Changes
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        // Top Header - Edge-to-edge status bar aligned with clean compact vertical padding
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 2.dp,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            listOf("All (${transactions.size})", "Inflows (+)", "Outflows (-)").forEach { filterLabel ->
-                val key = filterLabel.substringBefore(" (")
-                val isSelected = selectedFilter == key
-                FilterChip(
-                    selected = isSelected,
-                    onClick = { selectedFilter = key },
-                    label = {
-                        Text(
-                            text = filterLabel,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    },
-                    shape = RoundedCornerShape(20.dp),
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = NawanoPrimary200,
-                        selectedLabelColor = Color.White
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.onSurface
                     )
-                )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Stock Audit Logs",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = NawanoPrimary200.copy(alpha = 0.12f)
+                        ) {
+                            Text(
+                                text = "${transactions.size} records",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = NawanoPrimary200,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Forensic history of all stock movements & adjustments",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
 
-        if (filteredTransactions.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 24.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                    ),
-                    shape = RoundedCornerShape(20.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        // Body Content
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(top = 10.dp, bottom = 40.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // KPI Summary Row
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(28.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    // Total Events KPI
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                     ) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f),
-                            shape = RoundedCornerShape(20.dp),
-                            modifier = Modifier.size(68.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.History,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(34.dp),
-                                    tint = MaterialTheme.colorScheme.secondary
-                                )
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = "Total Events",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "${transactions.size}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+
+                    // Inflows KPI
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color(0xFF10B981).copy(alpha = 0.08f),
+                        border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.3f))
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = "Inflows (+)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF047857),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "$inflowsCount",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF047857)
+                            )
+                        }
+                    }
+
+                    // Outflows KPI
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color(0xFFEF4444).copy(alpha = 0.08f),
+                        border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.3f))
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = "Outflows (-)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFFB91C1C),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "$outflowsCount",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFB91C1C)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Search Bar
+            item {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Search by SKU, item, or note...", style = MaterialTheme.typography.bodyMedium) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(18.dp))
                             }
                         }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "No stock activity logged yet",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "When you register products or adjust inventory stock, detailed audit logs will appear here.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = NawanoPrimary200,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                    )
+                )
+            }
+
+            // Filter Chips Row
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("All (${transactions.size})", "Inflows (+)", "Outflows (-)", "Restock").forEach { label ->
+                        val key = label.substringBefore(" (")
+                        val isSelected = selectedFilter == key
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { selectedFilter = key },
+                            label = {
+                                Text(
+                                    text = label,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = NawanoPrimary200,
+                                selectedLabelColor = Color.White
+                            )
                         )
                     }
                 }
             }
-        } else {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(bottom = 80.dp)
-            ) {
+
+            // Transaction Cards or Empty State
+            if (filteredTransactions.isEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 20.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        ),
+                        shape = RoundedCornerShape(20.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(28.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f),
+                                shape = RoundedCornerShape(20.dp),
+                                modifier = Modifier.size(64.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.History,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(32.dp),
+                                        tint = MaterialTheme.colorScheme.secondary
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Text(
+                                text = if (searchQuery.isNotBlank() || selectedFilter != "All") "No matching audit logs" else "No stock activity logged yet",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = if (searchQuery.isNotBlank()) "No records matched '$searchQuery'. Try resetting filters." else "When inventory stock is adjusted, unalterable audit trails will appear here.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            } else {
                 items(items = filteredTransactions, key = { tx -> tx.id }) { tx ->
                     TransactionItemCard(transaction = tx)
                 }
@@ -153,53 +334,108 @@ fun StockTransactionHistoryScreen(
     }
 }
 
+/**
+ * Compatibility wrapper for existing dialog / screen usages.
+ */
+@Composable
+fun StockTransactionHistoryScreen(
+    transactions: List<StockTransactionEntity>,
+    modifier: Modifier = Modifier
+) {
+    StockAuditLogsScreen(
+        transactions = transactions,
+        onBack = {},
+        modifier = modifier
+    )
+}
+
+@Composable
+fun StockTransactionHistoryDialog(
+    transactions: List<StockTransactionEntity>,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        },
+        title = {
+            Text(
+                text = "Stock Activity Audit (${transactions.size})",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Box(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+                if (transactions.isEmpty()) {
+                    Text(
+                        text = "No stock activity recorded yet.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(items = transactions, key = { tx -> tx.id }) { tx ->
+                            TransactionItemCard(transaction = tx)
+                        }
+                    }
+                }
+            }
+        }
+    )
+}
+
 @Composable
 private fun TransactionItemCard(transaction: StockTransactionEntity) {
     val dateFormat = SimpleDateFormat("MMM dd, yyyy • HH:mm", Locale.getDefault())
     val formattedDate = dateFormat.format(Date(transaction.timestamp))
 
     val (badgeText, badgeColor, icon) = when (transaction.transactionType) {
-        "STOCK_IN" -> Triple("STOCK IN (+${transaction.quantityDelta})", Color(0xFF43A047), Icons.Default.ArrowUpward)
-        "STOCK_OUT" -> Triple("STOCK OUT (${transaction.quantityDelta})", Color(0xFFE53935), Icons.Default.ArrowDownward)
-        "NEW_ITEM" -> Triple("NEW ITEM (+${transaction.quantityDelta})", Color(0xFF1E88E5), Icons.Default.AddCircle)
-        else -> Triple("INITIAL (+${transaction.quantityDelta})", Color(0xFF8E24AA), Icons.Default.Inventory)
+        "STOCK_IN" -> Triple("STOCK IN (+${transaction.quantityDelta})", Color(0xFF10B981), Icons.Default.ArrowUpward)
+        "STOCK_OUT" -> Triple("STOCK OUT (${transaction.quantityDelta})", Color(0xFFEF4444), Icons.Default.ArrowDownward)
+        "NEW_ITEM" -> Triple("NEW ITEM (+${transaction.quantityDelta})", Color(0xFF2563EB), Icons.Default.AddCircle)
+        else -> Triple("${transaction.transactionType} (${if (transaction.quantityDelta > 0) "+${transaction.quantityDelta}" else transaction.quantityDelta.toString()})", Color(0xFF8B5CF6), Icons.Default.Inventory)
     }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = MaterialTheme.colorScheme.surface
         ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             // Top Row: Icon Avatar + Title/Date + Badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    color = badgeColor.copy(alpha = 0.15f),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.size(40.dp)
+                    color = badgeColor.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = icon,
                             contentDescription = null,
                             tint = badgeColor,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(10.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = transaction.productName,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -214,24 +450,24 @@ private fun TransactionItemCard(transaction: StockTransactionEntity) {
                     )
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 Surface(
-                    color = badgeColor,
-                    shape = RoundedCornerShape(10.dp)
+                    color = badgeColor.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
                         text = badgeText,
-                        color = Color.White,
+                        color = badgeColor,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
                         maxLines = 1
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Bottom Row: Note and Stock Transition
             Row(
@@ -249,12 +485,12 @@ private fun TransactionItemCard(transaction: StockTransactionEntity) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Surface(
-                    color = MaterialTheme.colorScheme.surface,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                     shape = RoundedCornerShape(6.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
                 ) {
                     Text(
-                        text = "Stock: ${transaction.previousQuantity} ➔ ${transaction.newQuantity}",
+                        text = "Stock: ${transaction.previousQuantity} -> ${transaction.newQuantity}",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

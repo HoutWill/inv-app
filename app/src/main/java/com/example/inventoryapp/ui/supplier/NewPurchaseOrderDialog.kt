@@ -19,14 +19,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderItemEntity
 import com.example.inventoryapp.data.local.entity.SupplierEntity
-import com.example.inventoryapp.ui.theme.NawanoPrimary200
-import com.example.inventoryapp.ui.theme.NawanoTextPrimaryLight
-import com.example.inventoryapp.ui.theme.NawanoTextSecondaryLight
+import com.example.inventoryapp.ui.theme.*
 import java.util.Locale
 
 data class DraftOrderItem(
@@ -43,6 +42,7 @@ fun NewPurchaseOrderDialog(
     initialSupplier: SupplierEntity?,
     suppliers: List<SupplierEntity>,
     products: List<ProductEntity>,
+    isDarkTheme: Boolean = isSystemInDarkTheme(),
     onDismiss: () -> Unit,
     onSubmit: (
         supplier: SupplierEntity,
@@ -53,6 +53,12 @@ fun NewPurchaseOrderDialog(
         estArrival: String
     ) -> Unit
 ) {
+    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
+    val surfaceColor = if (isDarkTheme) NawanoDark200 else Color.White
+    val cardColor = if (isDarkTheme) NawanoDarkCard else Color(0xFFF8FAFC)
+    val outlineColor = if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0)
+
     var selectedSupplier by remember { mutableStateOf(initialSupplier ?: suppliers.firstOrNull()) }
     var orderTitle by remember { mutableStateOf("") }
     var picSender by remember { mutableStateOf(selectedSupplier?.contactName ?: "Leslie Alexander") }
@@ -95,12 +101,14 @@ fun NewPurchaseOrderDialog(
     var newCost by remember { mutableStateOf("25.00") }
 
     AlertDialog(
+        containerColor = surfaceColor,
         onDismissRequest = onDismiss,
         title = {
             Text(
                 text = "New Inbound Purchase Order",
                 fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
+                fontSize = 18.sp,
+                color = textPrimary
             )
         },
         text = {
@@ -111,15 +119,21 @@ fun NewPurchaseOrderDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Supplier selector
-                Text(text = "Target Supplier", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = NawanoTextSecondaryLight)
+                Text(text = "Target Supplier", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textSecondary)
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     suppliers.forEach { s ->
+                        val isSelected = selectedSupplier?.id == s.id
+                        val itemBg = if (isSelected) {
+                            if (isDarkTheme) NawanoPrimary200.copy(alpha = 0.25f) else Color(0xFFEDE9FE)
+                        } else {
+                            cardColor
+                        }
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = if (selectedSupplier?.id == s.id) Color(0xFFEDE9FE) else Color(0xFFF8FAFC),
+                            color = itemBg,
                             border = BorderStroke(
                                 1.dp,
-                                if (selectedSupplier?.id == s.id) NawanoPrimary200 else Color(0xFFE2E8F0)
+                                if (isSelected) NawanoPrimary200 else outlineColor
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -136,11 +150,11 @@ fun NewPurchaseOrderDialog(
                                 Text(
                                     text = s.name,
                                     fontSize = 13.sp,
-                                    fontWeight = if (selectedSupplier?.id == s.id) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (selectedSupplier?.id == s.id) NawanoPrimary200 else NawanoTextPrimaryLight
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) NawanoPrimary200 else textPrimary
                                 )
                                 if (s.contactName.isNotBlank()) {
-                                    Text(text = "PIC: ${s.contactName}", fontSize = 11.sp, color = NawanoTextSecondaryLight)
+                                    Text(text = "PIC: ${s.contactName}", fontSize = 11.sp, color = textSecondary)
                                 }
                             }
                         }
@@ -173,20 +187,21 @@ fun NewPurchaseOrderDialog(
                     )
                 }
 
-                HorizontalDivider(color = Color(0xFFE2E8F0))
+                HorizontalDivider(color = outlineColor)
 
                 // Order items
                 Text(
                     text = "Shipment Items (${draftItems.size})",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
-                    color = NawanoTextPrimaryLight
+                    color = textPrimary
                 )
 
                 draftItems.forEachIndexed { idx, item ->
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFFF8FAFC),
+                        color = cardColor,
+                        border = BorderStroke(1.dp, outlineColor.copy(alpha = 0.5f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -195,11 +210,11 @@ fun NewPurchaseOrderDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(text = item.name, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Text(text = item.name, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textPrimary)
                                 Text(
                                     text = "SKU: ${item.sku} • ${item.quantity} units @ $${String.format(Locale.US, "%.2f", item.unitCost)}",
                                     fontSize = 11.sp,
-                                    color = NawanoTextSecondaryLight
+                                    color = textSecondary
                                 )
                             }
                             IconButton(
@@ -220,8 +235,8 @@ fun NewPurchaseOrderDialog(
                 // Add item inputs
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = Color.White,
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    color = cardColor,
+                    border = BorderStroke(1.dp, outlineColor),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(

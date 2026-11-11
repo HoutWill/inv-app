@@ -81,7 +81,7 @@ fun ResetPasswordScreen(
 
             Spacer(Modifier.height(28.dp))
             Text(
-                text = "Reset Password 🔑",
+                text = "Reset Password",
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = NawanoTextPrimaryLight

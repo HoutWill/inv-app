@@ -421,7 +421,7 @@ fun StatisticsScreen(
     val targetProgress = if (salesTarget > 0 && dynamicSales > 0) (dynamicSales / salesTarget).toFloat().coerceIn(0f, 1f) else 0f
     val targetPercentage = if (salesTarget > 0) ((dynamicSales / salesTarget) * 100).toInt() else 0
     val targetStatus = when {
-        targetPercentage >= 100 -> "Achieved 🎉"
+        targetPercentage >= 100 -> "Achieved"
         targetPercentage >= 75 -> "On Track"
         else -> "In Progress"
     }
