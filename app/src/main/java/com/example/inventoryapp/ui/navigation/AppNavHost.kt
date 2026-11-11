@@ -131,13 +131,25 @@ fun AppNavHost(
 
         composable(Routes.SUPPLIER_ORDERS) {
             val user = currentUser ?: UserEntity(
-                fullName = "Supplier Partner",
-                email = "",
+                fullName = "Too Frozen Food (Supplier)",
+                email = "supplier@nawano.com",
                 passwordHash = "",
                 role = UserRole.SUPPLIER
             )
+            val dashState by inventoryViewModel.uiState.collectAsState()
+
             SupplierOrdersScreen(
                 user = user,
+                orders = dashState.orders,
+                onConfirmOrder = { orderId, note ->
+                    inventoryViewModel.confirmOrder(orderId, note)
+                },
+                onRejectOrder = { orderId, reason ->
+                    inventoryViewModel.rejectOrder(orderId, reason)
+                },
+                onMarkDelivered = { orderId ->
+                    inventoryViewModel.markOrderDelivered(orderId)
+                },
                 onLogout = {
                     authViewModel.logout {
                         navController.navigate(Routes.LOGIN) {

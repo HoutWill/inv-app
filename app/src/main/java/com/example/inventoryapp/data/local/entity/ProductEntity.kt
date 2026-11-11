@@ -21,5 +21,7 @@ data class ProductEntity(
     val location: String = "Warehouse A",
     val imageUri: String? = null,
     val expirationDate: Long? = null,
+    val supplierId: String? = null,
+    val reorderQty: Int = 0,
     val updatedAt: Long = System.currentTimeMillis()
 )

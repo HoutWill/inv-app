@@ -8,10 +8,16 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.inventoryapp.data.local.AppDatabase
 import com.example.inventoryapp.data.local.entity.ProductEntity
+import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
+import com.example.inventoryapp.data.local.entity.PurchaseOrderItemEntity
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
+import com.example.inventoryapp.data.local.entity.SupplierEntity
 import com.example.inventoryapp.data.remote.BarcodeLookupService
 import com.example.inventoryapp.data.remote.OnlineProductData
 import com.example.inventoryapp.data.repository.InventoryRepository
+import com.example.inventoryapp.data.repository.OrderRepository
+import com.example.inventoryapp.data.repository.OrderWithItems
+import com.example.inventoryapp.data.repository.SupplierRepository
 import com.example.inventoryapp.util.StockNotificationHelper
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
@@ -56,6 +62,8 @@ data class DashboardUiState(
     val products: List<ProductEntity> = emptyList(),
     val filteredProducts: List<ProductEntity> = emptyList(),
     val transactions: List<StockTransactionEntity> = emptyList(),
+    val suppliers: List<SupplierEntity> = emptyList(),
+    val orders: List<PurchaseOrderEntity> = emptyList(),
     val searchQuery: String = "",
     val selectedCategory: String = "All",
     val selectedSubcategory: String = "All",
@@ -74,6 +82,8 @@ data class DashboardUiState(
 class InventoryViewModel(application: Application) : AndroidViewModel(application) {
     private val database = AppDatabase.getDatabase(application)
     private val repository = InventoryRepository(database.productDao(), database.stockTransactionDao())
+    val supplierRepository = SupplierRepository(database.supplierDao())
+    val orderRepository = OrderRepository(database, database.purchaseOrderDao(), database.productDao(), database.stockTransactionDao())
 
     private val prefs = application.getSharedPreferences("nawano_settings", Context.MODE_PRIVATE)
     private val _isDarkMode = MutableStateFlow(prefs.getBoolean("is_dark_mode", false))
@@ -116,18 +126,46 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         FilterParams(query, category, subcategory, sort, scanSku)
     }
 
+    private data class SupplierOrderData(
+        val suppliers: List<SupplierEntity>,
+        val orders: List<PurchaseOrderEntity>
+    )
+
+    private data class OnlineLookupState(
+        val product: OnlineProductData?,
+        val isFetching: Boolean
+    )
+
+    private val supplierOrderFlow: Flow<SupplierOrderData> = combine(
+        supplierRepository.allSuppliers,
+        orderRepository.allOrders
+    ) { suppliers, orders ->
+        SupplierOrderData(suppliers, orders)
+    }
+
+    private val onlineStateFlow: Flow<OnlineLookupState> = combine(
+        _onlineProduct,
+        _isFetchingOnline
+    ) { onlineProd, isFetching ->
+        OnlineLookupState(onlineProd, isFetching)
+    }
+
     val uiState: StateFlow<DashboardUiState> = combine(
         repository.allProducts,
         repository.allTransactions,
+        supplierOrderFlow,
         filterParamsFlow,
-        _onlineProduct,
-        _isFetchingOnline
-    ) { products, transactions, filter, onlineProd, isFetching ->
+        onlineStateFlow
+    ) { products, transactions, supplierOrders, filter, onlineState ->
         val query = filter.query
         val category = filter.category
         val subcategory = filter.subcategory
         val sort = filter.sort
         val scanSku = filter.scannedSku
+        val onlineProd = onlineState.product
+        val isFetching = onlineState.isFetching
+        val suppliers = supplierOrders.suppliers
+        val orders = supplierOrders.orders
 
         val filtered = products.filter { item ->
             val matchesQuery = query.isBlank() ||
@@ -183,6 +221,8 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             products = products,
             filteredProducts = prioritizedList,
             transactions = transactions,
+            suppliers = suppliers,
+            orders = orders,
             searchQuery = query,
             selectedCategory = category,
             selectedSubcategory = subcategory,
@@ -348,6 +388,73 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 Log.e("InventoryViewModel", "Error in deleteProduct", e)
             }
         }
+    }
+
+    // --- Supplier and Order Operations ---
+
+    fun saveSupplier(supplier: SupplierEntity, onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            supplierRepository.saveSupplier(supplier)
+            onComplete()
+        }
+    }
+
+    fun toggleSupplierActive(id: String, isActive: Boolean) {
+        viewModelScope.launch {
+            supplierRepository.toggleActive(id, isActive)
+        }
+    }
+
+    fun createPurchaseOrder(
+        supplier: SupplierEntity,
+        title: String,
+        picSender: String,
+        items: List<PurchaseOrderItemEntity>,
+        ownerNote: String,
+        estArrival: String,
+        onComplete: (PurchaseOrderEntity?) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val result = orderRepository.createOrder(
+                supplierId = supplier.id,
+                supplierName = supplier.name,
+                title = title,
+                picSender = picSender,
+                items = items,
+                ownerNote = ownerNote,
+                estArrival = estArrival
+            )
+            onComplete(result.getOrNull())
+        }
+    }
+
+    fun confirmOrder(orderId: String, note: String? = null) {
+        viewModelScope.launch {
+            orderRepository.confirmOrder(orderId, note)
+        }
+    }
+
+    fun rejectOrder(orderId: String, reason: String) {
+        viewModelScope.launch {
+            orderRepository.rejectOrder(orderId, reason)
+        }
+    }
+
+    fun markOrderDelivered(orderId: String, trackingNumber: String? = null) {
+        viewModelScope.launch {
+            orderRepository.markDelivered(orderId, trackingNumber)
+        }
+    }
+
+    fun receiveOrder(orderId: String, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val result = orderRepository.receiveOrder(orderId)
+            onComplete(result.isSuccess)
+        }
+    }
+
+    suspend fun getOrderWithItems(orderId: String): OrderWithItems? {
+        return orderRepository.getOrderWithItems(orderId)
     }
 
     fun clearAllData() {

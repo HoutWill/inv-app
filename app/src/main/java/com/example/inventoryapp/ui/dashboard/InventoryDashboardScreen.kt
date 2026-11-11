@@ -47,9 +47,16 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.inventoryapp.R
 import com.example.inventoryapp.data.local.entity.ProductEntity
+import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
+import com.example.inventoryapp.data.local.entity.PurchaseOrderItemEntity
+import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
+import com.example.inventoryapp.data.local.entity.SupplierEntity
 import com.example.inventoryapp.data.remote.OnlineProductData
+import com.example.inventoryapp.data.repository.OrderWithItems
 import com.example.inventoryapp.ui.scanner.BarcodeScannerScreen
+import com.example.inventoryapp.ui.supplier.NewPurchaseOrderDialog
+import com.example.inventoryapp.ui.supplier.SuppliersManagementScreen
 import com.example.inventoryapp.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -89,6 +96,9 @@ fun InventoryDashboardScreen(
     var addProductDraft by remember { mutableStateOf(AddProductDraft()) }
     var scannedNotFoundSku by remember { mutableStateOf<String?>(null) }
     var isUpcomingSheetOpen by remember { mutableStateOf(false) }
+    var viewingOrderWithItems by remember { mutableStateOf<OrderWithItems?>(null) }
+    var showNewPoDialog by remember { mutableStateOf(false) }
+    var selectedSupplierForPo by remember { mutableStateOf<SupplierEntity?>(null) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var drawerDestination by remember { mutableStateOf<DrawerDestination?>(null) }
 
@@ -128,6 +138,9 @@ fun InventoryDashboardScreen(
                 }
                 DrawerDestination.AUDIT_LOGS -> {
                     drawerDestination = DrawerDestination.AUDIT_LOGS
+                }
+                DrawerDestination.SUPPLIERS -> {
+                    drawerDestination = DrawerDestination.SUPPLIERS
                 }
                 DrawerDestination.SETTINGS -> {
                     drawerDestination = DrawerDestination.SETTINGS
@@ -174,6 +187,18 @@ fun InventoryDashboardScreen(
                             stockTransactions = uiState.transactions,
                             onBack = { drawerDestination = null },
                             onScanClicked = { scannerTarget = ScannerTarget.DASHBOARD_SCAN }
+                        )
+                    }
+                    DrawerDestination.SUPPLIERS -> {
+                        SuppliersManagementScreen(
+                            suppliers = uiState.suppliers,
+                            onBack = { drawerDestination = null },
+                            onSaveSupplier = { supplier -> viewModel.saveSupplier(supplier) },
+                            onToggleSupplierActive = { id, active -> viewModel.toggleSupplierActive(id, active) },
+                            onNewPurchaseOrder = { supplier ->
+                                selectedSupplierForPo = supplier
+                                showNewPoDialog = true
+                            }
                         )
                     }
                     DrawerDestination.AUDIT_LOGS -> {
@@ -341,6 +366,20 @@ fun InventoryDashboardScreen(
                                         AddProductDraft(sku = sku)
                                     }
                                     isAddProductOpen = true
+                                },
+                                onOrderClick = { orderId ->
+                                    scope.launch {
+                                        viewingOrderWithItems = viewModel.getOrderWithItems(orderId)
+                                    }
+                                },
+                                onReceiveOrder = { orderId ->
+                                    viewModel.receiveOrder(orderId) { success ->
+                                        if (success) {
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("Shipment accepted & stock updated!")
+                                            }
+                                        }
+                                    }
                                 }
                             )
                         }
@@ -478,6 +517,7 @@ fun InventoryDashboardScreen(
             if (isAddProductOpen) {
                 AddProductDialog(
                     initialDraft = addProductDraft,
+                    suppliers = uiState.suppliers.filter { it.isActive },
                     onDismiss = { isAddProductOpen = false },
                     onRequestScanSku = { draft ->
                         addProductDraft = draft
@@ -599,6 +639,50 @@ fun InventoryDashboardScreen(
                     }
                 )
             }
+
+            // Movement Detail Fullscreen overlay
+            viewingOrderWithItems?.let { currentOrderWithItems ->
+                MovementDetailScreen(
+                    order = currentOrderWithItems.order,
+                    items = currentOrderWithItems.items,
+                    onBack = { viewingOrderWithItems = null },
+                    onReceiveOrder = { orderId ->
+                        viewModel.receiveOrder(orderId) { success ->
+                            if (success) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Shipment received & inventory stocked successfully!")
+                                }
+                                viewingOrderWithItems = null
+                            }
+                        }
+                    },
+                    onRejectOrder = { orderId ->
+                        viewModel.rejectOrder(orderId, "Rejected by store receiving")
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Shipment rejected")
+                        }
+                        viewingOrderWithItems = null
+                    }
+                )
+            }
+
+            // New Purchase Order Dialog
+            if (showNewPoDialog) {
+                NewPurchaseOrderDialog(
+                    initialSupplier = selectedSupplierForPo,
+                    suppliers = uiState.suppliers.filter { it.isActive },
+                    products = uiState.products,
+                    onDismiss = { showNewPoDialog = false },
+                    onSubmit = { sup, title, pic, items, note, estArrival ->
+                        viewModel.createPurchaseOrder(sup, title, pic, items, note, estArrival) { created ->
+                            showNewPoDialog = false
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Purchase Order ${created?.orderNumber ?: ""} created!")
+                            }
+                        }
+                    }
+                )
+            }
         }
     }
     }
@@ -622,7 +706,9 @@ private fun DashboardOverviewTab(
     onQuantityChange: (ProductEntity, Int) -> Unit,
     onClearScannedSku: () -> Unit,
     onImportOnlineProduct: (OnlineProductData) -> Unit,
-    onRegisterNewProduct: (String, OnlineProductData?) -> Unit
+    onRegisterNewProduct: (String, OnlineProductData?) -> Unit,
+    onOrderClick: (String) -> Unit = {},
+    onReceiveOrder: (String) -> Unit = {}
 ) {
     var selectedActivityFilter by remember { mutableStateOf("Incoming") }
 
@@ -686,7 +772,10 @@ private fun DashboardOverviewTab(
             NawanoIncomingGoodsSection(
                 selectedFilter = selectedActivityFilter,
                 transactions = uiState.transactions,
-                onViewAll = onNavigateToMoveSummary
+                orders = uiState.orders,
+                onViewAll = onNavigateToMoveSummary,
+                onOrderClick = onOrderClick,
+                onAcceptOrder = onReceiveOrder
             )
         }
 
@@ -1593,7 +1682,9 @@ private data class NawanoDashboardActivity(
     val arrivalTime: String,
     val reference: String,
     val quantityChange: String,
-    val isPositive: Boolean
+    val isPositive: Boolean,
+    val orderId: String? = null,
+    val isDeliveredOrder: Boolean = false
 )
 
 @Composable
@@ -1637,14 +1728,46 @@ private fun NawanoActivityFilterChips(
 private fun NawanoIncomingGoodsSection(
     selectedFilter: String,
     transactions: List<StockTransactionEntity>,
+    orders: List<PurchaseOrderEntity> = emptyList(),
     onViewAll: () -> Unit,
+    onOrderClick: ((String) -> Unit)? = null,
+    onAcceptOrder: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    // Collect all activities from real Room transactions
-    val allActivities = remember(transactions) {
+    // Collect all activities from real Room orders and transactions
+    val allActivities = remember(transactions, orders) {
         val list = mutableListOf<NawanoDashboardActivity>()
 
-        // Map real transactions (most recent on top)
+        // 1. Live purchase orders from suppliers (Delivered / Confirmed / Pending)
+        orders.filter {
+            it.status == PurchaseOrderStatus.DELIVERED ||
+            it.status == PurchaseOrderStatus.CONFIRMED ||
+            it.status == PurchaseOrderStatus.PENDING
+        }.forEach { po ->
+            val isInbound = po.status == PurchaseOrderStatus.DELIVERED
+            val badgeText = if (isInbound) "In Delivery" else if (po.status == PurchaseOrderStatus.CONFIRMED) "Confirmed" else "Incoming Req"
+            val badgeColor = if (isInbound) Color(0xFF4338CA) else if (po.status == PurchaseOrderStatus.CONFIRMED) NawanoPrimary200 else Color(0xFFF59E0B)
+            val type = if (isInbound) "INBOUND" else "INCOMING"
+
+            list.add(
+                NawanoDashboardActivity(
+                    id = "order_${po.id}",
+                    sku = po.orderNumber,
+                    title = po.title.ifBlank { "Items from ${po.supplierName}" },
+                    type = type,
+                    badgeText = badgeText,
+                    badgeColor = badgeColor,
+                    arrivalTime = "Est: ${po.estArrival.ifBlank { "Today" }} • ${po.supplierName}",
+                    reference = "Supplier: ${po.supplierName} • PIC: ${po.picSender.ifBlank { "Leslie Alexander" }}",
+                    quantityChange = "+${po.totalQuantity} units",
+                    isPositive = true,
+                    orderId = po.id,
+                    isDeliveredOrder = isInbound
+                )
+            )
+        }
+
+        // 2. Map real transactions (most recent on top)
         transactions.forEach { tx ->
             val isInbound = tx.quantityDelta > 0 || tx.transactionType == "STOCK_IN" || tx.transactionType == "NEW_ITEM"
             val isRequisition = tx.transactionType.contains("REQ", ignoreCase = true) ||
@@ -1773,7 +1896,19 @@ private fun NawanoIncomingGoodsSection(
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 filteredActivities.take(3).forEach { activity ->
-                    NawanoGoodsReqCard(activity = activity)
+                    NawanoGoodsReqCard(
+                        activity = activity,
+                        onClick = {
+                            if (activity.orderId != null) {
+                                onOrderClick?.invoke(activity.orderId)
+                            }
+                        },
+                        onAccept = {
+                            if (activity.orderId != null) {
+                                onAcceptOrder?.invoke(activity.orderId)
+                            }
+                        }
+                    )
                 }
             }
         }
@@ -1781,10 +1916,15 @@ private fun NawanoIncomingGoodsSection(
 }
 
 @Composable
-private fun NawanoGoodsReqCard(activity: NawanoDashboardActivity) {
+private fun NawanoGoodsReqCard(
+    activity: NawanoDashboardActivity,
+    onClick: () -> Unit = {},
+    onAccept: () -> Unit = {}
+) {
     var isActioned by remember(activity.id) { mutableStateOf(false) }
 
     Surface(
+        onClick = onClick,
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
@@ -1812,7 +1952,10 @@ private fun NawanoGoodsReqCard(activity: NawanoDashboardActivity) {
                 }
 
                 Surface(
-                    onClick = { isActioned = !isActioned },
+                    onClick = {
+                        isActioned = true
+                        onAccept()
+                    },
                     shape = RoundedCornerShape(14.dp),
                     color = if (isActioned) Color(0xFFD1FAE5) else if (activity.type == "OUTBOUND") Color(0xFFEDE9FE) else NawanoPrimary200
                 ) {

@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.inventoryapp.data.local.entity.ProductEntity
+import com.example.inventoryapp.data.local.entity.SupplierEntity
 import com.example.inventoryapp.data.remote.BarcodeLookupService
 import com.example.inventoryapp.ui.theme.*
 import kotlinx.coroutines.launch
@@ -51,7 +52,9 @@ data class AddProductDraft(
     val quantity: String = "10",
     val reorderLevel: String = "5",
     val location: String = "Aisle 1 - Shelf A",
-    val imageUri: String? = null
+    val imageUri: String? = null,
+    val supplierId: String? = null,
+    val reorderQty: String = "10"
 )
 
 /**
@@ -61,6 +64,7 @@ data class AddProductDraft(
 @Composable
 fun AddProductDialog(
     initialDraft: AddProductDraft = AddProductDraft(),
+    suppliers: List<SupplierEntity> = emptyList(),
     onDismiss: () -> Unit,
     onRequestScanSku: (AddProductDraft) -> Unit,
     onProductAdded: (ProductEntity) -> Unit
@@ -77,6 +81,9 @@ fun AddProductDialog(
     var reorderLevelText by remember { mutableStateOf(initialDraft.reorderLevel) }
     var location by remember { mutableStateOf(initialDraft.location) }
     var imageUri by remember { mutableStateOf(initialDraft.imageUri) }
+    var selectedSupplierId by remember { mutableStateOf(initialDraft.supplierId) }
+    var reorderQtyText by remember { mutableStateOf(initialDraft.reorderQty) }
+    var supplierDropdownExpanded by remember { mutableStateOf(false) }
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var hasAttemptedSubmit by remember { mutableStateOf(false) }
@@ -171,7 +178,9 @@ fun AddProductDialog(
         quantity = quantityText,
         reorderLevel = reorderLevelText,
         location = location,
-        imageUri = imageUri
+        imageUri = imageUri,
+        supplierId = selectedSupplierId,
+        reorderQty = reorderQtyText
     )
 
     fun animateDismiss() {
@@ -826,6 +835,66 @@ fun AddProductDialog(
                 singleLine = true
             )
 
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Reorder Qty & Supplier
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedTextField(
+                    value = reorderQtyText,
+                    onValueChange = { reorderQtyText = it },
+                    label = { Text("Reorder Batch Qty") },
+                    placeholder = { Text("10") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.weight(1f),
+                    singleLine = true
+                )
+
+                // Supplier Dropdown
+                val selectedSupplierName = suppliers.find { it.id == selectedSupplierId }?.name ?: "No Supplier"
+                ExposedDropdownMenuBox(
+                    expanded = supplierDropdownExpanded,
+                    onExpandedChange = { supplierDropdownExpanded = !supplierDropdownExpanded },
+                    modifier = Modifier.weight(1.5f)
+                ) {
+                    OutlinedTextField(
+                        value = selectedSupplierName,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Assigned Supplier") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = supplierDropdownExpanded) },
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = supplierDropdownExpanded,
+                        onDismissRequest = { supplierDropdownExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("None (Direct Stock)") },
+                            onClick = {
+                                selectedSupplierId = null
+                                supplierDropdownExpanded = false
+                            }
+                        )
+                        suppliers.forEach { s ->
+                            DropdownMenuItem(
+                                text = { Text(s.name) },
+                                onClick = {
+                                    selectedSupplierId = s.id
+                                    supplierDropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
 
             // Action Buttons Row
@@ -859,6 +928,8 @@ fun AddProductDialog(
                         val qty = quantityText.toIntOrNull() ?: 1
                         val reorderLevel = reorderLevelText.toIntOrNull() ?: 5
 
+                        val reorderQty = reorderQtyText.toIntOrNull() ?: 10
+
                         val newItem = ProductEntity(
                             id = UUID.randomUUID().toString(),
                             sku = sku.trim(),
@@ -871,6 +942,8 @@ fun AddProductDialog(
                             quantity = qty,
                             unit = unit,
                             reorderLevel = reorderLevel,
+                            reorderQty = reorderQty,
+                            supplierId = selectedSupplierId,
                             location = location.ifBlank { "Warehouse A" },
                             imageUri = imageUri
                         )

@@ -35,6 +35,7 @@ enum class DrawerDestination {
     STATISTICS,
     INVENTORY_SUMMARY,
     MOVEMENT_LIST,
+    SUPPLIERS,
     AUDIT_LOGS,
     SETTINGS
 }
@@ -239,6 +240,15 @@ fun InventoryDrawerSheet(
                 badge = "Logistics",
                 badgeColor = Color(0xFF06B6D4),
                 onClick = { onDestinationSelected(DrawerDestination.MOVEMENT_LIST) }
+            )
+
+            DrawerNavRow(
+                icon = Icons.Default.LocalShipping,
+                label = "Suppliers Directory",
+                isSelected = currentDestination == DrawerDestination.SUPPLIERS,
+                badge = "Vendor",
+                badgeColor = NawanoPrimary200,
+                onClick = { onDestinationSelected(DrawerDestination.SUPPLIERS) }
             )
 
             DrawerNavRow(

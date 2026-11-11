@@ -16,5 +16,7 @@ data class StockTransactionEntity(
     val previousQuantity: Int,
     val newQuantity: Int,
     val timestamp: Long = System.currentTimeMillis(),
-    val note: String? = null
+    val note: String? = null,
+    val orderId: String? = null,
+    val unitCost: Double? = null
 )
