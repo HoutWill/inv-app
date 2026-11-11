@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -28,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -72,12 +74,14 @@ fun SupplierOrdersScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // 0 = Orders view, 1 = Catalog (Items) view
+    // 0 = Orders view, 1 = Catalog (Items) view, 2 = Stats view, 3 = Settings view
     var activeViewTab by remember { mutableIntStateOf(0) }
     var selectedFilterIndex by remember { mutableIntStateOf(0) }
     val filterTabs = listOf("All", "Pending", "Transit", "Done")
 
-    // Modals & Sheets
+    // Modals, Sheets & Drawer
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    var showNotificationSheet by remember { mutableStateOf(false) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var orderToEdit by remember { mutableStateOf<PurchaseOrderEntity?>(null) }
     var orderToDelete by remember { mutableStateOf<PurchaseOrderEntity?>(null) }
@@ -148,113 +152,151 @@ fun SupplierOrdersScreen(
     val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
     val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(bgMain)
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            SupplierDrawerSheet(
+                userName = user.fullName.replace(" (Supplier)", ""),
+                initials = initials,
+                activeViewTab = activeViewTab,
+                onTabSelected = { tab ->
+                    activeViewTab = tab
+                    scope.launch { drawerState.close() }
+                },
+                ordersCount = orders.size,
+                catalogCount = products.size,
+                isDarkTheme = isDarkTheme,
+                onToggleTheme = onToggleTheme,
+                onCloseDrawer = { scope.launch { drawerState.close() } },
+                onLogout = onLogout
+            )
+        }
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
+                .background(bgMain)
         ) {
-            // Header Top Bar (Matches Middleman InventoryTopBar design)
-            Row(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxSize()
+                    .statusBarsPadding()
             ) {
+                // Header Top Bar (Menu, Profile, Dark/Light Mode, Notifications)
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(NawanoGradientStart, NawanoGradientEnd)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Drawer Menu Button (Hamburger)
+                        IconButton(
+                            onClick = { scope.launch { drawerState.open() } },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "Open Navigation Menu",
+                                tint = textPrimary
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(NawanoGradientStart, NawanoGradientEnd)
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = initials,
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+
+                        Column {
+                            Text(
+                                text = user.fullName.replace(" (Supplier)", ""),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = textPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = when (activeViewTab) {
+                                    0 -> "Supplier Portal • ${orders.size} Orders"
+                                    1 -> "Wholesale Catalog • ${products.size} SKUs"
+                                    2 -> "Analytics & Performance"
+                                    else -> "Supplier Settings"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = textSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        // Dark / Light Mode Toggle Button
+                        IconButton(
+                            onClick = onToggleTheme,
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                                contentDescription = if (isDarkTheme) "Switch to Light Mode" else "Switch to Dark Mode",
+                                tint = if (isDarkTheme) Color(0xFFFBBF24) else textSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        // Notification Bell with Badge
+                        val pendingCount = remember(orders) { orders.count { it.status == PurchaseOrderStatus.PENDING } }
+                        IconButton(
+                            onClick = { showNotificationSheet = true },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            BadgedBox(
+                                badge = {
+                                    if (pendingCount > 0) {
+                                        Badge(
+                                            containerColor = Color(0xFFEF4444),
+                                            contentColor = Color.White
+                                        ) {
+                                            Text(
+                                                text = pendingCount.toString(),
+                                                style = MaterialTheme.typography.labelSmall
+                                            )
+                                        }
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (pendingCount > 0) Icons.Default.Notifications else Icons.Outlined.Notifications,
+                                    contentDescription = "Notifications",
+                                    tint = textSecondary,
+                                    modifier = Modifier.size(20.dp)
                                 )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = initials,
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Black
-                        )
-                    }
-
-                    Column {
-                        Text(
-                            text = user.fullName.replace(" (Supplier)", ""),
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = textPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = if (activeViewTab == 0) "Supplier Portal • ${orders.size} Orders" else "Wholesale Catalog • ${products.size} SKUs",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = textSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                            }
+                        }
                     }
                 }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    // Dark / Light Mode Toggle Button (Identical to Middleman)
-                    IconButton(
-                        onClick = onToggleTheme,
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
-                            contentDescription = if (isDarkTheme) "Switch to Light Mode" else "Switch to Dark Mode",
-                            tint = if (isDarkTheme) Color(0xFFFBBF24) else textSecondary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    // Add Button (+)
-                    IconButton(
-                        onClick = {
-                            if (activeViewTab == 0) showCreateDialog = true
-                            else showAddCatalogItemDialog = true
-                        },
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AddCircleOutline,
-                            contentDescription = "New Order",
-                            tint = NawanoPrimary200,
-                            modifier = Modifier.size(21.dp)
-                        )
-                    }
-
-                    // Exit / Logout Button
-                    IconButton(
-                        onClick = onLogout,
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                            contentDescription = "Logout",
-                            tint = textSecondary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-            }
 
             // Scrollable Content
             LazyColumn(
@@ -265,7 +307,8 @@ fun SupplierOrdersScreen(
                 contentPadding = PaddingValues(bottom = 96.dp)
             ) {
                 // 1. Hero Summary Card (Violet Gradient matching Middleman)
-                item {
+                if (activeViewTab == 0 || activeViewTab == 1) {
+                    item {
                     Surface(
                         shape = RoundedCornerShape(24.dp),
                         color = Color.Transparent,
@@ -383,160 +426,80 @@ fun SupplierOrdersScreen(
                         }
                     }
                 }
+                }
 
-                // 2. Quick Action Bar (Minimal 1-word buttons: New, Scan, Sort)
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Surface(
-                            onClick = {
-                                if (activeViewTab == 0) showCreateDialog = true
-                                else showAddCatalogItemDialog = true
-                            },
-                            shape = RoundedCornerShape(16.dp),
-                            color = cardBg,
-                            border = BorderStroke(1.dp, cardBorder),
-                            shadowElevation = if (isDarkTheme) 0.dp else 1.dp,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp)
+                // View 0: Orders List
+                if (activeViewTab == 0) {
+                    item {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
+                            // Status Filter Pills
                             Row(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                filterTabs.forEachIndexed { index, name ->
+                                    val isSelected = selectedFilterIndex == index
+                                    Surface(
+                                        onClick = { selectedFilterIndex = index },
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = if (isSelected) NawanoPrimary200 else cardBg,
+                                        border = if (isSelected) null else BorderStroke(1.dp, cardBorder),
+                                        shadowElevation = if (isSelected || isDarkTheme) 0.dp else 0.5.dp
+                                    ) {
+                                        Text(
+                                            text = name,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isSelected) Color.White else textSecondary,
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Underneath Filter: Order counter & Sort Button (Moved to under)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                Text(
+                                    text = "${filteredOrders.size} Orders",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = textPrimary
+                                )
+
                                 Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = NawanoPrimary200.copy(alpha = if (isDarkTheme) 0.2f else 0.12f),
-                                    modifier = Modifier.size(24.dp)
+                                    onClick = { isSortAscending = !isSortAscending },
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = cardBg,
+                                    border = BorderStroke(1.dp, cardBorder),
+                                    shadowElevation = if (isDarkTheme) 0.dp else 0.5.dp
                                 ) {
-                                    Box(contentAlignment = Alignment.Center) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         Icon(
-                                            imageVector = Icons.Default.Add,
-                                            contentDescription = null,
+                                            imageVector = Icons.Default.SwapVert,
+                                            contentDescription = "Sort",
                                             tint = NawanoPrimary200,
                                             modifier = Modifier.size(16.dp)
                                         )
-                                    }
-                                }
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    text = "New",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = textPrimary
-                                )
-                            }
-                        }
-
-                        Surface(
-                            onClick = { showLiveCameraScanner = true },
-                            shape = RoundedCornerShape(16.dp),
-                            color = cardBg,
-                            border = BorderStroke(1.dp, cardBorder),
-                            shadowElevation = if (isDarkTheme) 0.dp else 1.dp,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Color(0xFFC084FC).copy(alpha = if (isDarkTheme) 0.2f else 0.12f),
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Default.QrCodeScanner,
-                                            contentDescription = null,
-                                            tint = Color(0xFFC084FC),
-                                            modifier = Modifier.size(15.dp)
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            text = if (isSortAscending) "Price ↑" else "Recent ↓",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = textPrimary
                                         )
                                     }
-                                }
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    text = "Scan",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = textPrimary
-                                )
-                            }
-                        }
-
-                        Surface(
-                            onClick = { isSortAscending = !isSortAscending },
-                            shape = RoundedCornerShape(16.dp),
-                            color = cardBg,
-                            border = BorderStroke(1.dp, cardBorder),
-                            shadowElevation = if (isDarkTheme) 0.dp else 1.dp,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.2f else 0.12f),
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Default.FilterList,
-                                            contentDescription = null,
-                                            tint = Color(0xFF10B981),
-                                            modifier = Modifier.size(15.dp)
-                                        )
-                                    }
-                                }
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    text = if (isSortAscending) "Price" else "Recent",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = textPrimary
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // If in Orders View: Status Filter Pills
-                if (activeViewTab == 0) {
-                    item {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            filterTabs.forEachIndexed { index, name ->
-                                val isSelected = selectedFilterIndex == index
-                                Surface(
-                                    onClick = { selectedFilterIndex = index },
-                                    shape = RoundedCornerShape(16.dp),
-                                    color = if (isSelected) NawanoPrimary200 else cardBg,
-                                    border = if (isSelected) null else BorderStroke(1.dp, cardBorder),
-                                    shadowElevation = if (isSelected || isDarkTheme) 0.dp else 0.5.dp
-                                ) {
-                                    Text(
-                                        text = name,
-                                        fontSize = 11.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected) Color.White else textSecondary,
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                                    )
                                 }
                             }
                         }
@@ -547,7 +510,7 @@ fun SupplierOrdersScreen(
                         item {
                             EmptyZeroState(
                                 title = "No Orders",
-                                subtitle = "Tap '+ New' to create an order.",
+                                subtitle = "Tap '+' to create an order.",
                                 icon = Icons.Default.LocalShipping,
                                 isDarkTheme = isDarkTheme
                             )
@@ -575,13 +538,55 @@ fun SupplierOrdersScreen(
                             )
                         }
                     }
-                } else {
-                    // Catalog (Items) View
+                } else if (activeViewTab == 1) {
+                    // View 1: Catalog (Items) View
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${filteredCatalogProducts.size} Products",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = textPrimary
+                            )
+
+                            Surface(
+                                onClick = { isSortAscending = !isSortAscending },
+                                shape = RoundedCornerShape(12.dp),
+                                color = cardBg,
+                                border = BorderStroke(1.dp, cardBorder),
+                                shadowElevation = if (isDarkTheme) 0.dp else 0.5.dp
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.SwapVert,
+                                        contentDescription = "Sort",
+                                        tint = NawanoPrimary200,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = if (isSortAscending) "Price ↑" else "Recent ↓",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = textPrimary
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     if (filteredCatalogProducts.isEmpty()) {
                         item {
                             EmptyZeroState(
                                 title = "Catalog Empty",
-                                subtitle = "Tap '+ New' to add items you supply.",
+                                subtitle = "Tap '+' to add items you supply.",
                                 icon = Icons.Default.Category,
                                 isDarkTheme = isDarkTheme
                             )
@@ -599,6 +604,25 @@ fun SupplierOrdersScreen(
                             )
                         }
                     }
+                } else if (activeViewTab == 2) {
+                    // View 2: Analytics & Stats View
+                    item {
+                        SupplierStatsView(
+                            orders = orders,
+                            products = products,
+                            isDarkTheme = isDarkTheme
+                        )
+                    }
+                } else if (activeViewTab == 3) {
+                    // View 3: Supplier Settings View
+                    item {
+                        SupplierSettingsView(
+                            user = user,
+                            isDarkTheme = isDarkTheme,
+                            onToggleTheme = onToggleTheme,
+                            onLogout = onLogout
+                        )
+                    }
                 }
             }
         }
@@ -608,16 +632,88 @@ fun SupplierOrdersScreen(
             activeViewTab = activeViewTab,
             onTabSelected = { activeViewTab = it },
             onAddClicked = {
-                if (activeViewTab == 0) showCreateDialog = true
-                else showAddCatalogItemDialog = true
+                if (activeViewTab == 1) showAddCatalogItemDialog = true
+                else showCreateDialog = true
             },
-            onLogout = onLogout,
             isDarkTheme = isDarkTheme,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         )
+    }
+}
+
+    // Supplier Notifications Modal Bottom Sheet
+    if (showNotificationSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showNotificationSheet = false },
+            containerColor = if (isDarkTheme) NawanoDark200 else Color.White,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = null,
+                            tint = NawanoPrimary200,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "Supplier Notifications",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = textPrimary
+                        )
+                    }
+                    TextButton(onClick = { showNotificationSheet = false }) {
+                        Text("Close", color = NawanoPrimary200, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                NotificationItemRow(
+                    title = "Shipment In Delivery",
+                    subtitle = "PO-1111-1183 (TRK-8EABAD26) has been dispatched.",
+                    time = "10m ago",
+                    icon = Icons.Default.LocalShipping,
+                    isDarkTheme = isDarkTheme
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                NotificationItemRow(
+                    title = "Wholesale Catalog Synced",
+                    subtitle = "Catalog items and prices synchronized with Middleman HQ.",
+                    time = "1h ago",
+                    icon = Icons.Default.Sync,
+                    isDarkTheme = isDarkTheme
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                NotificationItemRow(
+                    title = "Settlement Period Active",
+                    subtitle = "Net 30 terms in good standing for Pacific Seafood Supply.",
+                    time = "Today",
+                    icon = Icons.Default.AccountBalanceWallet,
+                    isDarkTheme = isDarkTheme
+                )
+
+                Spacer(Modifier.height(28.dp))
+            }
+        }
     }
 
     // Modal 1: Dispatch Outbound Shipment Dialog with Carrier & Tracking Entry
@@ -1141,13 +1237,13 @@ private fun SupplierCatalogProductCard(
 
 /**
  * Modern Floating Bottom Navigation Dock for Supplier Orders & Catalog (Identical to Middleman).
+ * Tabs: Orders (0), Catalog (1), Stats (2), Settings (3) + Elevated Pop-Up '+' Action Button.
  */
 @Composable
 private fun SupplierBottomBar(
     activeViewTab: Int,
     onTabSelected: (Int) -> Unit,
     onAddClicked: () -> Unit,
-    onLogout: () -> Unit,
     isDarkTheme: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -1189,20 +1285,20 @@ private fun SupplierBottomBar(
                 // Center placeholder space for the elevated pop-up action button
                 Spacer(modifier = Modifier.width(56.dp))
 
-                // Tab 2: Scan / Add
+                // Tab 2: Stats (Replaces "New")
                 FloatingNavItem(
-                    title = "New",
-                    icon = Icons.Outlined.AddBox,
-                    isSelected = false,
-                    onClick = onAddClicked
+                    title = "Stats",
+                    icon = if (activeViewTab == 2) Icons.Default.BarChart else Icons.Outlined.BarChart,
+                    isSelected = activeViewTab == 2,
+                    onClick = { onTabSelected(2) }
                 )
 
-                // Tab 3: Exit
+                // Tab 3: Settings (Replaces "Exit")
                 FloatingNavItem(
-                    title = "Exit",
-                    icon = Icons.AutoMirrored.Filled.ExitToApp,
-                    isSelected = false,
-                    onClick = onLogout
+                    title = "Settings",
+                    icon = if (activeViewTab == 3) Icons.Default.Settings else Icons.Outlined.Settings,
+                    isSelected = activeViewTab == 3,
+                    onClick = { onTabSelected(3) }
                 )
             }
         }
@@ -1235,6 +1331,724 @@ private fun SupplierBottomBar(
                     contentDescription = "New Order or Product",
                     tint = Color.White,
                     modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Navigation Drawer Sheet for Supplier (Matches Middleman InventoryDrawerSheet).
+ */
+@Composable
+private fun SupplierDrawerSheet(
+    userName: String,
+    initials: String,
+    activeViewTab: Int,
+    onTabSelected: (Int) -> Unit,
+    ordersCount: Int,
+    catalogCount: Int,
+    isDarkTheme: Boolean,
+    onToggleTheme: () -> Unit,
+    onCloseDrawer: () -> Unit,
+    onLogout: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
+    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
+
+    ModalDrawerSheet(
+        modifier = modifier
+            .width(310.dp)
+            .fillMaxHeight(),
+        drawerContainerColor = if (isDarkTheme) NawanoDark200 else Color.White,
+        drawerTonalElevation = 4.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(vertical = 16.dp, horizontal = 16.dp)
+        ) {
+            // Profile & Branding Header
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = if (isDarkTheme) NawanoDark200 else Color(0xFFF3E8FF),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.35f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(NawanoGradientStart, NawanoGradientEnd)
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = initials,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 18.sp,
+                                color = Color.White
+                            )
+                        }
+
+                        IconButton(
+                            onClick = onCloseDrawer,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close Drawer",
+                                tint = textSecondary
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = userName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = textPrimary
+                    )
+                    Text(
+                        text = "Verified Supplier • Nawano Partner",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = textSecondary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Text(
+                text = "PORTAL VIEWS",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = textSecondary,
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Item 1: Orders
+            SupplierDrawerItem(
+                label = "Orders & Dispatches",
+                icon = Icons.Default.Inventory2,
+                badge = "$ordersCount",
+                isSelected = activeViewTab == 0,
+                isDarkTheme = isDarkTheme,
+                onClick = { onTabSelected(0) }
+            )
+
+            // Item 2: Catalog
+            SupplierDrawerItem(
+                label = "Wholesale Catalog",
+                icon = Icons.Default.Category,
+                badge = "$catalogCount",
+                isSelected = activeViewTab == 1,
+                isDarkTheme = isDarkTheme,
+                onClick = { onTabSelected(1) }
+            )
+
+            // Item 3: Stats
+            SupplierDrawerItem(
+                label = "Analytics & Performance",
+                icon = Icons.Default.BarChart,
+                badge = "KPIs",
+                isSelected = activeViewTab == 2,
+                isDarkTheme = isDarkTheme,
+                onClick = { onTabSelected(2) }
+            )
+
+            // Item 4: Settings
+            SupplierDrawerItem(
+                label = "Supplier Settings",
+                icon = Icons.Default.Settings,
+                isSelected = activeViewTab == 3,
+                isDarkTheme = isDarkTheme,
+                onClick = { onTabSelected(3) }
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+            HorizontalDivider(color = if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "PREFERENCES & SYSTEM",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = textSecondary,
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Switch to Dark / Light Mode
+            Surface(
+                onClick = onToggleTheme,
+                shape = RoundedCornerShape(12.dp),
+                color = Color.Transparent,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                        contentDescription = null,
+                        tint = if (isDarkTheme) Color(0xFFFBBF24) else NawanoPrimary200,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = if (isDarkTheme) "Switch to Light Mode" else "Switch to Dark Mode",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = textPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.weight(1f, fill = false))
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Log Out Button
+            Surface(
+                onClick = onLogout,
+                shape = RoundedCornerShape(12.dp),
+                color = if (isDarkTheme) Color(0xFF2D1515) else Color(0xFFFEF2F2),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                        contentDescription = null,
+                        tint = Color(0xFFEF4444),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Log Out of Supplier",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFEF4444)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SupplierDrawerItem(
+    label: String,
+    icon: ImageVector,
+    badge: String? = null,
+    isSelected: Boolean,
+    isDarkTheme: Boolean,
+    onClick: () -> Unit
+) {
+    val selectedBg = if (isDarkTheme) NawanoPrimary200.copy(alpha = 0.25f) else Color(0xFFEEF2FF)
+    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = if (isSelected) selectedBg else Color.Transparent,
+        border = if (isSelected) BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.4f)) else null,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (isSelected) NawanoPrimary200 else (if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight),
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                color = if (isSelected) NawanoPrimary200 else textPrimary,
+                modifier = Modifier.weight(1f)
+            )
+            badge?.let {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (isSelected) NawanoPrimary200 else (if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0))
+                ) {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSelected) Color.White else (if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationItemRow(
+    title: String,
+    subtitle: String,
+    time: String,
+    icon: ImageVector,
+    isDarkTheme: Boolean
+) {
+    val cardBg = if (isDarkTheme) NawanoDarkCard else Color(0xFFF8FAFC)
+    val cardBorder = if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0)
+    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
+
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = cardBg,
+        border = BorderStroke(1.dp, cardBorder),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = NawanoPrimary200.copy(alpha = 0.15f),
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = NawanoPrimary200,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = textPrimary
+                    )
+                    Text(
+                        text = time,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = textSecondary
+                    )
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = textSecondary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SupplierStatsView(
+    orders: List<PurchaseOrderEntity>,
+    products: List<ProductEntity>,
+    isDarkTheme: Boolean
+) {
+    val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
+    val cardBorder = if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0)
+    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
+
+    val totalValue = orders.sumOf { it.totalAmount }
+    val totalQty = orders.sumOf { it.totalQuantity }
+    val pendingCount = orders.count { it.status == PurchaseOrderStatus.PENDING }
+    val inTransitCount = orders.count { it.status == PurchaseOrderStatus.DELIVERED }
+    val completedCount = orders.count { it.status == PurchaseOrderStatus.RECEIVED }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // Hero Performance Card
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = Color.Transparent,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.linearGradient(
+                            listOf(Color(0xFF6366F1), NawanoPrimary200, Color(0xFF9061F9))
+                        )
+                    )
+                    .padding(20.dp)
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Supplier Performance",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color.White.copy(alpha = 0.2f)
+                        ) {
+                            Text(
+                                text = "Tier: Gold Partner",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Fulfillment Rate", fontSize = 11.sp, color = Color.White.copy(alpha = 0.75f))
+                            Text("98.4%", fontSize = 22.sp, fontWeight = FontWeight.Black, color = Color.White)
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("On-Time Dispatch", fontSize = 11.sp, color = Color.White.copy(alpha = 0.75f))
+                            Text("96.8%", fontSize = 22.sp, fontWeight = FontWeight.Black, color = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Metrics Grid (Revenue & Total Qty)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = cardBg,
+                border = BorderStroke(1.dp, cardBorder),
+                modifier = Modifier.weight(1f)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Total Supply Value", style = MaterialTheme.typography.labelSmall, color = textSecondary)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "$${String.format(Locale.US, "%,.2f", totalValue)}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF047857)
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text("${orders.size} Total Orders", style = MaterialTheme.typography.bodySmall, color = textSecondary)
+                }
+            }
+
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = cardBg,
+                border = BorderStroke(1.dp, cardBorder),
+                modifier = Modifier.weight(1f)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Units Supplied", style = MaterialTheme.typography.labelSmall, color = textSecondary)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "$totalQty Units",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = NawanoPrimary200
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text("${products.size} Catalog SKUs", style = MaterialTheme.typography.bodySmall, color = textSecondary)
+                }
+            }
+        }
+
+        // Order Status Distribution Breakdown
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = cardBg,
+            border = BorderStroke(1.dp, cardBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Order Distribution Pipeline",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = textPrimary
+                )
+                Spacer(Modifier.height(12.dp))
+
+                StatusProgressRow(
+                    label = "In Delivery",
+                    count = inTransitCount,
+                    total = orders.size.coerceAtLeast(1),
+                    color = Color(0xFF6366F1),
+                    isDarkTheme = isDarkTheme
+                )
+                Spacer(Modifier.height(8.dp))
+
+                StatusProgressRow(
+                    label = "Pending Confirmation",
+                    count = pendingCount,
+                    total = orders.size.coerceAtLeast(1),
+                    color = Color(0xFFF59E0B),
+                    isDarkTheme = isDarkTheme
+                )
+                Spacer(Modifier.height(8.dp))
+
+                StatusProgressRow(
+                    label = "Completed & Received",
+                    count = completedCount,
+                    total = orders.size.coerceAtLeast(1),
+                    color = Color(0xFF10B981),
+                    isDarkTheme = isDarkTheme
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusProgressRow(
+    label: String,
+    count: Int,
+    total: Int,
+    color: Color,
+    isDarkTheme: Boolean
+) {
+    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
+    val ratio = (count.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(label, style = MaterialTheme.typography.bodySmall, color = textPrimary)
+            Text("$count orders", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = textSecondary)
+        }
+        Spacer(Modifier.height(4.dp))
+        LinearProgressIndicator(
+            progress = { ratio },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = color,
+            trackColor = color.copy(alpha = 0.15f)
+        )
+    }
+}
+
+@Composable
+private fun SupplierSettingsView(
+    user: UserEntity,
+    isDarkTheme: Boolean,
+    onToggleTheme: () -> Unit,
+    onLogout: () -> Unit
+) {
+    val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
+    val cardBorder = if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0)
+    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // Supplier Profile Information Card
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = cardBg,
+            border = BorderStroke(1.dp, cardBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Supplier Profile",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = textPrimary
+                )
+                Spacer(Modifier.height(12.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(50.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(NawanoGradientStart, NawanoGradientEnd)
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "PS",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 20.sp,
+                            color = Color.White
+                        )
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column {
+                        Text(
+                            text = user.fullName.replace(" (Supplier)", ""),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = textPrimary
+                        )
+                        Text(
+                            text = user.email.ifBlank { "supplier@nawano.com" },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = textSecondary
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF10B981).copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "Verified Active Partner",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF059669),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // App & Portal Preferences
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = cardBg,
+            border = BorderStroke(1.dp, cardBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Portal Preferences",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = textPrimary
+                )
+                Spacer(Modifier.height(12.dp))
+
+                // Dark Theme Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onToggleTheme() },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Dark Mode", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = textPrimary)
+                        Text(if (isDarkTheme) "Enabled (High Contrast Dark)" else "Disabled (Clean Light)", style = MaterialTheme.typography.bodySmall, color = textSecondary)
+                    }
+                    Switch(
+                        checked = isDarkTheme,
+                        onCheckedChange = { onToggleTheme() }
+                    )
+                }
+
+                Spacer(Modifier.height(10.dp))
+                HorizontalDivider(color = cardBorder)
+                Spacer(Modifier.height(10.dp))
+
+                // Auto Delivery Sync
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Carrier Tracking Sync", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = textPrimary)
+                        Text("Automatically update tracking for Middleman", style = MaterialTheme.typography.bodySmall, color = textSecondary)
+                    }
+                    Switch(
+                        checked = true,
+                        onCheckedChange = {}
+                    )
+                }
+            }
+        }
+
+        // Log Out Button
+        Surface(
+            onClick = onLogout,
+            shape = RoundedCornerShape(16.dp),
+            color = if (isDarkTheme) Color(0xFF2D1515) else Color(0xFFFEF2F2),
+            border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.3f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 14.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                    contentDescription = null,
+                    tint = Color(0xFFEF4444),
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Log Out of Supplier Portal",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFEF4444)
                 )
             }
         }
