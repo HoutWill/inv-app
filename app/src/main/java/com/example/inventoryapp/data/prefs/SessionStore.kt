@@ -5,10 +5,13 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import java.io.IOException
 
 private val Context.sessionDataStore: DataStore<Preferences> by preferencesDataStore(name = "session")
 
@@ -30,8 +33,16 @@ interface AppSessionStore {
 class SessionStore(context: Context) : AppSessionStore {
     private val dataStore = context.applicationContext.sessionDataStore
 
-    override val hasSeenIntro: Flow<Boolean> = dataStore.data.map { it[KEY_HAS_SEEN_INTRO] ?: false }
-    override val loggedInUserId: Flow<String?> = dataStore.data.map { it[KEY_LOGGED_IN_USER_ID] }
+    private val safePreferences: Flow<Preferences> = dataStore.data.catch { exception ->
+        if (exception is IOException) {
+            emit(emptyPreferences())
+        } else {
+            throw exception
+        }
+    }
+
+    override val hasSeenIntro: Flow<Boolean> = safePreferences.map { it[KEY_HAS_SEEN_INTRO] ?: false }
+    override val loggedInUserId: Flow<String?> = safePreferences.map { it[KEY_LOGGED_IN_USER_ID] }
 
     override suspend fun setHasSeenIntro(seen: Boolean) {
         dataStore.edit { it[KEY_HAS_SEEN_INTRO] = seen }
