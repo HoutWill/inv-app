@@ -70,24 +70,127 @@ fun SupplierDashboardCard(
         modifier = modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Header: Status Badge on left + Action Button on right
+            // Row 1: PO Number, Status Pill, Terms Pill & Emerald Total Price
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = statusBg
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = statusLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = statusFg,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        text = order.orderNumber,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = textPrimary
                     )
+
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = statusBg
+                    ) {
+                        Text(
+                            text = statusLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = statusFg,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (isDarkTheme) Color(0xFF1E3A8A).copy(alpha = 0.4f) else Color(0xFFE0F2FE)
+                    ) {
+                        Text(
+                            text = "Net 30",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isDarkTheme) Color(0xFF93C5FD) else Color(0xFF0284C7),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
                 }
+
+                Text(
+                    text = "$${String.format(Locale.US, "%,.2f", order.totalAmount)}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (isDarkTheme) Color(0xFF34D399) else Color(0xFF059669)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Row 2: Title & Qty
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = order.title.ifBlank { "Goods Inbound" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+
+                Text(
+                    text = "${order.totalQuantity} Qty",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = textSecondary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Row 3: Tracking & Driver / Courier Line
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.LocalShipping,
+                    contentDescription = null,
+                    tint = NawanoPrimary200,
+                    modifier = Modifier.size(13.dp)
+                )
+                Text(
+                    text = buildString {
+                        if (order.trackingNumber.isNotBlank()) append(order.trackingNumber)
+                        else append("TRK-${order.orderNumber.takeLast(6)}")
+                        append(" • ")
+                        append(order.picSender.ifBlank { "Leslie Alexander" })
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            HorizontalDivider(color = dividerColor)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Row 4: Est Arrival on Left + Action Buttons on Right
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Est: ${order.estArrival.ifBlank { "Today" }}",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = textSecondary
+                )
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -97,7 +200,7 @@ fun SupplierDashboardCard(
                         PurchaseOrderStatus.PENDING -> {
                             Surface(
                                 onClick = onAccept,
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = NawanoPrimary200
                             ) {
                                 Row(
@@ -123,7 +226,7 @@ fun SupplierDashboardCard(
                         PurchaseOrderStatus.CONFIRMED -> {
                             Surface(
                                 onClick = onSend,
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = Color(0xFF4338CA)
                             ) {
                                 Row(
@@ -149,23 +252,34 @@ fun SupplierDashboardCard(
                         else -> {
                             Surface(
                                 onClick = onView,
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = if (isDarkTheme) Color(0xFF2A2E63) else Color(0xFFEEF2FF)
                             ) {
-                                Text(
-                                    text = "View",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isDarkTheme) Color.White else Color(0xFF4338CA),
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                )
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Visibility,
+                                        contentDescription = null,
+                                        tint = if (isDarkTheme) Color.White else Color(0xFF4338CA),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = "View",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isDarkTheme) Color.White else Color(0xFF4338CA)
+                                    )
+                                }
                             }
                         }
                     }
 
                     IconButton(
                         onClick = onEdit,
-                        modifier = Modifier.size(26.dp)
+                        modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
@@ -177,7 +291,7 @@ fun SupplierDashboardCard(
 
                     IconButton(
                         onClick = onDelete,
-                        modifier = Modifier.size(26.dp)
+                        modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Delete,
@@ -186,62 +300,6 @@ fun SupplierDashboardCard(
                             modifier = Modifier.size(14.dp)
                         )
                     }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Title & Arrival
-            Text(
-                text = "${order.orderNumber} - ${order.title.ifBlank { "Inbound Goods Request" }}",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Text(
-                text = "Est: ${order.estArrival.ifBlank { "Today" }} • ${order.picSender.ifBlank { "ColdFreight Express" }}",
-                style = MaterialTheme.typography.labelSmall,
-                color = textSecondary
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-            HorizontalDivider(color = dividerColor)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Footer: Tracking / Terms on Left + Amount & Qty on Right
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (order.trackingNumber.isNotBlank()) "Track: ${order.trackingNumber} • Net 30" else "Wholesale PO • Net 30",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "$${String.format(Locale.US, "%.2f", order.totalAmount)}",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF047857)
-                    )
-                    Text(
-                        text = "Total: +${order.totalQuantity} units",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = NawanoPrimary200
-                    )
                 }
             }
         }

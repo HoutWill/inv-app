@@ -4,11 +4,13 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -23,7 +25,7 @@ import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.ui.theme.*
 
 /**
- * Slide-out navigation drawer sheet for the Supplier Portal, matching the design of InventoryDrawerSheet.
+ * Slide-out navigation drawer sheet for the Supplier Portal, matching the authentic design of InventoryDrawerSheet.
  */
 @Composable
 fun SupplierDrawerSheet(
@@ -38,6 +40,8 @@ fun SupplierDrawerSheet(
     onToggleTheme: () -> Unit,
     onCloseDrawer: () -> Unit,
     onLogout: () -> Unit,
+    onOpenShipments: () -> Unit = {},
+    onOpenNotifications: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
@@ -56,10 +60,10 @@ fun SupplierDrawerSheet(
                 .verticalScroll(rememberScrollState())
                 .padding(vertical = 16.dp, horizontal = 16.dp)
         ) {
-            // Profile & Branding Header
+            // Profile & Branding Header (Matching Middleman Drawer Header)
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = if (isDarkTheme) NawanoDark200 else Color(0xFFF3E8FF),
+                color = if (isDarkTheme) NawanoDark400 else MaterialTheme.colorScheme.primaryContainer,
                 shape = RoundedCornerShape(20.dp),
                 border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.35f))
             ) {
@@ -69,23 +73,19 @@ fun SupplierDrawerSheet(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(46.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(NawanoGradientStart, NawanoGradientEnd)
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
+                        Surface(
+                            shape = CircleShape,
+                            color = NawanoPrimary200,
+                            modifier = Modifier.size(46.dp)
                         ) {
-                            Text(
-                                text = initials,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 18.sp,
-                                color = Color.White
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = initials,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 18.sp,
+                                    color = Color.White
+                                )
+                            }
                         }
 
                         IconButton(
@@ -94,8 +94,9 @@ fun SupplierDrawerSheet(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Close Drawer",
-                                tint = textSecondary
+                                contentDescription = "Close Menu",
+                                tint = textSecondary,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
@@ -105,11 +106,11 @@ fun SupplierDrawerSheet(
                     Text(
                         text = userName,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.ExtraBold,
                         color = textPrimary
                     )
                     Text(
-                        text = "Verified Supplier • Nawano Partner",
+                        text = "Wholesale Supplier • Nawano Partner",
                         style = MaterialTheme.typography.bodySmall,
                         color = textSecondary
                     )
@@ -118,21 +119,20 @@ fun SupplierDrawerSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
+            // Main Views Section
             Text(
-                text = "PORTAL VIEWS",
+                text = "MAIN OVERVIEW",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = textSecondary,
+                color = textSecondary.copy(alpha = 0.7f),
                 letterSpacing = 1.sp,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Item 0: Orders
+            // Item 0: Orders Dashboard
             SupplierDrawerItem(
-                label = "Purchase Orders",
-                icon = Icons.Default.Inventory2,
+                label = "Orders Dashboard",
+                icon = Icons.Default.Dashboard,
                 badge = "$ordersCount",
                 isSelected = activeViewTab == 0,
                 isDarkTheme = isDarkTheme,
@@ -142,21 +142,69 @@ fun SupplierDrawerSheet(
             // Item 1: Catalog
             SupplierDrawerItem(
                 label = "Wholesale Catalog",
-                icon = Icons.Default.Category,
+                icon = Icons.Default.Inventory2,
                 badge = "$catalogCount",
                 isSelected = activeViewTab == 1,
                 isDarkTheme = isDarkTheme,
                 onClick = { onTabSelected(1) }
             )
 
-            // Item 2: Stats
+            // Item 2: Stats (Analytics & Performance)
             SupplierDrawerItem(
-                label = "Analytics & Performance",
+                label = "Vendor Statistics (KPIs)",
                 icon = Icons.Default.BarChart,
                 badge = "KPIs",
                 isSelected = activeViewTab == 2,
                 isDarkTheme = isDarkTheme,
                 onClick = { onTabSelected(2) }
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+            HorizontalDivider(color = if (isDarkTheme) NawanoDarkOutline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Logistics & Freight Section
+            Text(
+                text = "LOGISTICS & FREIGHT",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = textSecondary.copy(alpha = 0.7f),
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+            )
+
+            SupplierDrawerItem(
+                label = "Freight Shipments",
+                icon = Icons.Default.LocalShipping,
+                badge = if (shipmentsCount > 0) "$shipmentsCount In Transit" else null,
+                badgeColor = Color(0xFF6366F1),
+                isSelected = false,
+                isDarkTheme = isDarkTheme,
+                onClick = onOpenShipments
+            )
+
+            SupplierDrawerItem(
+                label = "Notifications & Alerts",
+                icon = Icons.Default.Notifications,
+                badge = "Alerts",
+                badgeColor = Color(0xFFF59E0B),
+                isSelected = false,
+                isDarkTheme = isDarkTheme,
+                onClick = onOpenNotifications
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+            HorizontalDivider(color = if (isDarkTheme) NawanoDarkOutline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Preferences & System
+            Text(
+                text = "PREFERENCES & SYSTEM",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = textSecondary.copy(alpha = 0.7f),
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
             )
 
             // Item 3: Settings
@@ -167,21 +215,6 @@ fun SupplierDrawerSheet(
                 isDarkTheme = isDarkTheme,
                 onClick = { onTabSelected(3) }
             )
-
-            Spacer(modifier = Modifier.height(20.dp))
-            HorizontalDivider(color = if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0))
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "PREFERENCES & SYSTEM",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = textSecondary,
-                letterSpacing = 1.sp,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
 
             // Dark / Light Mode Switcher
             Surface(
@@ -212,17 +245,18 @@ fun SupplierDrawerSheet(
             }
 
             Spacer(modifier = Modifier.weight(1f, fill = false))
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Log Out Button
             Surface(
                 onClick = onLogout,
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 color = if (isDarkTheme) Color(0xFF2D1515) else Color(0xFFFEF2F2),
+                border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.25f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -249,18 +283,21 @@ fun SupplierDrawerItem(
     label: String,
     icon: ImageVector,
     badge: String? = null,
-    isSelected: Boolean,
-    isDarkTheme: Boolean,
+    badgeColor: Color = NawanoPrimary200,
+    isSelected: Boolean = false,
+    isDarkTheme: Boolean = false,
     onClick: () -> Unit
 ) {
-    val selectedBg = if (isDarkTheme) NawanoPrimary200.copy(alpha = 0.25f) else Color(0xFFEEF2FF)
+    val activeBg = if (isDarkTheme) NawanoPrimary200.copy(alpha = 0.22f) else MaterialTheme.colorScheme.primaryContainer
+    val activeBorder = if (isDarkTheme) NawanoPrimary200.copy(alpha = 0.5f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
     val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = if (isSelected) selectedBg else Color.Transparent,
-        border = if (isSelected) BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.4f)) else null,
+        shape = RoundedCornerShape(14.dp),
+        color = if (isSelected) activeBg else Color.Transparent,
+        border = if (isSelected) BorderStroke(1.dp, activeBorder) else null,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -269,8 +306,8 @@ fun SupplierDrawerItem(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
-                tint = if (isSelected) NawanoPrimary200 else (if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight),
+                contentDescription = label,
+                tint = if (isSelected) NawanoPrimary200 else textSecondary,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
@@ -278,20 +315,20 @@ fun SupplierDrawerItem(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                color = if (isSelected) NawanoPrimary200 else textPrimary,
+                color = if (isSelected) (if (isDarkTheme) Color.White else MaterialTheme.colorScheme.onPrimaryContainer) else textPrimary,
                 modifier = Modifier.weight(1f)
             )
             badge?.let {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = if (isSelected) NawanoPrimary200 else (if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0))
+                    color = badgeColor.copy(alpha = 0.15f)
                 ) {
                     Text(
                         text = it,
-                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isSelected) Color.White else (if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        color = badgeColor,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
             }

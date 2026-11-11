@@ -26,10 +26,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.inventoryapp.ui.dashboard.NawanoLogoBadge
 import com.example.inventoryapp.ui.theme.*
 
 /**
- * Top App Bar for the Supplier Portal, matching the polished design of Middleman InventoryTopBar.
+ * Top App Bar for the Supplier Portal, matching the polished design and branding of Middleman InventoryTopBar.
  */
 @Composable
 fun SupplierTopBar(
@@ -67,15 +68,15 @@ fun SupplierTopBar(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left Group: Hamburger + Brand Avatar + Title
+            // Left Group: Hamburger + Nawano Logo Badge + Title & Subtitle
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.weight(1f, fill = false)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.weight(1f)
             ) {
                 IconButton(
                     onClick = onOpenDrawer,
-                    modifier = Modifier.size(38.dp)
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Menu,
@@ -84,54 +85,71 @@ fun SupplierTopBar(
                     )
                 }
 
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            Brush.linearGradient(
-                                listOf(NawanoGradientStart, NawanoGradientEnd)
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = initials,
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Black
-                    )
-                }
+                NawanoLogoBadge()
+
+                Spacer(modifier = Modifier.width(2.dp))
 
                 Column {
-                    Text(
-                        text = userName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Nawano",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = textPrimary,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = NawanoPrimary200.copy(alpha = 0.16f)
+                        ) {
+                            Text(
+                                text = "Supplier",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = NawanoPrimary200,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(1.dp))
                     Text(
                         text = when (activeViewTab) {
-                            0 -> "Orders • $ordersCount Active"
+                            0 -> "Wholesale Hub • $ordersCount Orders"
                             1 -> "Catalog • $catalogCount SKUs"
-                            2 -> "Analytics & Performance"
+                            2 -> "Vendor Analytics"
                             else -> "Supplier Settings"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = textSecondary,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
                     )
                 }
             }
 
-            // Right Group: Theme Toggle & Notification Bell (Add and Scan buttons removed per specification)
+            // Right Group: Search, Dark/Light Theme Toggle & Notification Bell
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                // Search Expand / Collapse Toggle
+                IconButton(
+                    onClick = { isSearchExpanded = !isSearchExpanded },
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isSearchExpanded) Icons.Default.Close else Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = if (isSearchExpanded) NawanoPrimary200 else textSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
                 // Dark / Light Mode Toggle
                 IconButton(
                     onClick = onToggleTheme,
@@ -141,7 +159,7 @@ fun SupplierTopBar(
                         imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
                         contentDescription = if (isDarkTheme) "Light Mode" else "Dark Mode",
                         tint = if (isDarkTheme) Color(0xFFFBBF24) else textSecondary,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
@@ -157,7 +175,7 @@ fun SupplierTopBar(
                                     containerColor = Color(0xFFEF4444)
                                 ) {
                                     Text(
-                                        text = "$pendingNotificationCount",
+                                        text = if (pendingNotificationCount > 99) "99+" else "$pendingNotificationCount",
                                         color = Color.White,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold
@@ -167,10 +185,10 @@ fun SupplierTopBar(
                         }
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Notifications,
+                            imageVector = if (pendingNotificationCount > 0) Icons.Default.Notifications else Icons.Outlined.Notifications,
                             contentDescription = "Notifications",
-                            tint = textSecondary,
-                            modifier = Modifier.size(22.dp)
+                            tint = if (pendingNotificationCount > 0) NawanoPrimary200 else textSecondary,
+                            modifier = Modifier.size(21.dp)
                         )
                     }
                 }

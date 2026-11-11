@@ -22,7 +22,7 @@ import com.example.inventoryapp.ui.theme.*
 
 /**
  * Modern Floating Bottom Navigation Bar for Supplier Portal.
- * Features central elevated quick-scan FloatingScanButton.
+ * Features central elevated quick-scan FloatingScanButton matching Middleman.
  *
  * Tabs:
  * 0: Orders
@@ -34,7 +34,7 @@ import com.example.inventoryapp.ui.theme.*
 fun SupplierBottomBar(
     activeViewTab: Int,
     onTabSelected: (Int) -> Unit,
-    onScanClicked: () -> Unit,
+    onAddClicked: () -> Unit,
     isDarkTheme: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -97,9 +97,9 @@ fun SupplierBottomBar(
             }
         }
 
-        // Center Elevated Floating Scan Button (Matching Middleman floating scan button with Nawano Gradient)
+        // Center Elevated Floating Add Button (Matching Middleman floating button with Nawano Gradient)
         Surface(
-            onClick = onScanClicked,
+            onClick = onAddClicked,
             shape = CircleShape,
             color = Color.Transparent,
             tonalElevation = 8.dp,
@@ -124,8 +124,8 @@ fun SupplierBottomBar(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.QrCodeScanner,
-                    contentDescription = "Scan Barcode / QR",
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "New Order / Add",
                     tint = Color.White,
                     modifier = Modifier.size(28.dp)
                 )

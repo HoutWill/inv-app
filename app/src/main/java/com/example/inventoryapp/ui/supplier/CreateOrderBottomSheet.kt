@@ -125,13 +125,13 @@ fun CreateOrderBottomSheet(
 
                     Column {
                         Text(
-                            text = "New Wholesale Order",
-                            style = MaterialTheme.typography.titleLarge,
+                            text = "New Purchase Order",
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.ExtraBold,
                             color = textPrimary
                         )
                         Text(
-                            text = "Issue inbound shipment for Middleman HQ",
+                            text = "Wholesale shipment to Middleman HQ",
                             style = MaterialTheme.typography.bodySmall,
                             color = textSecondary
                         )
@@ -150,7 +150,7 @@ fun CreateOrderBottomSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Section 1: Quick Pick from Wholesale Catalog
             Row(
@@ -159,32 +159,31 @@ fun CreateOrderBottomSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "SELECT FROM CATALOG",
+                    text = "Select from Catalog",
                     style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = textSecondary,
-                    letterSpacing = 1.sp
+                    fontWeight = FontWeight.SemiBold,
+                    color = textSecondary
                 )
 
                 Surface(
                     onClick = onRequestScanProduct,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(8.dp),
                     color = NawanoPrimary200.copy(alpha = if (isDarkTheme) 0.25f else 0.12f),
                     border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.4f))
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Default.QrCodeScanner,
                             contentDescription = "Scan Item Barcode",
                             tint = NawanoPrimary200,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(13.dp)
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            text = "Scan Item",
+                            text = "Scan",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = NawanoPrimary200
@@ -192,10 +191,9 @@ fun CreateOrderBottomSheet(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             if (products.isNotEmpty()) {
-
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -214,15 +212,15 @@ fun CreateOrderBottomSheet(
                                     priceText = String.format(Locale.US, "%.2f", prod.costPrice)
                                 }
                             },
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(12.dp),
                             color = if (isSelected) NawanoPrimary200.copy(alpha = if (isDarkTheme) 0.25f else 0.12f) else innerCardBg,
                             border = BorderStroke(
-                                1.5.dp,
+                                1.dp,
                                 if (isSelected) NawanoPrimary200 else fieldBorder
                             )
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 if (isSelected) {
@@ -230,9 +228,9 @@ fun CreateOrderBottomSheet(
                                         imageVector = Icons.Default.CheckCircle,
                                         contentDescription = null,
                                         tint = NawanoPrimary200,
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(14.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
                                 }
                                 Column {
                                     Text(
@@ -251,16 +249,16 @@ fun CreateOrderBottomSheet(
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
             // Section 2: Order Title
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
-                label = { Text("Shipment Description / Item Title", color = textSecondary) },
-                placeholder = { Text("e.g. Toronto King Crab 1.5kg Bulk Box", color = textSecondary.copy(alpha = 0.5f)) },
-                shape = RoundedCornerShape(14.dp),
+                label = { Text("Item Name / Description", color = textSecondary) },
+                placeholder = { Text("e.g. Pacific Salmon Bulk", color = textSecondary.copy(alpha = 0.5f)) },
+                shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = textPrimary,
                     unfocusedTextColor = textPrimary,
@@ -270,31 +268,30 @@ fun CreateOrderBottomSheet(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Section 3: Quantity Stepper & Price
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Quantity Stepper with [-] and [+] controls
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "QUANTITY",
+                        text = "Quantity",
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = textSecondary,
-                        letterSpacing = 1.sp
+                        fontWeight = FontWeight.SemiBold,
+                        color = textSecondary
                     )
                     Spacer(Modifier.height(4.dp))
                     Surface(
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(12.dp),
                         color = innerCardBg,
                         border = BorderStroke(1.dp, fieldBorder),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp)
+                            .height(50.dp)
                     ) {
                         Row(
                             modifier = Modifier
@@ -308,14 +305,14 @@ fun CreateOrderBottomSheet(
                                     val current = qtyText.toIntOrNull() ?: 1
                                     if (current > 1) qtyText = (current - 1).toString()
                                 },
-                                modifier = Modifier.size(34.dp)
+                                modifier = Modifier.size(32.dp)
                             ) {
-                                Text("-", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+                                Text("-", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = textPrimary)
                             }
 
                             Text(
                                 text = qtyText.ifBlank { "1" },
-                                fontSize = 16.sp,
+                                fontSize = 15.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = textPrimary
                             )
@@ -325,7 +322,7 @@ fun CreateOrderBottomSheet(
                                     val current = qtyText.toIntOrNull() ?: 0
                                     qtyText = (current + 1).toString()
                                 },
-                                modifier = Modifier.size(34.dp)
+                                modifier = Modifier.size(32.dp)
                             ) {
                                 Text("+", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = NawanoPrimary200)
                             }
@@ -336,18 +333,17 @@ fun CreateOrderBottomSheet(
                 // Unit Supply Price Input
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "UNIT PRICE ($)",
+                        text = "Unit Price ($)",
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = textSecondary,
-                        letterSpacing = 1.sp
+                        fontWeight = FontWeight.SemiBold,
+                        color = textSecondary
                     )
                     Spacer(Modifier.height(4.dp))
                     OutlinedTextField(
                         value = priceText,
                         onValueChange = { priceText = it },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(12.dp),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = textPrimary,
@@ -359,39 +355,38 @@ fun CreateOrderBottomSheet(
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp)
+                            .height(50.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Section 4: Estimated Arrival Window
             Text(
-                text = "ESTIMATED ARRIVAL WINDOW",
+                text = "Estimated Arrival",
                 style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = textSecondary,
-                letterSpacing = 1.sp
+                fontWeight = FontWeight.SemiBold,
+                color = textSecondary
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                listOf("Today", "Tomorrow Morning", "Next 48h", "Custom").forEach { opt ->
+                listOf("Today", "Tomorrow", "Next 48h", "Custom").forEach { opt ->
                     val isSelected = selectedArrivalOption == opt
                     Surface(
                         onClick = { selectedArrivalOption = opt },
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         color = if (isSelected) NawanoPrimary200 else innerCardBg,
                         border = BorderStroke(1.dp, if (isSelected) NawanoPrimary200 else fieldBorder),
                         modifier = Modifier.weight(1f)
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
-                            modifier = Modifier.padding(vertical = 10.dp)
+                            modifier = Modifier.padding(vertical = 8.dp)
                         ) {
                             Text(
                                 text = opt,
