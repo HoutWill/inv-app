@@ -7,17 +7,20 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.inventoryapp.data.local.dao.ProductDao
 import com.example.inventoryapp.data.local.dao.StockTransactionDao
+import com.example.inventoryapp.data.local.dao.UserDao
 import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
+import com.example.inventoryapp.data.local.entity.UserEntity
 
 @Database(
-    entities = [ProductEntity::class, StockTransactionEntity::class],
-    version = 6,
+    entities = [ProductEntity::class, StockTransactionEntity::class, UserEntity::class],
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun productDao(): ProductDao
     abstract fun stockTransactionDao(): StockTransactionDao
+    abstract fun userDao(): UserDao
 
     companion object {
         @Volatile

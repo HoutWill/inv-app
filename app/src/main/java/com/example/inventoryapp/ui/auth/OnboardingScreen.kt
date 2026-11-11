@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -55,6 +56,7 @@ import kotlinx.coroutines.launch
 
 private data class IntroPage(
     @param:DrawableRes val image: Int,
+    @param:DrawableRes val iconRes: Int,
     val title: String,
     val description: String
 )
@@ -62,16 +64,19 @@ private data class IntroPage(
 private val introPages = listOf(
     IntroPage(
         image = R.drawable.onboarding_1,
+        iconRes = R.drawable.ic_bus_intro,
         title = "Easy way to manage your inventory business",
         description = "Simplify your inventory management and boost productivity with our intuitive app."
     ),
     IntroPage(
         image = R.drawable.onboarding_2,
+        iconRes = R.drawable.ic_pos_cart,
         title = "Effortlessly track inventory details with scanning",
         description = "Streamline inventory management by scanning items for quick, accurate tracking."
     ),
     IntroPage(
         image = R.drawable.onboarding_3,
+        iconRes = R.drawable.ic_inventory_box,
         title = "Empowering success through report analysis",
         description = "Optimize inventory management by analyzing detailed reports."
     )
@@ -128,9 +133,29 @@ fun OnboardingScreen(onFinished: () -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .navigationBarsPadding()
-                        .padding(horizontal = 24.dp, vertical = 28.dp)
+                        .padding(horizontal = 24.dp, vertical = 22.dp)
                 ) {
                     val page = introPages[pagerState.currentPage]
+
+                    // Intro Brand Feature Icon (Bus icon for transit/intro)
+                    Surface(
+                        shape = CircleShape,
+                        color = NawanoPrimary100.copy(alpha = 0.22f),
+                        border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.35f)),
+                        modifier = Modifier.size(52.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                painter = painterResource(page.iconRes),
+                                contentDescription = "Intro Feature Icon",
+                                tint = NawanoPrimary200,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+
                     Text(
                         text = page.title,
                         color = NawanoTextPrimaryLight,

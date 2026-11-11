@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -15,11 +16,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.inventoryapp.R
 import com.example.inventoryapp.ui.theme.NawanoPrimary200
 
 /**
@@ -47,6 +51,9 @@ fun InventoryNavigationDrawer(
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
     totalSkus: Int,
+    userName: String = "Anthony",
+    userRole: String = "Inventory Manager • Nawano HQ",
+    onLogout: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
@@ -60,7 +67,10 @@ fun InventoryNavigationDrawer(
                 onCloseDrawer = onCloseDrawer,
                 isDarkTheme = isDarkTheme,
                 onToggleTheme = onToggleTheme,
-                totalSkus = totalSkus
+                totalSkus = totalSkus,
+                userName = userName,
+                userRole = userRole,
+                onLogout = onLogout
             )
         },
         content = content
@@ -80,6 +90,9 @@ fun InventoryDrawerSheet(
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
     totalSkus: Int,
+    userName: String = "Anthony",
+    userRole: String = "Inventory Manager • Nawano HQ",
+    onLogout: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     ModalDrawerSheet(
@@ -109,6 +122,14 @@ fun InventoryDrawerSheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Avatar
+                        val initials = userName.trim().split(" ")
+                            .filter { it.isNotBlank() }
+                            .map { it.first() }
+                            .take(2)
+                            .joinToString("")
+                            .uppercase()
+                            .ifEmpty { "NW" }
+
                         Surface(
                             shape = CircleShape,
                             color = NawanoPrimary200,
@@ -116,7 +137,7 @@ fun InventoryDrawerSheet(
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Text(
-                                    text = "NW",
+                                    text = initials,
                                     fontWeight = FontWeight.ExtraBold,
                                     fontSize = 18.sp,
                                     color = Color.White
@@ -141,13 +162,13 @@ fun InventoryDrawerSheet(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = "Anthony",
+                        text = userName,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Inventory Manager • Nawano HQ",
+                        text = userRole,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -174,7 +195,7 @@ fun InventoryDrawerSheet(
             )
 
             DrawerNavRow(
-                icon = Icons.Default.Inventory2,
+                painter = painterResource(R.drawable.ic_inventory_box),
                 label = "Items Catalog",
                 isSelected = currentDestination == DrawerDestination.ITEMS,
                 badge = "$totalSkus",
@@ -203,7 +224,7 @@ fun InventoryDrawerSheet(
             )
 
             DrawerNavRow(
-                icon = Icons.Default.PieChart,
+                painter = painterResource(R.drawable.ic_inventory_packages),
                 label = "Inventory Summary",
                 isSelected = currentDestination == DrawerDestination.INVENTORY_SUMMARY,
                 badge = "New",
@@ -212,7 +233,7 @@ fun InventoryDrawerSheet(
             )
 
             DrawerNavRow(
-                icon = Icons.Default.LocalShipping,
+                painter = painterResource(R.drawable.ic_bus_intro),
                 label = "Movement List",
                 isSelected = currentDestination == DrawerDestination.MOVEMENT_LIST,
                 badge = "Logistics",
@@ -257,6 +278,16 @@ fun InventoryDrawerSheet(
                 onClick = onToggleTheme
             )
 
+            if (onLogout != null) {
+                DrawerNavRow(
+                    icon = Icons.AutoMirrored.Filled.ExitToApp,
+                    label = "Log Out",
+                    isSelected = false,
+                    badge = null,
+                    onClick = onLogout
+                )
+            }
+
             Spacer(modifier = Modifier.weight(1f, fill = false))
             Spacer(modifier = Modifier.height(28.dp))
 
@@ -294,6 +325,9 @@ fun NawanoDrawerSheet(
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
     totalSkus: Int,
+    userName: String = "Anthony",
+    userRole: String = "Inventory Manager • Nawano HQ",
+    onLogout: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) = InventoryDrawerSheet(
     currentDestination = currentDestination,
@@ -302,16 +336,20 @@ fun NawanoDrawerSheet(
     isDarkTheme = isDarkTheme,
     onToggleTheme = onToggleTheme,
     totalSkus = totalSkus,
+    userName = userName,
+    userRole = userRole,
+    onLogout = onLogout,
     modifier = modifier
 )
 
 @Composable
 fun DrawerNavRow(
-    icon: ImageVector,
     label: String,
     isSelected: Boolean,
     badge: String?,
     badgeColor: Color = NawanoPrimary200,
+    icon: ImageVector? = null,
+    painter: Painter? = null,
     onClick: () -> Unit
 ) {
     Surface(
@@ -334,12 +372,21 @@ fun DrawerNavRow(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = if (isSelected) NawanoPrimary200 else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
+                if (painter != null) {
+                    Icon(
+                        painter = painter,
+                        contentDescription = null,
+                        tint = if (isSelected) NawanoPrimary200 else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                } else if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = if (isSelected) NawanoPrimary200 else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     text = label,

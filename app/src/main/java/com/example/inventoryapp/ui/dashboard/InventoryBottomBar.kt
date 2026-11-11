@@ -34,9 +34,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.inventoryapp.R
 import com.example.inventoryapp.ui.theme.NawanoGradientEnd
 import com.example.inventoryapp.ui.theme.NawanoGradientStart
 import com.example.inventoryapp.ui.theme.NawanoPrimary200
@@ -84,10 +87,10 @@ fun InventoryBottomBar(
                     onClick = { onTabSelected(0) }
                 )
 
-                // Tab 1: Items
+                // Tab 1: Items (Vector icon from iconpacks.net)
                 FloatingNavItem(
                     title = "Items",
-                    icon = if (selectedTab == 1) Icons.Default.Inventory2 else Icons.Outlined.Inventory2,
+                    painter = painterResource(R.drawable.ic_inventory_box),
                     isSelected = selectedTab == 1,
                     onClick = { onTabSelected(1) }
                 )
@@ -144,8 +147,9 @@ fun FloatingInventoryBottomBar(
 @Composable
 fun FloatingNavItem(
     title: String,
-    icon: ImageVector,
     isSelected: Boolean,
+    icon: ImageVector? = null,
+    painter: Painter? = null,
     onClick: () -> Unit
 ) {
     val activeColor = NawanoPrimary200
@@ -186,12 +190,21 @@ fun FloatingNavItem(
                 .background(animatedBgColor),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = title,
-                tint = animatedIconTint,
-                modifier = Modifier.size(22.dp)
-            )
+            if (painter != null) {
+                Icon(
+                    painter = painter,
+                    contentDescription = title,
+                    tint = animatedIconTint,
+                    modifier = Modifier.size(22.dp)
+                )
+            } else if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    tint = animatedIconTint,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
         }
         Spacer(modifier = Modifier.height(2.dp))
         Text(

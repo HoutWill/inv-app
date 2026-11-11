@@ -28,8 +28,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,6 +45,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.inventoryapp.R
 import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
 import com.example.inventoryapp.data.remote.OnlineProductData
@@ -68,7 +71,10 @@ fun InventoryDashboardScreen(
         factory = InventoryViewModelFactory(LocalContext.current.applicationContext as Application)
     ),
     isDarkTheme: Boolean = isSystemInDarkTheme(),
-    onToggleTheme: () -> Unit = {}
+    onToggleTheme: () -> Unit = {},
+    userName: String = "Anthony",
+    userRole: String = "Inventory Manager • Nawano HQ",
+    onLogout: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -96,6 +102,9 @@ fun InventoryDashboardScreen(
             2 -> DrawerDestination.STATISTICS
             else -> DrawerDestination.DASHBOARD
         },
+        userName = userName,
+        userRole = userRole,
+        onLogout = onLogout,
         onDestinationSelected = { dest ->
             scope.launch { drawerState.close() }
             when (dest) {
@@ -645,7 +654,15 @@ private fun DashboardOverviewTab(
             NawanoHeroInventorySummaryCard(uiState = uiState)
         }
 
-        // 2. 4 Quick Operational Cards (Low Stock, Move Summary, Upcoming, Qty Changes)
+        // 2. POS & Barcode Quick Actions (iconpacks.net vector icons)
+        item {
+            NawanoPosQuickActionsBar(
+                onScanBarcode = onScanClicked,
+                onOpenPosSale = onScanClicked
+            )
+        }
+
+        // 3. 4 Quick Operational Cards (Low Stock, Move Summary, Upcoming, Qty Changes)
         item {
             NawanoOperationalCardsGrid(
                 uiState = uiState,
@@ -797,7 +814,7 @@ private fun InventoryItemsCatalogTab(
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.QrCodeScanner,
+                            painter = painterResource(R.drawable.ic_pos_barcode),
                             contentDescription = "Scan SKU to Search",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
@@ -1038,7 +1055,7 @@ private fun InventoryItemsCatalogTab(
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    imageVector = Icons.Default.Inventory2,
+                                    painter = painterResource(R.drawable.ic_inventory_box),
                                     contentDescription = null,
                                     modifier = Modifier.size(34.dp),
                                     tint = MaterialTheme.colorScheme.primary
@@ -1289,6 +1306,114 @@ private fun NawanoHeroInventorySummaryCard(
 }
 
 @Composable
+private fun NawanoPosQuickActionsBar(
+    onScanBarcode: () -> Unit,
+    onOpenPosSale: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // POS Sale Quick Action Button
+            Surface(
+                onClick = onOpenPosSale,
+                shape = RoundedCornerShape(14.dp),
+                color = NawanoPrimary200.copy(alpha = 0.10f),
+                border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.25f)),
+                modifier = Modifier.weight(1f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = NawanoPrimary200,
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_pos_cart),
+                                contentDescription = "POS Sale",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "POS Sale",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Point of sale",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Barcode Scanner Action Button
+            Surface(
+                onClick = onScanBarcode,
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                modifier = Modifier.weight(1f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_pos_barcode),
+                                contentDescription = "Scan Barcode",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "Scan SKU",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Instant lookup",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun NawanoOperationalCardsGrid(
     uiState: DashboardUiState,
     onNavigateToLowStock: () -> Unit,
@@ -1316,7 +1441,7 @@ private fun NawanoOperationalCardsGrid(
                 hasNewBadge = uiState.transactions.isNotEmpty(),
                 description = "Track inventory that has moved locations",
                 stat = "${uiState.transactions.size} Orders",
-                icon = Icons.Outlined.SwapHoriz,
+                painter = painterResource(R.drawable.ic_bus_intro),
                 iconTint = NawanoPrimary200,
                 onClick = onNavigateToMoveSummary,
                 modifier = Modifier.weight(1f)
@@ -1357,7 +1482,8 @@ private fun NawanoOperationalCard(
     hasNewBadge: Boolean,
     description: String,
     stat: String,
-    icon: ImageVector,
+    icon: ImageVector? = null,
+    painter: Painter? = null,
     iconTint: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -1385,12 +1511,21 @@ private fun NawanoOperationalCard(
                     modifier = Modifier.size(32.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = iconTint,
-                            modifier = Modifier.size(17.dp)
-                        )
+                        if (painter != null) {
+                            Icon(
+                                painter = painter,
+                                contentDescription = null,
+                                tint = iconTint,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        } else if (icon != null) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = iconTint,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
                     }
                 }
 
