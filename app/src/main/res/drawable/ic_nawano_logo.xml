@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nawano logo: two offset isometric pillars forming a stylised "N" (purple, for light backgrounds). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- Left pillar (higher) -->
+    <path android:fillColor="#C9C6FC" android:pathData="M8,10 L16,6 L24,10 L16,14 Z" />
+    <path android:fillColor="#7871F8" android:pathData="M8,10 L16,14 L16,34 L8,30 Z" />
+    <path android:fillColor="#4F48D9" android:pathData="M16,14 L24,10 L24,30 L16,34 Z" />
+
+    <!-- Right pillar (lower) -->
+    <path android:fillColor="#C9C6FC" android:pathData="M24,18 L32,14 L40,18 L32,22 Z" />
+    <path android:fillColor="#7871F8" android:pathData="M24,18 L32,22 L32,42 L24,38 Z" />
+    <path android:fillColor="#4F48D9" android:pathData="M32,22 L40,18 L40,38 L32,42 Z" />
+</vector>

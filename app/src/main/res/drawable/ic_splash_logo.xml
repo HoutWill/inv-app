@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- White Nawano logo for the purple splash screen. Scaled down so it fits the
+     Android 12+ splash icon safe circle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <group
+        android:pivotX="24"
+        android:pivotY="24"
+        android:scaleX="0.6"
+        android:scaleY="0.6">
+        <!-- Left pillar -->
+        <path android:fillColor="#FFFFFF" android:pathData="M8,10 L16,6 L24,10 L16,14 Z" />
+        <path android:fillColor="#E9E8FE" android:pathData="M8,10 L16,14 L16,34 L8,30 Z" />
+        <path android:fillColor="#C4C1FB" android:pathData="M16,14 L24,10 L24,30 L16,34 Z" />
+        <!-- Right pillar -->
+        <path android:fillColor="#FFFFFF" android:pathData="M24,18 L32,14 L40,18 L32,22 Z" />
+        <path android:fillColor="#E9E8FE" android:pathData="M24,18 L32,22 L32,42 L24,38 Z" />
+        <path android:fillColor="#C4C1FB" android:pathData="M32,22 L40,18 L40,38 L32,42 Z" />
+    </group>
+</vector>
