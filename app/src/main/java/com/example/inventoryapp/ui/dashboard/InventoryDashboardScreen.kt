@@ -49,6 +49,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.inventoryapp.R
 import com.example.inventoryapp.data.local.entity.ProductEntity
+import com.example.inventoryapp.data.local.entity.canRequestSupply
+import com.example.inventoryapp.data.local.entity.isDirectSlot
 import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderItemEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
@@ -106,6 +108,14 @@ fun InventoryDashboardScreen(
     var showNewPoDialog by remember { mutableStateOf(false) }
     var showAddSupplierDialog by remember { mutableStateOf(false) }
     var selectedSupplierForPo by remember { mutableStateOf<SupplierEntity?>(null) }
+    var selectedProductForPo by remember { mutableStateOf<ProductEntity?>(null) }
+
+    val handleRequestSupply: (ProductEntity) -> Unit = { item ->
+        val sup = uiState.suppliers.find { it.id == item.supplierId }
+        selectedSupplierForPo = sup
+        selectedProductForPo = item
+        showNewPoDialog = true
+    }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var drawerDestination by remember { mutableStateOf<DrawerDestination?>(null) }
 
@@ -371,7 +381,8 @@ fun InventoryDashboardScreen(
                                             }
                                         }
                                     }
-                                }
+                                },
+                                onRequestSupply = handleRequestSupply
                             )
                         }
                         1 -> {
@@ -418,7 +429,8 @@ fun InventoryDashboardScreen(
                                         AddProductDraft(sku = sku)
                                     }
                                     isAddProductOpen = true
-                                }
+                                },
+                                onRequestSupply = handleRequestSupply
                             )
                         }
                         2 -> {
@@ -601,6 +613,10 @@ fun InventoryDashboardScreen(
                     onProductClick = { product ->
                         isUpcomingSheetOpen = false
                         viewingProductDetails = product
+                    },
+                    onRequestSupply = { product ->
+                        isUpcomingSheetOpen = false
+                        handleRequestSupply(product)
                     }
                 )
             }
@@ -627,7 +643,8 @@ fun InventoryDashboardScreen(
                         scope.launch {
                             snackbarHostState.showSnackbar("Deleted '${liveProduct.name}'")
                         }
-                    }
+                    },
+                    onRequestSupply = handleRequestSupply
                 )
             }
 
@@ -661,13 +678,18 @@ fun InventoryDashboardScreen(
             if (showNewPoDialog) {
                 NewPurchaseOrderDialog(
                     initialSupplier = selectedSupplierForPo,
+                    initialProduct = selectedProductForPo,
                     suppliers = uiState.suppliers.filter { it.isActive },
                     products = uiState.products,
                     isDarkTheme = isDarkTheme,
-                    onDismiss = { showNewPoDialog = false },
+                    onDismiss = {
+                        showNewPoDialog = false
+                        selectedProductForPo = null
+                    },
                     onSubmit = { sup, title, pic, items, note, estArrival ->
                         viewModel.createPurchaseOrder(sup, title, pic, items, note, estArrival) { created ->
                             showNewPoDialog = false
+                            selectedProductForPo = null
                             scope.launch {
                                 snackbarHostState.showSnackbar("Purchase Order ${created?.orderNumber ?: ""} created!")
                             }
@@ -720,7 +742,8 @@ private fun DashboardOverviewTab(
     onRestockSupplier: (SupplierEntity) -> Unit = {},
     onViewAllSuppliers: () -> Unit = {},
     onOrderClick: (String) -> Unit = {},
-    onReceiveOrder: (String) -> Unit = {}
+    onReceiveOrder: (String) -> Unit = {},
+    onRequestSupply: (ProductEntity) -> Unit = {}
 ) {
     var selectedActivityFilter by remember { mutableStateOf("Stock In") }
 
@@ -763,18 +786,7 @@ private fun DashboardOverviewTab(
             )
         }
 
-        // 3. Suppliers & Restock Section (Existing Suppliers & Direct Restock Action)
-        item {
-            SuppliersRestockSection(
-                suppliers = uiState.suppliers.filter { it.isActive },
-                onAddSupplier = onAddSupplier,
-                onRestockSupplier = onRestockSupplier,
-                onViewAllSuppliers = onViewAllSuppliers,
-                isDarkTheme = isDarkTheme
-            )
-        }
-
-        // 4. Activity Filter Chips Row (All Activity, Incoming, Inbound, Outbound)
+        // 3. Activity Filter Chips Row (All, Stock In, Stock Out)
         item {
             NawanoActivityFilterChips(
                 selectedFilter = selectedActivityFilter,
@@ -828,7 +840,8 @@ private fun DashboardOverviewTab(
                     isHighlighted = item.sku.equals(uiState.scannedSku, ignoreCase = true),
                     onQuantityChange = { delta -> onQuantityChange(item, delta) },
                     onCardClick = { onProductClick(item) },
-                    onDelete = null
+                    onDelete = null,
+                    onRequestSupply = { onRequestSupply(item) }
                 )
             }
         }
@@ -854,7 +867,8 @@ private fun InventoryItemsCatalogTab(
     onDeleteProduct: (ProductEntity) -> Unit,
     onClearScannedSku: () -> Unit,
     onImportOnlineProduct: (OnlineProductData) -> Unit,
-    onRegisterNewProduct: (String, OnlineProductData?) -> Unit
+    onRegisterNewProduct: (String, OnlineProductData?) -> Unit,
+    onRequestSupply: (ProductEntity) -> Unit = {}
 ) {
     var sortMenuExpanded by remember { mutableStateOf(false) }
 
@@ -1043,8 +1057,13 @@ private fun InventoryItemsCatalogTab(
                 text = "${uiState.filteredProducts.size} Items Displayed",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
             )
+
+            Spacer(modifier = Modifier.width(8.dp))
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -1210,7 +1229,8 @@ private fun InventoryItemsCatalogTab(
                         isHighlighted = isHighlighted,
                         onQuantityChange = { delta -> onQuantityChange(item, delta) },
                         onCardClick = { onProductClick(item) },
-                        onDelete = { onDeleteProduct(item) }
+                        onDelete = { onDeleteProduct(item) },
+                        onRequestSupply = { onRequestSupply(item) }
                     )
                 }
             }
@@ -1753,8 +1773,12 @@ private fun NawanoIncomingGoodsSection(
                 text = sectionTitle,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
             )
+            Spacer(modifier = Modifier.width(8.dp))
             TextButton(onClick = onViewAll) {
                 Text(
                     text = "View all >",
@@ -1857,16 +1881,21 @@ private fun NawanoGoodsReqCard(
             ) {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = activity.badgeColor.copy(alpha = 0.12f)
+                    color = activity.badgeColor.copy(alpha = 0.12f),
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
                     Text(
                         text = activity.badgeText,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = activity.badgeColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Surface(
                     onClick = {
@@ -1928,7 +1957,8 @@ private fun NawanoGoodsReqCard(
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
+                        maxLines = 2,
+                        lineHeight = 18.sp,
                         overflow = TextOverflow.Ellipsis
                     )
 
@@ -1960,6 +1990,7 @@ private fun NawanoGoodsReqCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Total: ${activity.quantityChange}",
                     style = MaterialTheme.typography.labelMedium,
@@ -2528,10 +2559,12 @@ private fun InventoryItemCard(
     isHighlighted: Boolean,
     onQuantityChange: (Int) -> Unit,
     onCardClick: (() -> Unit)? = null,
-    onDelete: (() -> Unit)? = null
+    onDelete: (() -> Unit)? = null,
+    onRequestSupply: (() -> Unit)? = null
 ) {
     val isLowStock = item.quantity <= item.reorderLevel
     val categoryIcon = getCategoryIcon(item.category)
+    val showRequestBtn = item.canRequestSupply && onRequestSupply != null
 
     val (stockText, stockColor, stockContainerColor) = when {
         item.quantity <= 0 -> Triple("Out of Stock", Color(0xFFEF4444), Color(0xFFEF4444).copy(alpha = 0.12f))
@@ -2651,10 +2684,11 @@ private fun InventoryItemCard(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    // Meta Chips Row: Monospace SKU + Category Pill + Location
+                    // Meta Chips: Monospace SKU + Category Pill (Row 1) and Location (Row 2)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         // Monospace SKU Chip
                         Surface(
@@ -2668,6 +2702,8 @@ private fun InventoryItemCard(
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.SemiBold,
                                 color = NawanoPrimary200,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
@@ -2675,7 +2711,8 @@ private fun InventoryItemCard(
                         // Hierarchical Category > Subcategory Pill
                         Surface(
                             color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(6.dp)
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier.weight(1f, fill = false)
                         ) {
                             val catBreadcrumb = if (item.subcategory.isNotBlank()) "${item.category} > ${item.subcategory}" else item.category
                             Text(
@@ -2683,26 +2720,73 @@ private fun InventoryItemCard(
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = NawanoPrimary200,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
+                    }
 
-                        if (item.location.isNotBlank()) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.LocationOn,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(Modifier.width(2.dp))
-                                Text(
-                                    text = item.location,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                    if (item.location.isNotBlank() || showRequestBtn) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (item.location.isNotBlank()) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.LocationOn,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(Modifier.width(3.dp))
+                                    Text(
+                                        text = item.location,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            } else {
+                                Spacer(Modifier.width(1.dp))
+                            }
+
+                            if (showRequestBtn) {
+                                Spacer(Modifier.width(6.dp))
+                                Surface(
+                                    onClick = { onRequestSupply?.invoke() },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = NawanoPrimary200.copy(alpha = 0.12f),
+                                    border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.35f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.LocalShipping,
+                                            contentDescription = "Request Supply",
+                                            tint = NawanoPrimary200,
+                                            modifier = Modifier.size(11.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(
+                                            text = "Request",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = NawanoPrimary200,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -2721,10 +2805,11 @@ private fun InventoryItemCard(
                 Surface(
                     color = stockContainerColor,
                     shape = RoundedCornerShape(20.dp),
-                    border = BorderStroke(1.dp, stockColor.copy(alpha = 0.35f))
+                    border = BorderStroke(1.dp, stockColor.copy(alpha = 0.35f)),
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -2739,7 +2824,8 @@ private fun InventoryItemCard(
                             style = MaterialTheme.typography.labelSmall,
                             color = stockColor,
                             fontWeight = FontWeight.Bold,
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -2753,7 +2839,7 @@ private fun InventoryItemCard(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold,
                         color = NawanoPrimary200,
-                        modifier = Modifier.padding(end = 10.dp)
+                        modifier = Modifier.padding(end = 8.dp)
                     )
 
                     Surface(
@@ -2763,32 +2849,32 @@ private fun InventoryItemCard(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 3.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp)
                         ) {
                             Surface(
                                 onClick = { onQuantityChange(-1) },
                                 shape = CircleShape,
                                 color = MaterialTheme.colorScheme.surface,
                                 shadowElevation = 1.dp,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(26.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.Remove,
                                         contentDescription = "Decrease Stock",
                                         tint = MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(15.dp)
                                     )
                                 }
                             }
                             Text(
                                 text = "${item.quantity}",
-                                style = MaterialTheme.typography.labelLarge,
+                                style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier
-                                    .padding(horizontal = 8.dp)
-                                    .defaultMinSize(minWidth = 22.dp),
+                                    .padding(horizontal = 6.dp)
+                                    .defaultMinSize(minWidth = 18.dp),
                                 textAlign = TextAlign.Center
                             )
                             Surface(
@@ -2796,14 +2882,14 @@ private fun InventoryItemCard(
                                 shape = CircleShape,
                                 color = NawanoPrimary200,
                                 shadowElevation = 1.5.dp,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(26.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.Add,
                                         contentDescription = "Increase Stock",
                                         tint = Color.White,
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(15.dp)
                                     )
                                 }
                             }

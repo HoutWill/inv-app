@@ -91,7 +91,7 @@ fun SupplierTopBar(
 
                 Spacer(modifier = Modifier.width(2.dp))
 
-                Column {
+                Column(modifier = Modifier.weight(1f, fill = false)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "Nawano",
@@ -99,7 +99,7 @@ fun SupplierTopBar(
                             fontWeight = FontWeight.ExtraBold,
                             color = textPrimary,
                             maxLines = 1,
-                            softWrap = false
+                            overflow = TextOverflow.Ellipsis
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Surface(
@@ -112,7 +112,6 @@ fun SupplierTopBar(
                                 fontWeight = FontWeight.Bold,
                                 color = NawanoPrimary200,
                                 maxLines = 1,
-                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
@@ -128,8 +127,7 @@ fun SupplierTopBar(
                         style = MaterialTheme.typography.bodySmall,
                         color = textSecondary,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        softWrap = false
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -137,38 +135,38 @@ fun SupplierTopBar(
             // Right Group: Search, Dark/Light Theme Toggle & Notification Bell
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 // Search Expand / Collapse Toggle
                 IconButton(
                     onClick = { isSearchExpanded = !isSearchExpanded },
-                    modifier = Modifier.size(38.dp)
+                    modifier = Modifier.size(34.dp)
                 ) {
                     Icon(
                         imageVector = if (isSearchExpanded) Icons.Default.Close else Icons.Default.Search,
                         contentDescription = "Search",
                         tint = if (isSearchExpanded) NawanoPrimary200 else textSecondary,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
 
                 // Dark / Light Mode Toggle
                 IconButton(
                     onClick = onToggleTheme,
-                    modifier = Modifier.size(38.dp)
+                    modifier = Modifier.size(34.dp)
                 ) {
                     Icon(
                         imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
                         contentDescription = if (isDarkTheme) "Light Mode" else "Dark Mode",
                         tint = if (isDarkTheme) Color(0xFFFBBF24) else textSecondary,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
 
                 // Notification Bell with Badge
                 IconButton(
                     onClick = onOpenNotifications,
-                    modifier = Modifier.size(38.dp)
+                    modifier = Modifier.size(34.dp)
                 ) {
                     BadgedBox(
                         badge = {

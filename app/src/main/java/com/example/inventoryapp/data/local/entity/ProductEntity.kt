@@ -25,3 +25,17 @@ data class ProductEntity(
     val reorderQty: Int = 0,
     val updatedAt: Long = System.currentTimeMillis()
 )
+
+val ProductEntity.isDirectSlot: Boolean
+    get() {
+        val s = supplierId?.trim() ?: return true
+        return s.isEmpty() ||
+                s.equals("direct", ignoreCase = true) ||
+                s.equals("none", ignoreCase = true) ||
+                s.equals("direct_slot", ignoreCase = true) ||
+                s.equals("own_direct_slot", ignoreCase = true)
+    }
+
+val ProductEntity.canRequestSupply: Boolean
+    get() = quantity in 1..4 && !isDirectSlot
+

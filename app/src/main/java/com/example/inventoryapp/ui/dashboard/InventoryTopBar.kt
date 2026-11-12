@@ -112,7 +112,7 @@ fun InventoryTopBar(
             ) {
                 NawanoLogoBadge()
                 Spacer(modifier = Modifier.width(10.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f, fill = false)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "Nawano",
@@ -138,20 +138,20 @@ fun InventoryTopBar(
             // Dark / Light Mode Toggle Button
             IconButton(
                 onClick = onToggleTheme,
-                modifier = Modifier.size(38.dp)
+                modifier = Modifier.size(36.dp)
             ) {
                 Icon(
                     imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
                     contentDescription = if (isDarkTheme) "Switch to Light Mode" else "Switch to Dark Mode",
                     tint = if (isDarkTheme) Color(0xFFFBBF24) else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(19.dp)
                 )
             }
 
             // Notification Bell with Stock Alert Badge
             IconButton(
                 onClick = onOpenNotifications,
-                modifier = Modifier.size(38.dp)
+                modifier = Modifier.size(36.dp)
             ) {
                 BadgedBox(
                     badge = {

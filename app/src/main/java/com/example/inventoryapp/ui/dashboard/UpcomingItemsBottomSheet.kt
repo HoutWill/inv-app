@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.*
@@ -25,6 +26,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.data.local.entity.ProductEntity
+import com.example.inventoryapp.data.local.entity.canRequestSupply
+import com.example.inventoryapp.data.local.entity.isDirectSlot
 import com.example.inventoryapp.ui.theme.*
 import java.util.Locale
 
@@ -39,7 +42,8 @@ fun UpcomingItemsBottomSheet(
     products: List<ProductEntity>,
     onDismiss: () -> Unit,
     onRestockProduct: (ProductEntity, Int) -> Unit,
-    onProductClick: (ProductEntity) -> Unit
+    onProductClick: (ProductEntity) -> Unit,
+    onRequestSupply: ((ProductEntity) -> Unit)? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -219,7 +223,8 @@ fun UpcomingItemsBottomSheet(
                         UpcomingItemRow(
                             product = item,
                             onRestock = { onRestockProduct(item, 10) },
-                            onView = { onProductClick(item) }
+                            onView = { onProductClick(item) },
+                            onRequestSupply = if (onRequestSupply != null) { { onRequestSupply(item) } } else null
                         )
                     }
                 }
@@ -232,10 +237,12 @@ fun UpcomingItemsBottomSheet(
 private fun UpcomingItemRow(
     product: ProductEntity,
     onRestock: () -> Unit,
-    onView: () -> Unit
+    onView: () -> Unit,
+    onRequestSupply: (() -> Unit)? = null
 ) {
     val isOut = product.quantity <= 0
     val isLow = product.quantity <= product.reorderLevel
+    val canRequest = product.canRequestSupply && onRequestSupply != null
 
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -303,6 +310,20 @@ private fun UpcomingItemRow(
                 )
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (canRequest) {
+                        Button(
+                            onClick = { onRequestSupply?.invoke() },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Icon(Icons.Default.LocalShipping, contentDescription = null, modifier = Modifier.size(13.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text("Request", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
                     OutlinedButton(
                         onClick = onView,
                         shape = RoundedCornerShape(10.dp),
@@ -315,7 +336,7 @@ private fun UpcomingItemRow(
                     Button(
                         onClick = onRestock,
                         shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200),
+                        colors = ButtonDefaults.buttonColors(containerColor = if (canRequest) Color(0xFF10B981) else NawanoPrimary200),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                         modifier = Modifier.height(32.dp)
                     ) {

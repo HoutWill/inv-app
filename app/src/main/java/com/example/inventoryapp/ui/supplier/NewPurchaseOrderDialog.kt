@@ -50,6 +50,7 @@ data class DraftOrderItem(
 @Composable
 fun NewPurchaseOrderDialog(
     initialSupplier: SupplierEntity?,
+    initialProduct: ProductEntity? = null,
     suppliers: List<SupplierEntity>,
     products: List<ProductEntity>,
     isDarkTheme: Boolean = isSystemInDarkTheme(),
@@ -69,9 +70,19 @@ fun NewPurchaseOrderDialog(
     val cardColor = if (isDarkTheme) NawanoDarkCard else Color(0xFFF8FAFC)
     val outlineColor = if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0)
 
-    var selectedSupplier by remember { mutableStateOf(initialSupplier ?: suppliers.firstOrNull()) }
+    var selectedSupplier by remember {
+        mutableStateOf(
+            initialSupplier
+                ?: initialProduct?.let { p -> suppliers.find { it.id == p.supplierId } }
+                ?: suppliers.firstOrNull()
+        )
+    }
     var isDropdownExpanded by remember { mutableStateOf(false) }
-    var orderTitle by remember { mutableStateOf("") }
+    var orderTitle by remember {
+        mutableStateOf(
+            initialProduct?.let { "Restock: ${it.name}" } ?: ""
+        )
+    }
     var picSender by remember { mutableStateOf(selectedSupplier?.contactName ?: "Brandon Vaccaro") }
     var estArrival by remember { mutableStateOf("09:30 - 11:30 AM") }
     var ownerNote by remember { mutableStateOf("") }
@@ -85,19 +96,19 @@ fun NewPurchaseOrderDialog(
     // Draft items for the PO
     val draftItems = remember { mutableStateListOf<DraftOrderItem>() }
 
-    fun populateItemsForSupplier(sup: SupplierEntity?) {
+    fun populateItemsForSupplier(sup: SupplierEntity?, presetProduct: ProductEntity? = null) {
         draftItems.clear()
         if (sup == null) return
         val supItems = products.filter { it.supplierId == sup.id }
-        if (supItems.isNotEmpty()) {
-            val first = supItems.first()
+        val target = presetProduct?.takeIf { it.supplierId == sup.id } ?: supItems.firstOrNull()
+        if (target != null) {
             draftItems.add(
                 DraftOrderItem(
-                    sku = first.sku,
-                    name = first.name,
-                    quantity = if (first.reorderQty > 0) first.reorderQty else 10,
-                    unitCost = first.costPrice,
-                    productId = first.id
+                    sku = target.sku,
+                    name = target.name,
+                    quantity = if (target.reorderQty > 0) target.reorderQty else 10,
+                    unitCost = target.costPrice,
+                    productId = target.id
                 )
             )
         }
@@ -106,7 +117,7 @@ fun NewPurchaseOrderDialog(
     // Populate on initial launch
     LaunchedEffect(selectedSupplier?.id) {
         if (draftItems.isEmpty()) {
-            populateItemsForSupplier(selectedSupplier)
+            populateItemsForSupplier(selectedSupplier, initialProduct)
         }
     }
 

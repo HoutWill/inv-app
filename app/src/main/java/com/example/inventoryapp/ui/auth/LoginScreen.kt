@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -256,6 +257,7 @@ fun LoginScreen(
                                 containerColor = NawanoLightSurface,
                                 contentColor = NawanoPrimary200
                             ),
+                            contentPadding = PaddingValues(horizontal = 6.dp),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(44.dp)
@@ -266,7 +268,7 @@ fun LoginScreen(
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(Modifier.width(6.dp))
-                            Text("Middle Man", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text("Middle Man", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                         }
 
                         OutlinedButton(
@@ -279,6 +281,7 @@ fun LoginScreen(
                                 containerColor = NawanoLightSurface,
                                 contentColor = NawanoPrimary200
                             ),
+                            contentPadding = PaddingValues(horizontal = 6.dp),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(44.dp)
@@ -289,7 +292,7 @@ fun LoginScreen(
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(Modifier.width(6.dp))
-                            Text("Supplier", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text("Supplier", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                         }
                     }
 

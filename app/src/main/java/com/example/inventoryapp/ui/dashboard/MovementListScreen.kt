@@ -237,18 +237,20 @@ fun MovementListScreen(
                         containerColor = NawanoPrimary200,
                         contentColor = Color.White
                     ),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp)
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "Add Activity",
                         style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
@@ -328,7 +330,10 @@ private fun MovementCard(item: MovementActivityItem) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = item.type.color.copy(alpha = 0.12f)
@@ -360,9 +365,13 @@ private fun MovementCard(item: MovementActivityItem) {
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -373,6 +382,7 @@ private fun MovementCard(item: MovementActivityItem) {
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = item.status.fg,
+                        maxLines = 1,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
@@ -385,7 +395,10 @@ private fun MovementCard(item: MovementActivityItem) {
                 text = item.title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                lineHeight = 18.sp,
+                overflow = TextOverflow.Ellipsis
             )
 
             Spacer(modifier = Modifier.height(3.dp))

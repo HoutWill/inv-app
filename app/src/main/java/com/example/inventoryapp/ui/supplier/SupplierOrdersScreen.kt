@@ -366,7 +366,7 @@ fun SupplierOrdersScreen(
                                 }
                             }
 
-                            // 4. Section Header: "Incoming Goods Req (X)" on Left, "View all >" on Right
+                            // 4. Section Header: "Incoming Goods Req (X)" on Left, Actions on Right
                             item {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -377,8 +377,13 @@ fun SupplierOrdersScreen(
                                         text = "Incoming Goods Req (${filteredOrders.size})",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = textPrimary
+                                        color = textPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
                                     )
+
+                                    Spacer(Modifier.width(8.dp))
 
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -432,16 +437,6 @@ fun SupplierOrdersScreen(
                                                 color = Color.White
                                             )
                                         }
-
-                                        Text(
-                                            text = "View all >",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = NawanoPrimary200,
-                                            modifier = Modifier
-                                                .clickable { selectedFilterIndex = 0 }
-                                                .padding(vertical = 4.dp)
-                                        )
                                     }
                                 }
                             }

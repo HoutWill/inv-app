@@ -86,16 +86,21 @@ fun SupplierDashboardCard(
                 // Status Pill
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = statusBg
+                    color = statusBg,
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
                     Text(
                         text = statusLabel,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = statusFg,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
                     )
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 // Action Controls on Right
                 Column(
@@ -240,7 +245,8 @@ fun SupplierDashboardCard(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = textPrimary,
-                        maxLines = 1,
+                        maxLines = 2,
+                        lineHeight = 18.sp,
                         overflow = TextOverflow.Ellipsis
                     )
 
@@ -293,7 +299,7 @@ fun SupplierDashboardCard(
                         }
                     }
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f, fill = false)) {
                         Text(
                             text = companyName,
                             style = MaterialTheme.typography.bodyMedium,
@@ -311,6 +317,8 @@ fun SupplierDashboardCard(
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 // Right: Total Weight / Items & Price
                 Column(horizontalAlignment = Alignment.End) {

@@ -1,6 +1,7 @@
 package com.example.inventoryapp.ui.supplier
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -16,9 +17,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -107,8 +110,13 @@ fun SupplierCatalogTab(
                     text = "${filteredProducts.size} Products",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = textPrimary
+                    color = textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
+
+                Spacer(Modifier.width(8.dp))
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -253,13 +261,17 @@ fun SupplierCatalogProductCard(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = textPrimary,
-                        maxLines = 1,
+                        maxLines = 2,
+                        lineHeight = 18.sp,
                         overflow = TextOverflow.Ellipsis
                     )
 
                     Spacer(modifier = Modifier.height(2.dp))
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = if (isDarkTheme) NawanoPrimary200.copy(alpha = 0.2f) else Color(0xFFF3E8FF)
@@ -279,7 +291,10 @@ fun SupplierCatalogProductCard(
                             text = product.sku,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = textSecondary
+                            color = textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
                     }
                 }
@@ -312,120 +327,151 @@ fun SupplierCatalogProductCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider(color = if (isDarkTheme) NawanoDarkOutline.copy(alpha = 0.5f) else Color(0xFFF1F5F9))
             Spacer(modifier = Modifier.height(10.dp))
+            HorizontalDivider(color = if (isDarkTheme) NawanoDarkOutline.copy(alpha = 0.5f) else Color(0xFFF1F5F9))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Financial & Stock Stepper Footer
+            // Financial & Stock Stepper Footer (2 clean rows to prevent compact width overflows)
+            // Row 1: Wholesale Price / Unit on left, Stock Status Pill on right
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Wholesale Price & Stock Status
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "$${String.format(Locale.US, "%.2f", product.costPrice)}",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF047857)
-                        )
-                        Text(
-                            text = " / ${product.unit}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = textSecondary
-                        )
-                    }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    Text(
+                        text = "$${String.format(Locale.US, "%.2f", product.costPrice)}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF047857)
+                    )
+                    Text(
+                        text = " / ${product.unit}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = textSecondary,
+                        maxLines = 1
+                    )
+                }
 
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = stockContainerColor,
-                        modifier = Modifier.padding(top = 2.dp)
+                Spacer(Modifier.width(8.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = stockContainerColor,
+                    border = BorderStroke(1.dp, stockColor.copy(alpha = 0.35f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(stockColor)
+                        )
+                        Spacer(Modifier.width(5.dp))
                         Text(
                             text = stockText,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = stockColor,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Row 2: Action Controls: [+ Restock] Button on left, Tactile Stepper on right
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Quick Restock Dialog Button
+                Surface(
+                    onClick = onRestock,
+                    shape = RoundedCornerShape(8.dp),
+                    color = NawanoPrimary200.copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.35f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            tint = NawanoPrimary200,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "Restock",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = NawanoPrimary200
                         )
                     }
                 }
 
-                // Restock button & Tactile Stepper buttons (matching Middleman stock adjuster)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Quick Restock Dialog Button
+                if (onQuantityChange != null) {
                     Surface(
-                        onClick = onRestock,
-                        shape = RoundedCornerShape(8.dp),
-                        color = NawanoPrimary200.copy(alpha = 0.12f),
-                        border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.35f))
+                        color = if (isDarkTheme) NawanoDark400 else MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(20.dp),
+                        border = BorderStroke(1.dp, if (isDarkTheme) NawanoDarkOutline else NawanoPrimary200.copy(alpha = 0.25f))
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = null,
-                                tint = NawanoPrimary200,
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(Modifier.width(3.dp))
-                            Text(
-                                text = "Restock",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = NawanoPrimary200
-                            )
-                        }
-                    }
-
-                    if (onQuantityChange != null) {
-                        Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp)
                         ) {
                             Surface(
                                 onClick = { onQuantityChange(product, -1) },
                                 shape = CircleShape,
-                                color = if (isDarkTheme) NawanoDark400 else Color(0xFFF1F5F9),
-                                modifier = Modifier.size(30.dp)
+                                color = if (isDarkTheme) NawanoDark200 else Color.White,
+                                shadowElevation = 1.dp,
+                                modifier = Modifier.size(26.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        text = "−",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 16.sp,
-                                        color = textPrimary
+                                    Icon(
+                                        imageVector = Icons.Default.Remove,
+                                        contentDescription = "Decrease Stock",
+                                        tint = textPrimary,
+                                        modifier = Modifier.size(15.dp)
                                     )
                                 }
                             }
 
                             Text(
                                 text = "${product.quantity}",
-                                style = MaterialTheme.typography.titleSmall,
+                                style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = textPrimary,
-                                modifier = Modifier.padding(horizontal = 4.dp)
+                                modifier = Modifier
+                                    .padding(horizontal = 6.dp)
+                                    .defaultMinSize(minWidth = 18.dp),
+                                textAlign = TextAlign.Center
                             )
 
                             Surface(
                                 onClick = { onQuantityChange(product, 1) },
                                 shape = CircleShape,
                                 color = NawanoPrimary200,
-                                modifier = Modifier.size(30.dp)
+                                shadowElevation = 1.5.dp,
+                                modifier = Modifier.size(26.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        text = "+",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 16.sp,
-                                        color = Color.White
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "Increase Stock",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(15.dp)
                                     )
                                 }
                             }

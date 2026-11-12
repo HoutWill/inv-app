@@ -44,6 +44,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.inventoryapp.data.local.entity.ProductEntity
+import com.example.inventoryapp.data.local.entity.canRequestSupply
+import com.example.inventoryapp.data.local.entity.isDirectSlot
 import com.example.inventoryapp.ui.theme.*
 import com.example.inventoryapp.util.ProductThumbnail
 import kotlinx.coroutines.launch
@@ -64,7 +66,8 @@ fun ProductDetailsBottomSheet(
     onDismiss: () -> Unit,
     onQuantityAdjust: (delta: Int, note: String) -> Unit,
     onProductUpdated: (ProductEntity) -> Unit,
-    onDeleteProduct: () -> Unit
+    onDeleteProduct: () -> Unit,
+    onRequestSupply: ((ProductEntity) -> Unit)? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val coroutineScope = rememberCoroutineScope()
@@ -600,6 +603,39 @@ fun ProductDetailsBottomSheet(
                                     fontWeight = FontWeight.Bold,
                                     color = stockColor
                                 )
+                            }
+                        }
+
+                        // Low stock from 4-1 with external supplier: Request Supply Button
+                        if (product.canRequestSupply && onRequestSupply != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Surface(
+                                onClick = {
+                                    animateDismiss()
+                                    onRequestSupply(product)
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                color = NawanoPrimary200.copy(alpha = 0.15f),
+                                border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.45f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.LocalShipping,
+                                        contentDescription = "Request Supply",
+                                        tint = NawanoPrimary200,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Text(
+                                        text = "Request",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = NawanoPrimary200
+                                    )
+                                }
                             }
                         }
                     }

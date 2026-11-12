@@ -50,7 +50,8 @@ fun SupplierDrawerSheet(
 
     ModalDrawerSheet(
         modifier = modifier
-            .width(310.dp)
+            .widthIn(max = 290.dp)
+            .fillMaxWidth(0.82f)
             .fillMaxHeight(),
         drawerContainerColor = if (isDarkTheme) NawanoDark200 else Color.White,
         drawerTonalElevation = 4.dp
@@ -59,6 +60,7 @@ fun SupplierDrawerSheet(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
                 .padding(vertical = 16.dp, horizontal = 16.dp)
         ) {
             // Profile & Branding Header (Matching Middleman Drawer Header)
@@ -81,7 +83,7 @@ fun SupplierDrawerSheet(
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Text(
-                                    text = initials,
+                                    text = initials.filter { it.isLetter() }.take(2).ifBlank { "FS" },
                                     fontWeight = FontWeight.ExtraBold,
                                     fontSize = 18.sp,
                                     color = Color.White

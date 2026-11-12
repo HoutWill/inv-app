@@ -101,7 +101,8 @@ fun InventoryDrawerSheet(
 ) {
     ModalDrawerSheet(
         modifier = modifier
-            .width(310.dp)
+            .widthIn(max = 290.dp)
+            .fillMaxWidth(0.82f)
             .fillMaxHeight(),
         drawerContainerColor = MaterialTheme.colorScheme.surface,
         drawerTonalElevation = 4.dp
@@ -110,6 +111,7 @@ fun InventoryDrawerSheet(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
                 .padding(vertical = 16.dp, horizontal = 16.dp)
         ) {
             // Profile & Branding Header
@@ -126,9 +128,8 @@ fun InventoryDrawerSheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Avatar
-                        val initials = userName.trim().split(" ")
-                            .filter { it.isNotBlank() }
-                            .map { it.first() }
+                        val initials = userName.trim().split("\\s+".toRegex())
+                            .mapNotNull { part -> part.firstOrNull { it.isLetter() }?.toString() }
                             .take(2)
                             .joinToString("")
                             .uppercase()
