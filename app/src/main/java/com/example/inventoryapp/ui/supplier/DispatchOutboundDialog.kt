@@ -80,11 +80,26 @@ fun DispatchOutboundDialog(
         }
     }
 
-    Dialog(
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        sheetState = sheetState,
+        containerColor = bgMain,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                color = if (isDarkTheme) NawanoDarkOutline else Color(0xFFCBD5E1)
+            )
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(top = 24.dp)
+            .imePadding()
     ) {
         Scaffold(
+            containerColor = bgMain,
             topBar = {
                 Surface(
                     color = bgMain,
@@ -93,14 +108,13 @@ fun DispatchOutboundDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(onClick = onDismiss) {
                             Icon(
-                                imageVector = Icons.Default.ArrowBack,
-                                contentDescription = "Back",
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
                                 tint = textPrimary
                             )
                         }
@@ -152,8 +166,7 @@ fun DispatchOutboundDialog(
                         }
                     }
                 }
-            },
-            containerColor = bgMain
+            }
         ) { paddingValues ->
             Column(
                 modifier = Modifier

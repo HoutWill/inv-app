@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -115,24 +116,48 @@ fun NewPurchaseOrderDialog(
     var newQty by remember { mutableStateOf("10") }
     var newCost by remember { mutableStateOf("25.00") }
 
-    AlertDialog(
-        containerColor = surfaceColor,
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "Restock",
-                fontWeight = FontWeight.Bold,
-                fontSize = 17.sp,
-                color = textPrimary
+        sheetState = sheetState,
+        containerColor = surfaceColor,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                color = if (isDarkTheme) NawanoDarkOutline else Color(0xFFCBD5E1)
             )
         },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(top = 40.dp)
+            .imePadding()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Text(
+                    text = "Restock Purchase Order",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = textPrimary
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = textSecondary)
+                }
+            }
                 // 1. Partner Dropdown Selector (drop select)
                 Text(text = "Supplier", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = textSecondary)
 
@@ -508,40 +533,50 @@ fun NewPurchaseOrderDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val sup = selectedSupplier ?: return@Button
-                    val finalItems = draftItems.map { d ->
-                        PurchaseOrderItemEntity(
-                            orderId = "",
-                            productId = d.productId,
-                            sku = d.sku,
-                            productName = d.name,
-                            quantity = d.quantity,
-                            unitCost = d.unitCost
-                        )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Bottom Action buttons: Cancel and Submit
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                    ) {
+                        Text("Cancel", color = textSecondary)
                     }
-                    val title = orderTitle.ifBlank { "Inbound Delivery from ${sup.name}" }
-                    onSubmit(sup, title, picSender, finalItems, ownerNote, estArrival)
-                },
-                enabled = selectedSupplier != null && draftItems.isNotEmpty(),
-                shape = RoundedCornerShape(8.dp),
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200)
-            ) {
-                Text("Submit")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-            ) {
-                Text("Cancel", color = textSecondary)
+
+                    Button(
+                        onClick = {
+                            val sup = selectedSupplier ?: return@Button
+                            val finalItems = draftItems.map { d ->
+                                PurchaseOrderItemEntity(
+                                    orderId = "",
+                                    productId = d.productId,
+                                    sku = d.sku,
+                                    productName = d.name,
+                                    quantity = d.quantity,
+                                    unitCost = d.unitCost
+                                )
+                            }
+                            val title = orderTitle.ifBlank { "Inbound Delivery from ${sup.name}" }
+                            onSubmit(sup, title, picSender, finalItems, ownerNote, estArrival)
+                        },
+                        enabled = selectedSupplier != null && draftItems.isNotEmpty(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200),
+                        modifier = Modifier
+                            .weight(1.5f)
+                            .height(48.dp)
+                    ) {
+                        Text("Submit Order", fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
-    )
-}
+    }

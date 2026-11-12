@@ -339,6 +339,7 @@ private fun SupplierCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SupplierAddEditDialog(
     supplier: SupplierEntity?,
@@ -370,109 +371,157 @@ fun SupplierAddEditDialog(
         unfocusedLabelColor = textSecondary
     )
 
-    AlertDialog(
-        containerColor = surfaceColor,
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "Supplier",
-                fontWeight = FontWeight.Bold,
-                fontSize = 17.sp,
-                color = textPrimary
+        sheetState = sheetState,
+        containerColor = surfaceColor,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                color = if (isDarkTheme) NawanoDarkOutline else Color(0xFFCBD5E1)
             )
         },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(top = 40.dp)
+            .imePadding()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Company") },
-                    singleLine = true,
-                    colors = tfColors,
-                    modifier = Modifier.fillMaxWidth()
+                Text(
+                    text = if (supplier == null) "Add New Supplier" else "Edit Supplier",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = textPrimary
                 )
-
-                OutlinedTextField(
-                    value = contactName,
-                    onValueChange = { contactName = it },
-                    label = { Text("Contact") },
-                    singleLine = true,
-                    colors = tfColors,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                OutlinedTextField(
-                    value = phone,
-                    onValueChange = { phone = it },
-                    label = { Text("Phone") },
-                    singleLine = true,
-                    colors = tfColors,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = { Text("Email") },
-                    singleLine = true,
-                    colors = tfColors,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                OutlinedTextField(
-                    value = address,
-                    onValueChange = { address = it },
-                    label = { Text("Address") },
-                    colors = tfColors,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                OutlinedTextField(
-                    value = note,
-                    onValueChange = { note = it },
-                    label = { Text("Category") },
-                    colors = tfColors,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                IconButton(onClick = onDismiss) {
+                    Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = textSecondary)
+                }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (name.isNotBlank()) {
-                        val toSave = supplier?.copy(
-                            name = name.trim(),
-                            contactName = contactName.trim(),
-                            phone = phone.trim(),
-                            email = email.trim(),
-                            address = address.trim(),
-                            note = note.trim()
-                        ) ?: SupplierEntity(
-                            name = name.trim(),
-                            contactName = contactName.trim(),
-                            phone = phone.trim(),
-                            email = email.trim(),
-                            address = address.trim(),
-                            note = note.trim()
-                        )
-                        onConfirm(toSave)
-                    }
-                },
-                enabled = name.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200)
+
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Company Name *") },
+                singleLine = true,
+                colors = tfColors,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            OutlinedTextField(
+                value = contactName,
+                onValueChange = { contactName = it },
+                label = { Text("Contact Person") },
+                singleLine = true,
+                colors = tfColors,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            OutlinedTextField(
+                value = phone,
+                onValueChange = { phone = it },
+                label = { Text("Phone Number") },
+                singleLine = true,
+                colors = tfColors,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("Email Address") },
+                singleLine = true,
+                colors = tfColors,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            OutlinedTextField(
+                value = address,
+                onValueChange = { address = it },
+                label = { Text("Physical / Warehouse Address") },
+                colors = tfColors,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            OutlinedTextField(
+                value = note,
+                onValueChange = { note = it },
+                label = { Text("Category / Special Notes") },
+                colors = tfColors,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(text = if (supplier == null) "Create" else "Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = textSecondary)
+                OutlinedButton(
+                    onClick = onDismiss,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                ) {
+                    Text("Cancel", color = textSecondary)
+                }
+
+                Button(
+                    onClick = {
+                        if (name.isNotBlank()) {
+                            val toSave = supplier?.copy(
+                                name = name.trim(),
+                                contactName = contactName.trim(),
+                                phone = phone.trim(),
+                                email = email.trim(),
+                                address = address.trim(),
+                                note = note.trim()
+                            ) ?: SupplierEntity(
+                                name = name.trim(),
+                                contactName = contactName.trim(),
+                                phone = phone.trim(),
+                                email = email.trim(),
+                                address = address.trim(),
+                                note = note.trim()
+                            )
+                            onConfirm(toSave)
+                        }
+                    },
+                    enabled = name.isNotBlank(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200),
+                    modifier = Modifier
+                        .weight(1.5f)
+                        .height(48.dp)
+                ) {
+                    Text(
+                        text = if (supplier == null) "Create Supplier" else "Save Changes",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
-    )
+    }
 }
