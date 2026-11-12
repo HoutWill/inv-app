@@ -20,6 +20,9 @@ interface PurchaseOrderDao {
     @Query("SELECT * FROM purchase_orders WHERE status IN (:statuses) ORDER BY createdAt DESC")
     fun getOrdersByStatuses(statuses: List<PurchaseOrderStatus>): Flow<List<PurchaseOrderEntity>>
 
+    @Query("SELECT COUNT(*) FROM purchase_orders")
+    suspend fun getOrderCount(): Int
+
     @Query("SELECT * FROM purchase_orders WHERE id = :id LIMIT 1")
     suspend fun getOrderById(id: String): PurchaseOrderEntity?
 

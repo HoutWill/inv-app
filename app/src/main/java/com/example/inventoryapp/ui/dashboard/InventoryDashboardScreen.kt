@@ -84,7 +84,8 @@ fun InventoryDashboardScreen(
     onToggleTheme: () -> Unit = {},
     userName: String = "Anthony",
     userRole: String = "Middle Man • Nawano HQ",
-    onLogout: (() -> Unit)? = null
+    onLogout: (() -> Unit)? = null,
+    onSwitchToSupplier: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -119,6 +120,7 @@ fun InventoryDashboardScreen(
         userName = userName,
         userRole = userRole,
         onLogout = onLogout,
+        onSwitchToSupplier = onSwitchToSupplier,
         onDestinationSelected = { dest ->
             scope.launch { drawerState.close() }
             when (dest) {

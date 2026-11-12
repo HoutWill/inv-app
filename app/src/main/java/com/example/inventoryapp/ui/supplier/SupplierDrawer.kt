@@ -40,6 +40,7 @@ fun SupplierDrawerSheet(
     onToggleTheme: () -> Unit,
     onCloseDrawer: () -> Unit,
     onLogout: () -> Unit,
+    onSwitchToMiddleman: (() -> Unit)? = null,
     onOpenShipments: () -> Unit = {},
     onOpenNotifications: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -246,6 +247,19 @@ fun SupplierDrawerSheet(
 
             Spacer(modifier = Modifier.weight(1f, fill = false))
             Spacer(modifier = Modifier.height(20.dp))
+
+            if (onSwitchToMiddleman != null) {
+                SupplierDrawerItem(
+                    label = "Switch to Middleman HQ",
+                    icon = Icons.Default.SwapHoriz,
+                    badge = "HQ",
+                    badgeColor = NawanoPrimary200,
+                    isSelected = false,
+                    isDarkTheme = isDarkTheme,
+                    onClick = onSwitchToMiddleman
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
             // Log Out Button
             Surface(

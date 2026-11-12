@@ -69,7 +69,8 @@ fun SupplierOrdersScreen(
     onUpdateProduct: (ProductEntity) -> Unit = {},
     onDeleteProduct: (ProductEntity) -> Unit = {},
     onLoadOrderDetails: suspend (String) -> OrderWithItems? = { null },
-    onLogout: () -> Unit = {}
+    onLogout: () -> Unit = {},
+    onSwitchToMiddleman: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -236,6 +237,7 @@ fun SupplierOrdersScreen(
                 onToggleTheme = onToggleTheme,
                 onCloseDrawer = { scope.launch { drawerState.close() } },
                 onLogout = onLogout,
+                onSwitchToMiddleman = onSwitchToMiddleman,
                 onOpenShipments = {
                     scope.launch { drawerState.close() }
                     activeViewTab = 0

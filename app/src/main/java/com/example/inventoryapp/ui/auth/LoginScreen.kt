@@ -45,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -292,17 +293,59 @@ fun LoginScreen(
                         }
                     }
 
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(10.dp))
                     Text(
-                        text = "Or tap to auto-fill: middleman@nawano.com • pass: password123",
+                        text = "Quick Demo Auto-Fill (Tap to Test):",
                         fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = NawanoTextSecondaryLight,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.clickable {
-                            email = "middleman@nawano.com"
-                            password = "password123"
-                        }
+                        textAlign = TextAlign.Center
                     )
+                    Spacer(Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            onClick = {
+                                email = "middleman@nawano.com"
+                                password = "password123"
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            color = NawanoPrimary200.copy(alpha = 0.1f),
+                            border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.3f)),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = "🏢 Middleman HQ",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = NawanoPrimary200,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+
+                        Surface(
+                            onClick = {
+                                email = "supplier@nawano.com"
+                                password = "password123"
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF10B981).copy(alpha = 0.1f),
+                            border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.3f)),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = "🚚 Supplier Portal",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF059669),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+                    }
                 }
             }
 

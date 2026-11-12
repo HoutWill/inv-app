@@ -55,6 +55,7 @@ fun InventoryNavigationDrawer(
     userName: String = "Anthony",
     userRole: String = "Middle Man • Nawano HQ",
     onLogout: (() -> Unit)? = null,
+    onSwitchToSupplier: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
@@ -71,7 +72,8 @@ fun InventoryNavigationDrawer(
                 totalSkus = totalSkus,
                 userName = userName,
                 userRole = userRole,
-                onLogout = onLogout
+                onLogout = onLogout,
+                onSwitchToSupplier = onSwitchToSupplier
             )
         },
         content = content
@@ -94,6 +96,7 @@ fun InventoryDrawerSheet(
     userName: String = "Anthony",
     userRole: String = "Middle Man • Nawano HQ",
     onLogout: (() -> Unit)? = null,
+    onSwitchToSupplier: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     ModalDrawerSheet(
@@ -268,6 +271,16 @@ fun InventoryDrawerSheet(
                 badge = if (isDarkTheme) "Dark" else "Light",
                 onClick = onToggleTheme
             )
+
+            if (onSwitchToSupplier != null) {
+                DrawerNavRow(
+                    icon = Icons.Default.SwapHoriz,
+                    label = "Switch to Supplier Portal",
+                    isSelected = false,
+                    badge = "Demo",
+                    onClick = onSwitchToSupplier
+                )
+            }
 
             if (onLogout != null) {
                 DrawerNavRow(

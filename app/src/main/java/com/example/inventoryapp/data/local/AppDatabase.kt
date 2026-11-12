@@ -19,6 +19,8 @@ import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
 import com.example.inventoryapp.data.local.entity.SupplierEntity
 import com.example.inventoryapp.data.local.entity.UserEntity
+import com.example.inventoryapp.data.local.entity.UserRole
+import com.example.inventoryapp.util.PasswordHasher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -194,12 +196,43 @@ abstract class AppDatabase : RoomDatabase() {
             try {
                 val supplierDao = database.supplierDao()
                 val orderDao = database.purchaseOrderDao()
-                val transactionDao = database.stockTransactionDao()
+                val productDao = database.productDao()
+                val userDao = database.userDao()
 
-                // Remove old test data so middleman & supplier start completely clean
-                orderDao.clearAllOrders()
-                orderDao.clearAllOrderItems()
-                transactionDao.clearAllTransactions()
+                // Seed default users if not yet present
+                if (userDao.findByEmail("middleman@nawano.com") == null) {
+                    userDao.insert(
+                        UserEntity(
+                            id = "user_middleman",
+                            fullName = "Anthony (Middle Man)",
+                            email = "middleman@nawano.com",
+                            passwordHash = PasswordHasher.hash("password123"),
+                            role = UserRole.OWNER
+                        )
+                    )
+                }
+                if (userDao.findByEmail("supplier@nawano.com") == null) {
+                    userDao.insert(
+                        UserEntity(
+                            id = "user_supplier_pacific",
+                            fullName = "Pacific Seafood Supply (Supplier)",
+                            email = "supplier@nawano.com",
+                            passwordHash = PasswordHasher.hash("password123"),
+                            role = UserRole.SUPPLIER
+                        )
+                    )
+                }
+                if (userDao.findByEmail("foodie@nawano.com") == null) {
+                    userDao.insert(
+                        UserEntity(
+                            id = "user_supplier_foodie",
+                            fullName = "Foodie Supplier (Supplier)",
+                            email = "foodie@nawano.com",
+                            passwordHash = PasswordHasher.hash("password123"),
+                            role = UserRole.SUPPLIER
+                        )
+                    )
+                }
 
                 // Purge legacy mock supplier records if any
                 val legacyTooFrozen = supplierDao.getSupplierById("sup_too_frozen")
@@ -207,7 +240,7 @@ abstract class AppDatabase : RoomDatabase() {
                 val legacyApex = supplierDao.getSupplierById("sup_apex_dist")
                 if (legacyApex != null) supplierDao.deleteSupplier(legacyApex)
 
-                // The 4 canonical partner suppliers matching the Behance design & portal accounts
+                // Canonical partner suppliers matching the Behance design & portal accounts
                 val canonicalSuppliers = listOf(
                     SupplierEntity(
                         id = "sup_pacific_seafood",
@@ -216,7 +249,7 @@ abstract class AppDatabase : RoomDatabase() {
                         phone = "+1 (555) 234-8901",
                         email = "supplier@nawano.com",
                         address = "1550 Bedok North Ave 4, #04 30, Singapore",
-                        note = "Cold-chain premium seafood, frozen lobster & salmon",
+                        note = "Cold-chain premium seafood, frozen lobster & beverages",
                         isActive = true
                     ),
                     SupplierEntity(
@@ -226,7 +259,7 @@ abstract class AppDatabase : RoomDatabase() {
                         phone = "+1 (555) 345-6789",
                         email = "foodie@nawano.com",
                         address = "450 Harbor Way, Bay 4, Toronto",
-                        note = "Specialty imported seafood, meats & gourmet ingredients",
+                        note = "Specialty imported seafood, Italian pantry & gourmet goods",
                         isActive = true
                     ),
                     SupplierEntity(
@@ -270,9 +303,93 @@ abstract class AppDatabase : RoomDatabase() {
                     }
                 }
 
-                // Seed catalog products for each canonical partner supplier
-                val productDao = database.productDao()
+                // Seed catalog products with REAL global EAN-13 barcodes!
                 val partnerProducts = listOf(
+                    // Real Barcode Products (EAN-13)
+                    ProductEntity(
+                        id = "prod_coca_cola_330",
+                        sku = "5449000000996",
+                        name = "Coca-Cola Original (330ml Can)",
+                        category = "Beverages",
+                        brand = "Coca-Cola",
+                        costPrice = 0.75,
+                        sellingPrice = 1.50,
+                        quantity = 45,
+                        unit = "Can",
+                        supplierId = "sup_pacific_seafood",
+                        reorderLevel = 15,
+                        reorderQty = 50
+                    ),
+                    ProductEntity(
+                        id = "prod_red_bull_250",
+                        sku = "9002490100070",
+                        name = "Red Bull Energy Drink (250ml)",
+                        category = "Beverages",
+                        brand = "Red Bull",
+                        costPrice = 1.60,
+                        sellingPrice = 2.80,
+                        quantity = 30,
+                        unit = "Can",
+                        supplierId = "sup_pacific_seafood",
+                        reorderLevel = 10,
+                        reorderQty = 40
+                    ),
+                    ProductEntity(
+                        id = "prod_nutella_400",
+                        sku = "3017620422003",
+                        name = "Nutella Hazelnut Spread (400g)",
+                        category = "Pantry",
+                        brand = "Ferrero",
+                        costPrice = 3.20,
+                        sellingPrice = 5.40,
+                        quantity = 20,
+                        unit = "Jar",
+                        supplierId = "sup_foodie",
+                        reorderLevel = 8,
+                        reorderQty = 24
+                    ),
+                    ProductEntity(
+                        id = "prod_barilla_pesto",
+                        sku = "8076809513753",
+                        name = "Barilla Pesto alla Genovese (190g)",
+                        category = "Pantry",
+                        brand = "Barilla",
+                        costPrice = 2.40,
+                        sellingPrice = 4.20,
+                        quantity = 25,
+                        unit = "Jar",
+                        supplierId = "sup_foodie",
+                        reorderLevel = 8,
+                        reorderQty = 30
+                    ),
+                    ProductEntity(
+                        id = "prod_heinz_ketchup",
+                        sku = "8715700421639",
+                        name = "Heinz Tomato Ketchup (500g)",
+                        category = "Condiments",
+                        brand = "Heinz",
+                        costPrice = 1.85,
+                        sellingPrice = 3.25,
+                        quantity = 35,
+                        unit = "Bottle",
+                        supplierId = "sup_vegan",
+                        reorderLevel = 10,
+                        reorderQty = 20
+                    ),
+                    ProductEntity(
+                        id = "prod_oreo_original",
+                        sku = "7622210449283",
+                        name = "Oreo Original Sandwich Cookies (154g)",
+                        category = "Snacks",
+                        brand = "Oreo",
+                        costPrice = 1.20,
+                        sellingPrice = 2.10,
+                        quantity = 50,
+                        unit = "Pack",
+                        supplierId = "sup_apex",
+                        reorderLevel = 15,
+                        reorderQty = 40
+                    ),
                     // Pacific Seafood Supply
                     ProductEntity(
                         id = "prod_crb_0603",
@@ -298,18 +415,6 @@ abstract class AppDatabase : RoomDatabase() {
                         supplierId = "sup_pacific_seafood",
                         reorderQty = 20
                     ),
-                    ProductEntity(
-                        id = "prod_lob_0402",
-                        sku = "LOB-0402",
-                        name = "Boston Live Lobster (1.5 lb)",
-                        category = "Seafood",
-                        costPrice = 48.00,
-                        sellingPrice = 65.00,
-                        quantity = 18,
-                        unit = "Pcs",
-                        supplierId = "sup_pacific_seafood",
-                        reorderQty = 10
-                    ),
                     // Foodie Supplier
                     ProductEntity(
                         id = "prod_wgy_0801",
@@ -322,30 +427,6 @@ abstract class AppDatabase : RoomDatabase() {
                         unit = "Kg",
                         supplierId = "sup_foodie",
                         reorderQty = 10
-                    ),
-                    ProductEntity(
-                        id = "prod_trf_0305",
-                        sku = "TRF-0305",
-                        name = "Black Truffle Olive Oil (250ml)",
-                        category = "Gourmet",
-                        costPrice = 28.00,
-                        sellingPrice = 39.50,
-                        quantity = 30,
-                        unit = "Bottle",
-                        supplierId = "sup_foodie",
-                        reorderQty = 12
-                    ),
-                    ProductEntity(
-                        id = "prod_cvr_0104",
-                        sku = "CVR-0104",
-                        name = "Imperial Ossetra Caviar (50g)",
-                        category = "Gourmet",
-                        costPrice = 110.00,
-                        sellingPrice = 165.00,
-                        quantity = 8,
-                        unit = "Tin",
-                        supplierId = "sup_foodie",
-                        reorderQty = 5
                     ),
                     // Vegan Community
                     ProductEntity(
@@ -360,30 +441,6 @@ abstract class AppDatabase : RoomDatabase() {
                         supplierId = "sup_vegan",
                         reorderQty = 25
                     ),
-                    ProductEntity(
-                        id = "prod_oat_0702",
-                        sku = "OAT-0702",
-                        name = "Barista Blend Oat Milk (1L)",
-                        category = "Dairy-Free",
-                        costPrice = 5.20,
-                        sellingPrice = 7.50,
-                        quantity = 60,
-                        unit = "Carton",
-                        supplierId = "sup_vegan",
-                        reorderQty = 30
-                    ),
-                    ProductEntity(
-                        id = "prod_mush_0903",
-                        sku = "MUSH-0903",
-                        name = "Wild Forest Shiitake Mushrooms",
-                        category = "Produce",
-                        costPrice = 8.00,
-                        sellingPrice = 12.00,
-                        quantity = 35,
-                        unit = "Pack",
-                        supplierId = "sup_vegan",
-                        reorderQty = 15
-                    ),
                     // Apex Supply & Hardware Co.
                     ProductEntity(
                         id = "prod_box_1001",
@@ -396,30 +453,6 @@ abstract class AppDatabase : RoomDatabase() {
                         unit = "Pcs",
                         supplierId = "sup_apex",
                         reorderQty = 50
-                    ),
-                    ProductEntity(
-                        id = "prod_tpe_2002",
-                        sku = "TPE-2002",
-                        name = "Industrial Reinforced Packing Tape",
-                        category = "Packaging",
-                        costPrice = 6.00,
-                        sellingPrice = 9.00,
-                        quantity = 80,
-                        unit = "Roll",
-                        supplierId = "sup_apex",
-                        reorderQty = 40
-                    ),
-                    ProductEntity(
-                        id = "prod_thrm_3003",
-                        sku = "THRM-3003",
-                        name = "Cold Chain Thermal Insulated Liner",
-                        category = "Packaging",
-                        costPrice = 12.50,
-                        sellingPrice = 18.00,
-                        quantity = 45,
-                        unit = "Pcs",
-                        supplierId = "sup_apex",
-                        reorderQty = 20
                     )
                 )
 
@@ -427,9 +460,148 @@ abstract class AppDatabase : RoomDatabase() {
                     val existing = productDao.getProductBySku(p.sku)
                     if (existing == null) {
                         productDao.insertProduct(p)
-                    } else if (existing.supplierId != p.supplierId) {
-                        productDao.updateProduct(existing.copy(supplierId = p.supplierId))
+                    } else if (existing.supplierId != p.supplierId || existing.name != p.name) {
+                        productDao.updateProduct(
+                            existing.copy(
+                                name = p.name,
+                                supplierId = p.supplierId,
+                                brand = p.brand,
+                                costPrice = p.costPrice,
+                                sellingPrice = p.sellingPrice,
+                                unit = p.unit,
+                                reorderQty = p.reorderQty
+                            )
+                        )
                     }
+                }
+
+                // Seed REAL active Purchase Orders connecting Middleman and Supplier
+                val existingPo = orderDao.getOrderById("po_real_001")
+                if (existingPo == null) {
+                    val now = System.currentTimeMillis()
+
+                    // Order 1: CONFIRMED - Pacific Seafood Supply (Coca-Cola & Red Bull)
+                    val po1 = PurchaseOrderEntity(
+                        id = "po_real_001",
+                        orderNumber = "PO-2026-0842",
+                        supplierId = "sup_pacific_seafood",
+                        supplierName = "Pacific Seafood Supply",
+                        status = PurchaseOrderStatus.CONFIRMED,
+                        totalAmount = 101.50,
+                        totalQuantity = 90,
+                        title = "Cold-Chain Restock • Coca-Cola & Red Bull",
+                        movementType = "Inbound PO",
+                        picSender = "Brandon Vaccaro",
+                        trackingNumber = "TRK-892174092",
+                        ownerNote = "Storefront beverage display restock. Scan cold-chain barcode upon receipt.",
+                        supplierNote = "Pallet verified and packed in cold-chain cooler.",
+                        estArrival = "Tomorrow, 10:00 AM",
+                        totalWeight = "28.5 kg",
+                        createdAt = now - 3600_000 * 4,
+                        confirmedAt = now - 3600_000 * 2,
+                        updatedAt = now - 3600_000 * 2
+                    )
+                    val po1Items = listOf(
+                        PurchaseOrderItemEntity(
+                            id = "poi_coke_01",
+                            orderId = "po_real_001",
+                            productId = "prod_coca_cola_330",
+                            sku = "5449000000996",
+                            productName = "Coca-Cola Original (330ml Can)",
+                            quantity = 50,
+                            unitCost = 0.75
+                        ),
+                        PurchaseOrderItemEntity(
+                            id = "poi_redbull_01",
+                            orderId = "po_real_001",
+                            productId = "prod_red_bull_250",
+                            sku = "9002490100070",
+                            productName = "Red Bull Energy Drink (250ml)",
+                            quantity = 40,
+                            unitCost = 1.60
+                        )
+                    )
+                    orderDao.insertOrder(po1)
+                    orderDao.insertOrderItems(po1Items)
+
+                    // Order 2: DELIVERED (In-Transit) - Foodie Supplier (Nutella & Barilla Pesto)
+                    val po2 = PurchaseOrderEntity(
+                        id = "po_real_002",
+                        orderNumber = "PO-2026-0843",
+                        supplierId = "sup_foodie",
+                        supplierName = "Foodie Supplier",
+                        status = PurchaseOrderStatus.DELIVERED,
+                        totalAmount = 148.80,
+                        totalQuantity = 54,
+                        title = "Gourmet Pantry Inbound • Nutella & Barilla Pesto",
+                        movementType = "Inbound PO",
+                        picSender = "Brandon Vaccaro",
+                        trackingNumber = "DHL-SG-5849201",
+                        ownerNote = "Weekly Italian pantry batch.",
+                        supplierNote = "Dispatched via DHL Express Freight. Driver ETA 2:30 PM.",
+                        estArrival = "Today, 2:30 PM",
+                        totalWeight = "24.0 kg",
+                        createdAt = now - 3600_000 * 8,
+                        confirmedAt = now - 3600_000 * 6,
+                        deliveredAt = now - 3600_000 * 1,
+                        updatedAt = now - 3600_000 * 1
+                    )
+                    val po2Items = listOf(
+                        PurchaseOrderItemEntity(
+                            id = "poi_nutella_02",
+                            orderId = "po_real_002",
+                            productId = "prod_nutella_400",
+                            sku = "3017620422003",
+                            productName = "Nutella Hazelnut Spread (400g)",
+                            quantity = 24,
+                            unitCost = 3.20
+                        ),
+                        PurchaseOrderItemEntity(
+                            id = "poi_barilla_02",
+                            orderId = "po_real_002",
+                            productId = "prod_barilla_pesto",
+                            sku = "8076809513753",
+                            productName = "Barilla Pesto alla Genovese (190g)",
+                            quantity = 30,
+                            unitCost = 2.40
+                        )
+                    )
+                    orderDao.insertOrder(po2)
+                    orderDao.insertOrderItems(po2Items)
+
+                    // Order 3: PENDING - Pacific Seafood Supply (Coca-Cola Cans Restock)
+                    val po3 = PurchaseOrderEntity(
+                        id = "po_real_003",
+                        orderNumber = "PO-2026-0844",
+                        supplierId = "sup_pacific_seafood",
+                        supplierName = "Pacific Seafood Supply",
+                        status = PurchaseOrderStatus.PENDING,
+                        totalAmount = 37.50,
+                        totalQuantity = 50,
+                        title = "Inbound Request • Coca-Cola Cans Restock",
+                        movementType = "Inbound PO",
+                        picSender = "Brandon Vaccaro",
+                        trackingNumber = "",
+                        ownerNote = "Please accept and confirm production batch.",
+                        supplierNote = "",
+                        estArrival = "In 2 days",
+                        totalWeight = "16.5 kg",
+                        createdAt = now - 3600_000 * 1,
+                        updatedAt = now - 3600_000 * 1
+                    )
+                    val po3Items = listOf(
+                        PurchaseOrderItemEntity(
+                            id = "poi_coke_03",
+                            orderId = "po_real_003",
+                            productId = "prod_coca_cola_330",
+                            sku = "5449000000996",
+                            productName = "Coca-Cola Original (330ml Can)",
+                            quantity = 50,
+                            unitCost = 0.75
+                        )
+                    )
+                    orderDao.insertOrder(po3)
+                    orderDao.insertOrderItems(po3Items)
                 }
             } catch (e: Exception) {
                 Log.e("AppDatabase", "Error seeding default suppliers", e)

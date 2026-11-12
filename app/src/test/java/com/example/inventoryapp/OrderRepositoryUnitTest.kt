@@ -29,6 +29,7 @@ class FakePurchaseOrderDao : PurchaseOrderDao {
         MutableStateFlow(orders.values.filter { it.status == status })
     override fun getOrdersByStatuses(statuses: List<PurchaseOrderStatus>): Flow<List<PurchaseOrderEntity>> =
         MutableStateFlow(orders.values.filter { it.status in statuses })
+    override suspend fun getOrderCount(): Int = orders.size
     override suspend fun getOrderById(id: String): PurchaseOrderEntity? = orders[id]
     override fun observeOrderById(id: String): Flow<PurchaseOrderEntity?> = MutableStateFlow(orders[id])
     override fun getItemsForOrder(orderId: String): Flow<List<PurchaseOrderItemEntity>> =
