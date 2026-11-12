@@ -3,6 +3,7 @@ package com.example.inventoryapp.ui.supplier
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -74,10 +75,10 @@ fun SupplierOrdersScreen(
     val scope = rememberCoroutineScope()
 
     // Active View Tab:
-    // 0: Orders, 1: Wholesale Catalog, 2: Freight Shipments, 3: Analytics, 4: Settings
+    // 0: Home (Orders), 1: Items (Wholesale Catalog), 2: Stats (Analytics), 3: Settings
     var activeViewTab by remember { mutableIntStateOf(0) }
     var selectedFilterIndex by remember { mutableIntStateOf(0) }
-    val filterTabs = listOf("All", "Pending", "Transit", "Done")
+    val filterTabs = listOf("All Activ.", "Incomin.", "Inboun.", "Out.")
 
     // Drawer, Modals & Dialogs State
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -280,103 +281,50 @@ fun SupplierOrdersScreen(
                             verticalArrangement = Arrangement.spacedBy(14.dp),
                             contentPadding = PaddingValues(top = 8.dp, bottom = 96.dp)
                         ) {
-                            // 1. Signature Minimal Hero Summary Card
+                            // 1. "Home" Bold Title matching Behance Reference
                             item {
-                                Surface(
-                                    shape = RoundedCornerShape(20.dp),
-                                    color = Color.Transparent,
-                                    shadowElevation = if (isDarkTheme) 0.dp else 4.dp,
-                                    modifier = Modifier.fillMaxWidth()
+                                Text(
+                                    text = "Home",
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = textPrimary,
+                                    modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
+                                )
+                            }
+
+                            // 2. Horizontal Metric Cards Row ("4 Items", "32 Items", etc.)
+                            item {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .background(
-                                                Brush.linearGradient(
-                                                    listOf(
-                                                        Color(0xFF6366F1),
-                                                        NawanoPrimary200,
-                                                        Color(0xFF9061F9)
-                                                    )
-                                                )
-                                            )
-                                            .padding(horizontal = 18.dp, vertical = 16.dp)
-                                    ) {
-                                        Column {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Surface(
-                                                        shape = RoundedCornerShape(8.dp),
-                                                        color = Color.White.copy(alpha = 0.22f),
-                                                        modifier = Modifier.size(28.dp)
-                                                    ) {
-                                                        Box(contentAlignment = Alignment.Center) {
-                                                            Icon(
-                                                                imageVector = Icons.Default.Layers,
-                                                                contentDescription = null,
-                                                                tint = Color.White,
-                                                                modifier = Modifier.size(16.dp)
-                                                            )
-                                                        }
-                                                    }
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Text(
-                                                        text = "Wholesale Summary",
-                                                        fontSize = 14.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = Color.White
-                                                    )
-                                                }
-
-                                                Surface(
-                                                    shape = CircleShape,
-                                                    color = Color.White.copy(alpha = 0.22f)
-                                                ) {
-                                                    Text(
-                                                        text = "Verified",
-                                                        fontSize = 10.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = Color.White,
-                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                                    )
-                                                }
-                                            }
-
-                                            Spacer(modifier = Modifier.height(14.dp))
-
-                                            // Clean 4-column metric row
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween
-                                            ) {
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text("Orders", fontSize = 11.sp, color = Color.White.copy(alpha = 0.8f))
-                                                    Text("$totalOrders", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                                                }
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text("SKUs", fontSize = 11.sp, color = Color.White.copy(alpha = 0.8f))
-                                                    Text("$totalSkus", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                                                }
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text("Qty", fontSize = 11.sp, color = Color.White.copy(alpha = 0.8f))
-                                                    Text("$totalQty", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                                                }
-                                                Column(modifier = Modifier.weight(1.2f)) {
-                                                    Text("Value", fontSize = 11.sp, color = Color.White.copy(alpha = 0.8f))
-                                                    Text("$${String.format(Locale.US, "%,.0f", totalValue)}", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                                                }
-                                            }
-                                        }
-                                    }
+                                    SupplierMetricCard(
+                                        value = "$totalOrders Items",
+                                        label = "Incoming Reqs",
+                                        isDarkTheme = isDarkTheme
+                                    )
+                                    SupplierMetricCard(
+                                        value = "$totalSkus Items",
+                                        label = "Wholesale SKUs",
+                                        isDarkTheme = isDarkTheme
+                                    )
+                                    SupplierMetricCard(
+                                        value = "$inTransitCount Items",
+                                        label = "In Transit",
+                                        isDarkTheme = isDarkTheme
+                                    )
+                                    SupplierMetricCard(
+                                        value = "$${String.format(Locale.US, "%,.0f", totalValue)}",
+                                        label = "Total Value",
+                                        isDarkTheme = isDarkTheme
+                                    )
                                 }
                             }
 
 
-                            // 3. Activity Filter Chips Row (Minimal capsule design)
+                            // 3. Activity Filter Chips Row matching Behance Reference ("All Activ.", "Incomin.", "Inboun.", "Out.")
                             item {
                                 Row(
                                     modifier = Modifier
@@ -384,12 +332,12 @@ fun SupplierOrdersScreen(
                                         .horizontalScroll(rememberScrollState()),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    val filterTabsList = listOf("All", "Pending", "Transit", "Done")
+                                    val filterTabsList = listOf("All Activ.", "Incomin.", "Inboun.", "Out.")
                                     filterTabsList.forEachIndexed { index, filterName ->
                                         val isSelected = selectedFilterIndex == index
                                         Surface(
                                             onClick = { selectedFilterIndex = index },
-                                            shape = CircleShape,
+                                            shape = RoundedCornerShape(20.dp),
                                             color = if (isSelected) NawanoPrimary200 else cardBg,
                                             border = if (isSelected) null else BorderStroke(1.dp, cardBorder),
                                             shadowElevation = if (isSelected) 2.dp else 0.dp
@@ -406,7 +354,7 @@ fun SupplierOrdersScreen(
                                 }
                             }
 
-                            // 3. Section Header: Minimal Order Count & Sort Action (No redundant + button)
+                            // 4. Section Header: "Incoming Goods Req (X)" on Left, "View all >" on Right
                             item {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -414,47 +362,62 @@ fun SupplierOrdersScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "${filteredOrders.size} Orders",
-                                        style = MaterialTheme.typography.titleSmall,
+                                        text = "Incoming Goods Req (${filteredOrders.size})",
+                                        style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = textPrimary
                                     )
 
-                                    // Minimal Sort Button
-                                    Surface(
-                                        onClick = { isSortAscending = !isSortAscending },
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = cardBg,
-                                        border = BorderStroke(1.dp, cardBorder)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                            verticalAlignment = Alignment.CenterVertically
+                                        // Minimal Sort Button
+                                        Surface(
+                                            onClick = { isSortAscending = !isSortAscending },
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = cardBg,
+                                            border = BorderStroke(1.dp, cardBorder)
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.SwapVert,
-                                                contentDescription = "Sort",
-                                                tint = NawanoPrimary200,
-                                                modifier = Modifier.size(15.dp)
-                                            )
-                                            Spacer(Modifier.width(4.dp))
-                                            Text(
-                                                text = if (isSortAscending) "Price ↑" else "Recent ↓",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = textPrimary
-                                            )
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.SwapVert,
+                                                    contentDescription = "Sort",
+                                                    tint = NawanoPrimary200,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(Modifier.width(2.dp))
+                                                Text(
+                                                    text = if (isSortAscending) "Price" else "Recent",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = textPrimary
+                                                )
+                                            }
                                         }
+
+                                        Text(
+                                            text = "View all >",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = NawanoPrimary200,
+                                            modifier = Modifier
+                                                .clickable { selectedFilterIndex = 0 }
+                                                .padding(vertical = 4.dp)
+                                        )
                                     }
                                 }
                             }
 
-                            // 4. Orders List Items
+                            // 5. Orders List Items
                             if (filteredOrders.isEmpty()) {
                                 item {
                                     EmptyZeroState(
-                                        title = "No Orders",
-                                        subtitle = "Tap '+' to issue or create a wholesale order.",
+                                        title = "No Incoming Goods",
+                                        subtitle = "There are no incoming goods requests matching this filter.",
                                         icon = Icons.Default.LocalShipping,
                                         isDarkTheme = isDarkTheme
                                     )
@@ -467,6 +430,10 @@ fun SupplierOrdersScreen(
                                         onAccept = {
                                             onConfirmOrder(order.id, null)
                                             Toast.makeText(context, "Order ${order.orderNumber} Accepted!", Toast.LENGTH_SHORT).show()
+                                        },
+                                        onReject = {
+                                            onRejectOrder(order.id, "Rejected by supplier")
+                                            Toast.makeText(context, "Order ${order.orderNumber} Rejected.", Toast.LENGTH_SHORT).show()
                                         },
                                         onSend = {
                                             orderToDispatch = order
@@ -529,15 +496,15 @@ fun SupplierOrdersScreen(
                 }
             }
 
-            // Floating Bottom Navigation Dock with Central Elevated Add FAB
+            // Floating Bottom Navigation Dock with Central Elevated Scanner FAB
             SupplierBottomBar(
                 activeViewTab = activeViewTab,
                 onTabSelected = { activeViewTab = it },
-                onAddClicked = {
-                    when (activeViewTab) {
-                        1 -> showAddCatalogItemDialog = true
-                        else -> showCreateDialog = true
-                    }
+                onScanClicked = {
+                    scannerTarget = SupplierScannerTarget.GENERAL_SCAN
+                },
+                onOpenMenu = {
+                    scope.launch { drawerState.open() }
                 },
                 isDarkTheme = isDarkTheme,
                 modifier = Modifier
@@ -704,5 +671,97 @@ fun SupplierOrdersScreen(
                 Toast.makeText(context, "Updated '${updatedProd.name}'!", Toast.LENGTH_SHORT).show()
             }
         )
+    }
+}
+
+/**
+ * Metric summary card matching the Behance "Supply Chain Mastery" reference mockup.
+ * Displays value ("4 Items", "32 Items", etc.) with a clean label underneath.
+ */
+@Composable
+fun SupplierMetricCard(
+    value: String,
+    label: String,
+    isDarkTheme: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
+    val cardBorder = if (isDarkTheme) NawanoDarkOutline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = cardBg,
+        border = BorderStroke(1.dp, cardBorder),
+        shadowElevation = if (isDarkTheme) 0.dp else 1.dp,
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = value,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = textPrimary
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = textSecondary
+            )
+        }
+    }
+}
+
+@Composable
+fun EmptyZeroState(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    isDarkTheme: Boolean = false
+) {
+    val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
+    val cardBorder = if (isDarkTheme) NawanoDarkOutline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
+
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = cardBg,
+        border = BorderStroke(1.dp, cardBorder),
+        shadowElevation = if (isDarkTheme) 0.dp else 1.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = NawanoPrimary200.copy(alpha = 0.5f),
+                modifier = Modifier.size(48.dp)
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = textPrimary
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = subtitle,
+                fontSize = 12.sp,
+                color = textSecondary
+            )
+        }
     }
 }

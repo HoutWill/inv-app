@@ -21,20 +21,20 @@ import com.example.inventoryapp.ui.dashboard.FloatingNavItem
 import com.example.inventoryapp.ui.theme.*
 
 /**
- * Modern Floating Bottom Navigation Bar for Supplier Portal.
- * Features central elevated quick-scan FloatingScanButton matching Middleman.
- *
- * Tabs:
- * 0: Orders
- * 1: Wholesale Catalog
- * 2: Stats (Analytics & Performance)
- * 3: Settings (Preferences & Profile)
+ * Modern Floating Bottom Navigation Dock for Supplier Portal,
+ * matching Behance "Supply Chain Mastery" reference mockup:
+ * - Home (House icon)
+ * - Items (Inventory/Box icon)
+ * - Center elevated Floating Scanner FAB (Purple gradient with Viewfinder/QR icon)
+ * - Stats (Bar chart icon)
+ * - Menu (Grid icon for Drawer)
  */
 @Composable
 fun SupplierBottomBar(
     activeViewTab: Int,
     onTabSelected: (Int) -> Unit,
-    onAddClicked: () -> Unit,
+    onScanClicked: () -> Unit,
+    onOpenMenu: () -> Unit,
     isDarkTheme: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -60,18 +60,18 @@ fun SupplierBottomBar(
                 horizontalArrangement = Arrangement.SpaceAround,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Tab 0: Orders
+                // Tab 0: Home
                 FloatingNavItem(
-                    title = "Orders",
-                    icon = if (activeViewTab == 0) Icons.Default.Inventory2 else Icons.Outlined.Inventory2,
+                    title = "Home",
+                    icon = if (activeViewTab == 0) Icons.Default.Home else Icons.Outlined.Home,
                     isSelected = activeViewTab == 0,
                     onClick = { onTabSelected(0) }
                 )
 
-                // Tab 1: Catalog
+                // Tab 1: Items
                 FloatingNavItem(
-                    title = "Catalog",
-                    icon = if (activeViewTab == 1) Icons.Default.Category else Icons.Outlined.Category,
+                    title = "Items",
+                    icon = if (activeViewTab == 1) Icons.Default.Inventory2 else Icons.Outlined.Inventory2,
                     isSelected = activeViewTab == 1,
                     onClick = { onTabSelected(1) }
                 )
@@ -79,7 +79,7 @@ fun SupplierBottomBar(
                 // Center placeholder space for the elevated pop-up scan button
                 Spacer(modifier = Modifier.width(52.dp))
 
-                // Tab 2: Stats (Analytics & Performance)
+                // Tab 2: Stats
                 FloatingNavItem(
                     title = "Stats",
                     icon = if (activeViewTab == 2) Icons.Default.BarChart else Icons.Outlined.BarChart,
@@ -87,19 +87,19 @@ fun SupplierBottomBar(
                     onClick = { onTabSelected(2) }
                 )
 
-                // Tab 3: Settings
+                // Tab 3: Menu (Opens Drawer)
                 FloatingNavItem(
-                    title = "Settings",
-                    icon = if (activeViewTab == 3) Icons.Default.Settings else Icons.Outlined.Settings,
+                    title = "Menu",
+                    icon = if (activeViewTab == 3) Icons.Default.GridView else Icons.Outlined.GridView,
                     isSelected = activeViewTab == 3,
-                    onClick = { onTabSelected(3) }
+                    onClick = onOpenMenu
                 )
             }
         }
 
-        // Center Elevated Floating Add Button (Matching Middleman floating button with Nawano Gradient)
+        // Center Elevated Floating Scanner Button (Matching reference Behance mockup)
         Surface(
-            onClick = onAddClicked,
+            onClick = onScanClicked,
             shape = CircleShape,
             color = Color.Transparent,
             tonalElevation = 8.dp,
@@ -124,10 +124,10 @@ fun SupplierBottomBar(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "New Order / Add",
+                    imageVector = Icons.Default.QrCodeScanner,
+                    contentDescription = "Quick Scan Barcode / Waybill",
                     tint = Color.White,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(26.dp)
                 )
             }
         }
