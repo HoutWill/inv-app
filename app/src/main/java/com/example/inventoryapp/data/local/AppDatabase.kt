@@ -194,39 +194,80 @@ abstract class AppDatabase : RoomDatabase() {
             try {
                 val supplierDao = database.supplierDao()
                 val orderDao = database.purchaseOrderDao()
+                val transactionDao = database.stockTransactionDao()
 
-                // Purge any legacy mock orders so only real user data remains
-                orderDao.deleteOrder("po_nwnus303832049831")
-                orderDao.deleteOrder("po_lobster_0604")
+                // Remove old test data so middleman & supplier start completely clean
+                orderDao.clearAllOrders()
+                orderDao.clearAllOrderItems()
+                transactionDao.clearAllTransactions()
 
-                // Check if Too Frozen Food supplier exists
-                var supplier = supplierDao.getSupplierByEmail("supplier@nawano.com")
-                if (supplier == null) {
-                    supplier = SupplierEntity(
-                        id = "sup_too_frozen",
-                        name = "Too Frozen Food",
-                        contactName = "Leslie Alexander",
+                // Purge legacy mock supplier records if any
+                val legacyTooFrozen = supplierDao.getSupplierById("sup_too_frozen")
+                if (legacyTooFrozen != null) supplierDao.deleteSupplier(legacyTooFrozen)
+                val legacyApex = supplierDao.getSupplierById("sup_apex_dist")
+                if (legacyApex != null) supplierDao.deleteSupplier(legacyApex)
+
+                // The 4 canonical partner suppliers matching the Behance design & portal accounts
+                val canonicalSuppliers = listOf(
+                    SupplierEntity(
+                        id = "sup_pacific_seafood",
+                        name = "Pacific Seafood Supply",
+                        contactName = "Brandon Vaccaro",
                         phone = "+1 (555) 234-8901",
                         email = "supplier@nawano.com",
+                        address = "1550 Bedok North Ave 4, #04 30, Singapore",
+                        note = "Cold-chain premium seafood, frozen lobster & salmon",
+                        isActive = true
+                    ),
+                    SupplierEntity(
+                        id = "sup_foodie",
+                        name = "Foodie Supplier",
+                        contactName = "Brandon Vaccaro",
+                        phone = "+1 (555) 345-6789",
+                        email = "foodie@nawano.com",
                         address = "450 Harbor Way, Bay 4, Toronto",
-                        note = "Cold-chain premium seafood and frozen goods distributor",
+                        note = "Specialty imported seafood, meats & gourmet ingredients",
+                        isActive = true
+                    ),
+                    SupplierEntity(
+                        id = "sup_vegan",
+                        name = "Vegan Community",
+                        contactName = "Jesse Henry",
+                        phone = "+1 (555) 456-7890",
+                        email = "vegan@nawano.com",
+                        address = "01-33H, The Centrepoint, 176 Orchard Rd",
+                        note = "Organic produce, fresh veggies & plant-based stock",
+                        isActive = true
+                    ),
+                    SupplierEntity(
+                        id = "sup_apex",
+                        name = "Apex Supply & Hardware Co.",
+                        contactName = "Marcus Vance",
+                        phone = "+1 (555) 987-6543",
+                        email = "marcus@apexsupply.com",
+                        address = "1200 Industrial Parkway, Chicago",
+                        note = "Primary hardware, industrial boxes & freight packaging",
                         isActive = true
                     )
-                    supplierDao.insertSupplier(supplier)
+                )
 
-                    // Also add a second supplier
-                    supplierDao.insertSupplier(
-                        SupplierEntity(
-                            id = "sup_apex_dist",
-                            name = "Apex Supply & Hardware Co.",
-                            contactName = "Marcus Vance",
-                            phone = "+1 (555) 987-6543",
-                            email = "marcus@apexsupply.com",
-                            address = "1200 Industrial Parkway, Chicago",
-                            note = "Primary hardware, cables, and packaging distributor",
-                            isActive = true
+                for (s in canonicalSuppliers) {
+                    val existing = supplierDao.getSupplierById(s.id) ?: supplierDao.getSupplierByEmail(s.email)
+                    if (existing == null) {
+                        supplierDao.insertSupplier(s)
+                    } else {
+                        supplierDao.updateSupplier(
+                            existing.copy(
+                                name = s.name,
+                                contactName = s.contactName,
+                                phone = s.phone,
+                                email = s.email,
+                                address = s.address,
+                                note = s.note,
+                                isActive = true
+                            )
                         )
-                    )
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("AppDatabase", "Error seeding default suppliers", e)

@@ -58,6 +58,7 @@ import com.example.inventoryapp.data.remote.OnlineProductData
 import com.example.inventoryapp.data.repository.OrderWithItems
 import com.example.inventoryapp.ui.scanner.BarcodeScannerScreen
 import com.example.inventoryapp.ui.supplier.NewPurchaseOrderDialog
+import com.example.inventoryapp.ui.supplier.SupplierAddEditDialog
 import com.example.inventoryapp.ui.supplier.SuppliersManagementScreen
 import com.example.inventoryapp.ui.theme.*
 import kotlinx.coroutines.delay
@@ -100,6 +101,7 @@ fun InventoryDashboardScreen(
     var isUpcomingSheetOpen by remember { mutableStateOf(false) }
     var viewingOrderWithItems by remember { mutableStateOf<OrderWithItems?>(null) }
     var showNewPoDialog by remember { mutableStateOf(false) }
+    var showAddSupplierDialog by remember { mutableStateOf(false) }
     var selectedSupplierForPo by remember { mutableStateOf<SupplierEntity?>(null) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var drawerDestination by remember { mutableStateOf<DrawerDestination?>(null) }
@@ -301,6 +303,14 @@ fun InventoryDashboardScreen(
                                 onAddProductClicked = {
                                     addProductDraft = AddProductDraft()
                                     isAddProductOpen = true
+                                },
+                                onAddSupplier = { showAddSupplierDialog = true },
+                                onRestockSupplier = { supplier ->
+                                    selectedSupplierForPo = supplier
+                                    showNewPoDialog = true
+                                },
+                                onViewAllSuppliers = {
+                                    drawerDestination = DrawerDestination.SUPPLIERS
                                 },
                                 onNavigateToItems = { activeTab = 1 },
                                 onNavigateToLowStock = {
@@ -661,6 +671,22 @@ fun InventoryDashboardScreen(
                     }
                 )
             }
+
+            // Quick Add Supplier Dialog
+            if (showAddSupplierDialog) {
+                SupplierAddEditDialog(
+                    supplier = null,
+                    isDarkTheme = isDarkTheme,
+                    onDismiss = { showAddSupplierDialog = false },
+                    onConfirm = { newSupplier ->
+                        viewModel.saveSupplier(newSupplier)
+                        showAddSupplierDialog = false
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Supplier '${newSupplier.name}' added successfully!")
+                        }
+                    }
+                )
+            }
         }
     }
     }
@@ -686,6 +712,9 @@ private fun DashboardOverviewTab(
     onClearScannedSku: () -> Unit,
     onImportOnlineProduct: (OnlineProductData) -> Unit,
     onRegisterNewProduct: (String, OnlineProductData?) -> Unit,
+    onAddSupplier: () -> Unit = {},
+    onRestockSupplier: (SupplierEntity) -> Unit = {},
+    onViewAllSuppliers: () -> Unit = {},
     onOrderClick: (String) -> Unit = {},
     onReceiveOrder: (String) -> Unit = {}
 ) {
@@ -730,7 +759,18 @@ private fun DashboardOverviewTab(
             )
         }
 
-        // 3. Activity Filter Chips Row (All Activity, Incoming, Inbound, Outbound)
+        // 3. Suppliers & Restock Section (Existing Suppliers & Direct Restock Action)
+        item {
+            SuppliersRestockSection(
+                suppliers = uiState.suppliers.filter { it.isActive },
+                onAddSupplier = onAddSupplier,
+                onRestockSupplier = onRestockSupplier,
+                onViewAllSuppliers = onViewAllSuppliers,
+                isDarkTheme = isDarkTheme
+            )
+        }
+
+        // 4. Activity Filter Chips Row (All Activity, Incoming, Inbound, Outbound)
         item {
             NawanoActivityFilterChips(
                 selectedFilter = selectedActivityFilter,
@@ -739,7 +779,7 @@ private fun DashboardOverviewTab(
             )
         }
 
-        // 4. Incoming Goods Req Section (from Behance slide_2.png)
+        // 5. Incoming Goods Req Section (from Behance slide_2.png)
         item {
             NawanoIncomingGoodsSection(
                 selectedFilter = selectedActivityFilter,
