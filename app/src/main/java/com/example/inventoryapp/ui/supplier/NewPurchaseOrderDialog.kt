@@ -105,9 +105,9 @@ fun NewPurchaseOrderDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "New Inbound Purchase Order",
+                text = "Restock",
                 fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
+                fontSize = 17.sp,
                 color = textPrimary
             )
         },
@@ -116,10 +116,10 @@ fun NewPurchaseOrderDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // Supplier selector
-                Text(text = "Target Supplier", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textSecondary)
+                Text(text = "Supplier", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = textSecondary)
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     suppliers.forEach { s ->
                         val isSelected = selectedSupplier?.id == s.id
@@ -154,7 +154,7 @@ fun NewPurchaseOrderDialog(
                                     color = if (isSelected) NawanoPrimary200 else textPrimary
                                 )
                                 if (s.contactName.isNotBlank()) {
-                                    Text(text = "PIC: ${s.contactName}", fontSize = 11.sp, color = textSecondary)
+                                    Text(text = s.contactName, fontSize = 10.sp, color = textSecondary)
                                 }
                             }
                         }
@@ -164,7 +164,7 @@ fun NewPurchaseOrderDialog(
                 OutlinedTextField(
                     value = orderTitle,
                     onValueChange = { orderTitle = it },
-                    label = { Text("Order Title / Headline") },
+                    label = { Text("Title") },
                     placeholder = { Text("0603 - Items crab in from Toronto") },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -176,13 +176,13 @@ fun NewPurchaseOrderDialog(
                     OutlinedTextField(
                         value = picSender,
                         onValueChange = { picSender = it },
-                        label = { Text("PIC Sender") },
+                        label = { Text("Sender") },
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
                         value = estArrival,
                         onValueChange = { estArrival = it },
-                        label = { Text("Est. Arrival") },
+                        label = { Text("Arrival") },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -191,8 +191,8 @@ fun NewPurchaseOrderDialog(
 
                 // Order items
                 Text(
-                    text = "Shipment Items (${draftItems.size})",
-                    fontSize = 13.sp,
+                    text = "Items (${draftItems.size})",
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = textPrimary
                 )
@@ -243,7 +243,7 @@ fun NewPurchaseOrderDialog(
                         modifier = Modifier.padding(10.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(text = "Add Item to PO", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = NawanoPrimary200)
+                        Text(text = "Item", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = NawanoPrimary200)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             OutlinedTextField(
                                 value = newSku,
@@ -309,7 +309,7 @@ fun NewPurchaseOrderDialog(
                 OutlinedTextField(
                     value = ownerNote,
                     onValueChange = { ownerNote = it },
-                    label = { Text("Internal Instructions / Note") },
+                    label = { Text("Note") },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -334,7 +334,7 @@ fun NewPurchaseOrderDialog(
                 enabled = selectedSupplier != null && draftItems.isNotEmpty(),
                 colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200)
             ) {
-                Text("Submit Purchase Order")
+                Text("Submit")
             }
         },
         dismissButton = {

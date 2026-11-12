@@ -24,8 +24,8 @@ import com.example.inventoryapp.data.local.entity.SupplierEntity
 import com.example.inventoryapp.ui.theme.*
 
 /**
- * Prominent "Suppliers & Restock" Section on Middleman Home Dashboard.
- * Displays existing partner suppliers with 1-tap Restock (PO) and Add Supplier actions.
+ * Minimal "Suppliers" Section on Middleman Home Dashboard.
+ * Strict minimalist design: 1-word labels, tight margins, and sleek compact padding.
  */
 @Composable
 fun SuppliersRestockSection(
@@ -39,14 +39,13 @@ fun SuppliersRestockSection(
     val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
     val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
     val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
-    val cardBorder = if (isDarkTheme) NawanoDarkOutline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-    val dividerColor = if (isDarkTheme) NawanoDarkOutline.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+    val cardBorder = if (isDarkTheme) NawanoDarkOutline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // Section Header
+        // Minimal 1-Word Section Header
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -54,65 +53,65 @@ fun SuppliersRestockSection(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = NawanoPrimary200.copy(alpha = 0.15f),
-                    modifier = Modifier.size(28.dp)
+                    shape = RoundedCornerShape(6.dp),
+                    color = NawanoPrimary200.copy(alpha = 0.12f),
+                    modifier = Modifier.size(22.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Default.Storefront,
                             contentDescription = null,
                             tint = NawanoPrimary200,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(13.dp)
                         )
                     }
                 }
 
                 Text(
-                    text = "Suppliers & Restock",
-                    style = MaterialTheme.typography.titleMedium,
+                    text = "Suppliers",
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = textPrimary
                 )
 
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = NawanoPrimary200.copy(alpha = 0.12f)
+                    shape = RoundedCornerShape(10.dp),
+                    color = NawanoPrimary200.copy(alpha = 0.10f)
                 ) {
                     Text(
-                        text = "${suppliers.size} Partners",
+                        text = "${suppliers.size}",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = NawanoPrimary200,
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
                     )
                 }
             }
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Quick Add Supplier Button
+                // Minimal 1-Word Add Action
                 Surface(
                     onClick = onAddSupplier,
-                    shape = RoundedCornerShape(10.dp),
-                    color = NawanoPrimary200.copy(alpha = 0.12f)
+                    shape = RoundedCornerShape(8.dp),
+                    color = NawanoPrimary200.copy(alpha = 0.10f)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "Add Supplier",
+                            contentDescription = "Add",
                             tint = NawanoPrimary200,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(12.dp)
                         )
-                        Spacer(Modifier.width(3.dp))
+                        Spacer(Modifier.width(2.dp))
                         Text(
                             text = "Add",
                             fontSize = 11.sp,
@@ -122,24 +121,25 @@ fun SuppliersRestockSection(
                     }
                 }
 
+                // Minimal 1-Word Link
                 Text(
-                    text = "View all >",
-                    fontSize = 12.sp,
+                    text = "All >",
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = NawanoPrimary200,
                     modifier = Modifier
                         .clickable { onViewAllSuppliers() }
-                        .padding(vertical = 4.dp)
+                        .padding(horizontal = 2.dp, vertical = 2.dp)
                 )
             }
         }
 
-        // Horizontal Row of Partner Suppliers
+        // Horizontal Row of Compact Partner Cards
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             suppliers.forEach { supplier ->
                 val initials = supplier.name.split(" ")
@@ -149,27 +149,29 @@ fun SuppliersRestockSection(
                     .ifBlank { "SU" }
 
                 Surface(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(14.dp),
                     color = cardBg,
                     border = BorderStroke(1.dp, cardBorder),
-                    shadowElevation = if (isDarkTheme) 0.dp else 1.dp,
-                    modifier = Modifier.width(200.dp)
+                    shadowElevation = if (isDarkTheme) 0.dp else 0.5.dp,
+                    modifier = Modifier.width(148.dp)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 8.dp)
+                    ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(7.dp)
                         ) {
                             Surface(
                                 shape = CircleShape,
-                                color = NawanoPrimary200.copy(alpha = 0.14f),
-                                border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.35f)),
-                                modifier = Modifier.size(36.dp)
+                                color = NawanoPrimary200.copy(alpha = 0.12f),
+                                border = BorderStroke(0.5.dp, NawanoPrimary200.copy(alpha = 0.3f)),
+                                modifier = Modifier.size(28.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Text(
                                         text = initials,
-                                        fontSize = 12.sp,
+                                        fontSize = 10.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = NawanoPrimary200
                                     )
@@ -179,14 +181,14 @@ fun SuppliersRestockSection(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = supplier.name,
-                                    fontSize = 13.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = textPrimary,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = if (supplier.contactName.isNotBlank()) "PIC: ${supplier.contactName}" else "Wholesale Partner",
+                                    text = if (supplier.contactName.isNotBlank()) supplier.contactName else "Partner",
                                     fontSize = 10.sp,
                                     color = textSecondary,
                                     maxLines = 1,
@@ -195,41 +197,39 @@ fun SuppliersRestockSection(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
 
                         Text(
-                            text = if (supplier.note.isNotBlank()) supplier.note else if (supplier.address.isNotBlank()) supplier.address else "Wholesale goods distributor",
-                            fontSize = 11.sp,
+                            text = if (supplier.note.isNotBlank()) supplier.note else if (supplier.address.isNotBlank()) supplier.address else "Wholesale goods",
+                            fontSize = 10.sp,
                             color = textSecondary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
 
-                        Spacer(modifier = Modifier.height(10.dp))
-                        HorizontalDivider(color = dividerColor)
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
 
-                        // 1-Tap Restock Action Button
+                        // Minimal 1-Word Restock Button
                         Button(
                             onClick = { onRestockSupplier(supplier) },
                             colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200),
-                            shape = RoundedCornerShape(12.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(34.dp)
+                                .height(28.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.LocalShipping,
                                     contentDescription = null,
                                     tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(12.dp)
                                 )
-                                Spacer(Modifier.width(5.dp))
+                                Spacer(Modifier.width(4.dp))
                                 Text(
                                     text = "Restock",
-                                    fontSize = 12.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
@@ -239,47 +239,47 @@ fun SuppliersRestockSection(
                 }
             }
 
-            // End-of-row "Add Partner Supplier" Quick Card
+            // Minimal End-of-row "Add Partner" Quick Card
             Surface(
                 onClick = onAddSupplier,
-                shape = RoundedCornerShape(18.dp),
-                color = cardBg.copy(alpha = 0.6f),
-                border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.35f)),
+                shape = RoundedCornerShape(14.dp),
+                color = cardBg.copy(alpha = 0.5f),
+                border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.25f)),
                 modifier = Modifier
-                    .width(130.dp)
-                    .height(148.dp)
+                    .width(96.dp)
+                    .height(106.dp)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(12.dp),
+                        .padding(6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
                     Surface(
                         shape = CircleShape,
-                        color = NawanoPrimary200.copy(alpha = 0.15f),
-                        modifier = Modifier.size(36.dp)
+                        color = NawanoPrimary200.copy(alpha = 0.12f),
+                        modifier = Modifier.size(28.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.Add,
-                                contentDescription = "Add Supplier",
+                                contentDescription = "Add",
                                 tint = NawanoPrimary200,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(5.dp))
                     Text(
-                        text = "Add Supplier",
-                        fontSize = 12.sp,
+                        text = "Add",
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = NawanoPrimary200
                     )
                     Text(
-                        text = "New Partner",
-                        fontSize = 10.sp,
+                        text = "Partner",
+                        fontSize = 9.sp,
                         color = textSecondary
                     )
                 }

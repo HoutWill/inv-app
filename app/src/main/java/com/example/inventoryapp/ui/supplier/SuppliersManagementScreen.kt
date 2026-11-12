@@ -375,9 +375,9 @@ fun SupplierAddEditDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = if (supplier == null) "Add New Supplier" else "Edit Supplier",
+                text = "Supplier",
                 fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
+                fontSize = 17.sp,
                 color = textPrimary
             )
         },
@@ -386,12 +386,12 @@ fun SupplierAddEditDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Company / Supplier Name *") },
+                    label = { Text("Company") },
                     singleLine = true,
                     colors = tfColors,
                     modifier = Modifier.fillMaxWidth()
@@ -400,7 +400,7 @@ fun SupplierAddEditDialog(
                 OutlinedTextField(
                     value = contactName,
                     onValueChange = { contactName = it },
-                    label = { Text("Contact Person / PIC") },
+                    label = { Text("Contact") },
                     singleLine = true,
                     colors = tfColors,
                     modifier = Modifier.fillMaxWidth()
@@ -409,7 +409,7 @@ fun SupplierAddEditDialog(
                 OutlinedTextField(
                     value = phone,
                     onValueChange = { phone = it },
-                    label = { Text("Phone Number") },
+                    label = { Text("Phone") },
                     singleLine = true,
                     colors = tfColors,
                     modifier = Modifier.fillMaxWidth()
@@ -418,7 +418,7 @@ fun SupplierAddEditDialog(
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it },
-                    label = { Text("Email (used for supplier login)") },
+                    label = { Text("Email") },
                     singleLine = true,
                     colors = tfColors,
                     modifier = Modifier.fillMaxWidth()
@@ -427,7 +427,7 @@ fun SupplierAddEditDialog(
                 OutlinedTextField(
                     value = address,
                     onValueChange = { address = it },
-                    label = { Text("Warehouse / Factory Address") },
+                    label = { Text("Address") },
                     colors = tfColors,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -435,7 +435,7 @@ fun SupplierAddEditDialog(
                 OutlinedTextField(
                     value = note,
                     onValueChange = { note = it },
-                    label = { Text("Notes / Goods categories") },
+                    label = { Text("Category") },
                     colors = tfColors,
                     modifier = Modifier.fillMaxWidth()
                 )
