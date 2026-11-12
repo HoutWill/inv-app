@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.ui.theme.*
+import com.example.inventoryapp.util.ProductThumbnail
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
@@ -268,27 +269,14 @@ fun ProductDetailsBottomSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    if (!editImageUri.isNullOrBlank()) {
-                        AsyncImage(
-                            model = editImageUri,
-                            contentDescription = "Product Image",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .border(1.dp, NawanoPrimary200.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
-                        )
-                    } else {
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.size(72.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
+                    ProductThumbnail(
+                        sku = product.sku,
+                        name = editName,
+                        category = editCategory,
+                        imageUri = editImageUri,
+                        modifier = Modifier.size(72.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    )
 
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -535,33 +523,11 @@ fun ProductDetailsBottomSheet(
                 ) {
                     // High-Res Thumbnail with Quick Camera Button
                     Box(modifier = Modifier.size(88.dp)) {
-                        if (!product.imageUri.isNullOrBlank()) {
-                            AsyncImage(
-                                model = product.imageUri,
-                                contentDescription = product.name,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(RoundedCornerShape(18.dp))
-                                    .border(1.5.dp, NawanoPrimary200.copy(alpha = 0.4f), RoundedCornerShape(18.dp))
-                            )
-                        } else {
-                            Surface(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = RoundedCornerShape(18.dp),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = getCategoryIcon(product.category),
-                                        contentDescription = null,
-                                        tint = NawanoPrimary200,
-                                        modifier = Modifier.size(40.dp)
-                                    )
-                                }
-                            }
-                        }
+                        ProductThumbnail(
+                            product = product,
+                            modifier = Modifier.fillMaxSize(),
+                            shape = RoundedCornerShape(18.dp)
+                        )
 
                         // Floating quick camera overlay button
                         Surface(

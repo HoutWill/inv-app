@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.ui.theme.*
+import com.example.inventoryapp.util.ProductThumbnail
 import java.util.Locale
 
 /**
@@ -236,21 +237,12 @@ fun SupplierCatalogProductCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Category Icon Thumbnail Box
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = NawanoPrimary200.copy(alpha = 0.12f),
-                    modifier = Modifier.size(46.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = categoryIcon,
-                            contentDescription = product.category,
-                            tint = NawanoPrimary200,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
+                // Product Thumbnail Box
+                ProductThumbnail(
+                    product = product,
+                    modifier = Modifier.size(46.dp),
+                    shape = RoundedCornerShape(14.dp)
+                )
 
                 Spacer(modifier = Modifier.width(12.dp))
 

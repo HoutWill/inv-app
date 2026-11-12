@@ -58,6 +58,7 @@ import com.example.inventoryapp.data.remote.OnlineProductData
 import com.example.inventoryapp.data.repository.OrderWithItems
 import com.example.inventoryapp.ui.scanner.BarcodeScannerScreen
 import com.example.inventoryapp.ui.supplier.NewPurchaseOrderDialog
+import com.example.inventoryapp.util.ProductThumbnail
 import com.example.inventoryapp.ui.supplier.SupplierAddEditDialog
 import com.example.inventoryapp.ui.supplier.SuppliersManagementScreen
 import com.example.inventoryapp.ui.theme.*
@@ -2229,33 +2230,11 @@ private fun ScannedSkuBanner(
                         .then(if (onViewProduct != null) Modifier.clickable { onViewProduct() } else Modifier),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (!matchedItem.imageUri.isNullOrBlank()) {
-                        AsyncImage(
-                            model = matchedItem.imageUri,
-                            contentDescription = matchedItem.name,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(52.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                        )
-                    } else {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
-                            modifier = Modifier.size(52.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = getCategoryIcon(matchedItem.category),
-                                    contentDescription = null,
-                                    tint = NawanoPrimary200,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
-                    }
+                    ProductThumbnail(
+                        product = matchedItem,
+                        modifier = Modifier.size(52.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    )
 
                     Spacer(modifier = Modifier.width(12.dp))
 
@@ -2575,33 +2554,10 @@ private fun InventoryItemCard(
                 verticalAlignment = Alignment.Top
             ) {
                 // Product Thumbnail (54dp with rounded corners)
-                if (!item.imageUri.isNullOrBlank()) {
-                    AsyncImage(
-                        model = item.imageUri,
-                        contentDescription = item.name,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(54.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
-                    )
-                } else {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
-                        modifier = Modifier.size(54.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = categoryIcon,
-                                contentDescription = null,
-                                tint = NawanoPrimary200,
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
-                    }
-                }
+                ProductThumbnail(
+                    product = item,
+                    modifier = Modifier.size(54.dp)
+                )
 
                 Spacer(modifier = Modifier.width(12.dp))
 

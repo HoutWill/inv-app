@@ -318,7 +318,8 @@ abstract class AppDatabase : RoomDatabase() {
                         unit = "Can",
                         supplierId = "sup_pacific_seafood",
                         reorderLevel = 15,
-                        reorderQty = 50
+                        reorderQty = 50,
+                        imageUri = "android.resource://com.example.inventoryapp/drawable/img_coca_cola"
                     ),
                     ProductEntity(
                         id = "prod_red_bull_250",
@@ -332,7 +333,8 @@ abstract class AppDatabase : RoomDatabase() {
                         unit = "Can",
                         supplierId = "sup_pacific_seafood",
                         reorderLevel = 10,
-                        reorderQty = 40
+                        reorderQty = 40,
+                        imageUri = "android.resource://com.example.inventoryapp/drawable/img_red_bull"
                     ),
                     ProductEntity(
                         id = "prod_nutella_400",
@@ -346,7 +348,8 @@ abstract class AppDatabase : RoomDatabase() {
                         unit = "Jar",
                         supplierId = "sup_foodie",
                         reorderLevel = 8,
-                        reorderQty = 24
+                        reorderQty = 24,
+                        imageUri = "android.resource://com.example.inventoryapp/drawable/img_nutella"
                     ),
                     ProductEntity(
                         id = "prod_barilla_pesto",
@@ -360,7 +363,8 @@ abstract class AppDatabase : RoomDatabase() {
                         unit = "Jar",
                         supplierId = "sup_foodie",
                         reorderLevel = 8,
-                        reorderQty = 30
+                        reorderQty = 30,
+                        imageUri = "android.resource://com.example.inventoryapp/drawable/img_barilla_pesto"
                     ),
                     ProductEntity(
                         id = "prod_heinz_ketchup",
@@ -374,7 +378,8 @@ abstract class AppDatabase : RoomDatabase() {
                         unit = "Bottle",
                         supplierId = "sup_vegan",
                         reorderLevel = 10,
-                        reorderQty = 20
+                        reorderQty = 20,
+                        imageUri = "android.resource://com.example.inventoryapp/drawable/img_heinz_ketchup"
                     ),
                     ProductEntity(
                         id = "prod_oreo_original",
@@ -388,7 +393,8 @@ abstract class AppDatabase : RoomDatabase() {
                         unit = "Pack",
                         supplierId = "sup_apex",
                         reorderLevel = 15,
-                        reorderQty = 40
+                        reorderQty = 40,
+                        imageUri = "android.resource://com.example.inventoryapp/drawable/img_oreo"
                     ),
                     // Pacific Seafood Supply
                     ProductEntity(
@@ -401,7 +407,8 @@ abstract class AppDatabase : RoomDatabase() {
                         quantity = 25,
                         unit = "Box",
                         supplierId = "sup_pacific_seafood",
-                        reorderQty = 15
+                        reorderQty = 15,
+                        imageUri = "android.resource://com.example.inventoryapp/drawable/img_king_crab"
                     ),
                     ProductEntity(
                         id = "prod_slm_0201",
@@ -413,7 +420,21 @@ abstract class AppDatabase : RoomDatabase() {
                         quantity = 40,
                         unit = "Kg",
                         supplierId = "sup_pacific_seafood",
-                        reorderQty = 20
+                        reorderQty = 20,
+                        imageUri = "android.resource://com.example.inventoryapp/drawable/img_atlantic_salmon"
+                    ),
+                    ProductEntity(
+                        id = "prod_lob_0402",
+                        sku = "LOB-0402",
+                        name = "Boston Live Lobster (1.5 lb)",
+                        category = "Seafood",
+                        costPrice = 28.00,
+                        sellingPrice = 39.50,
+                        quantity = 30,
+                        unit = "Pcs",
+                        supplierId = "sup_pacific_seafood",
+                        reorderQty = 15,
+                        imageUri = "android.resource://com.example.inventoryapp/drawable/img_boston_lobster"
                     ),
                     // Foodie Supplier
                     ProductEntity(
@@ -426,7 +447,8 @@ abstract class AppDatabase : RoomDatabase() {
                         quantity = 15,
                         unit = "Kg",
                         supplierId = "sup_foodie",
-                        reorderQty = 10
+                        reorderQty = 10,
+                        imageUri = "android.resource://com.example.inventoryapp/drawable/img_wagyu_ribeye"
                     ),
                     // Vegan Community
                     ProductEntity(
@@ -439,7 +461,8 @@ abstract class AppDatabase : RoomDatabase() {
                         quantity = 50,
                         unit = "Pack",
                         supplierId = "sup_vegan",
-                        reorderQty = 25
+                        reorderQty = 25,
+                        imageUri = "android.resource://com.example.inventoryapp/drawable/img_organic_tofu"
                     ),
                     // Apex Supply & Hardware Co.
                     ProductEntity(
@@ -452,7 +475,8 @@ abstract class AppDatabase : RoomDatabase() {
                         quantity = 120,
                         unit = "Pcs",
                         supplierId = "sup_apex",
-                        reorderQty = 50
+                        reorderQty = 50,
+                        imageUri = "android.resource://com.example.inventoryapp/drawable/img_carton_box"
                     )
                 )
 
@@ -460,7 +484,7 @@ abstract class AppDatabase : RoomDatabase() {
                     val existing = productDao.getProductBySku(p.sku)
                     if (existing == null) {
                         productDao.insertProduct(p)
-                    } else if (existing.supplierId != p.supplierId || existing.name != p.name) {
+                    } else if (existing.supplierId != p.supplierId || existing.name != p.name || existing.imageUri.isNullOrBlank()) {
                         productDao.updateProduct(
                             existing.copy(
                                 name = p.name,
@@ -469,7 +493,8 @@ abstract class AppDatabase : RoomDatabase() {
                                 costPrice = p.costPrice,
                                 sellingPrice = p.sellingPrice,
                                 unit = p.unit,
-                                reorderQty = p.reorderQty
+                                reorderQty = p.reorderQty,
+                                imageUri = p.imageUri ?: existing.imageUri
                             )
                         )
                     }

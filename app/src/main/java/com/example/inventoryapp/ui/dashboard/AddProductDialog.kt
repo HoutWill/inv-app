@@ -34,6 +34,7 @@ import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.data.local.entity.SupplierEntity
 import com.example.inventoryapp.data.remote.BarcodeLookupService
 import com.example.inventoryapp.ui.theme.*
+import com.example.inventoryapp.util.ProductImageHelper
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
@@ -500,6 +501,26 @@ fun AddProductDialog(
                                     Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(13.dp), tint = NawanoPrimary200)
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text("Gallery", style = MaterialTheme.typography.labelSmall, color = NawanoPrimary200, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            Surface(
+                                onClick = {
+                                    val auto = ProductImageHelper.getAutoMatchedResourceUri(sku, name, category)
+                                    if (auto != null) {
+                                        imageUri = auto
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, NawanoPrimary100.copy(alpha = 0.5f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(13.dp), tint = NawanoPrimary200)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Auto", style = MaterialTheme.typography.labelSmall, color = NawanoPrimary200, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
