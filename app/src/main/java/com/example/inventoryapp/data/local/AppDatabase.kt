@@ -269,6 +269,168 @@ abstract class AppDatabase : RoomDatabase() {
                         )
                     }
                 }
+
+                // Seed catalog products for each canonical partner supplier
+                val productDao = database.productDao()
+                val partnerProducts = listOf(
+                    // Pacific Seafood Supply
+                    ProductEntity(
+                        id = "prod_crb_0603",
+                        sku = "CRB-0603",
+                        name = "King Crab Cluster (Toronto Pack)",
+                        category = "Seafood",
+                        costPrice = 35.00,
+                        sellingPrice = 48.00,
+                        quantity = 25,
+                        unit = "Box",
+                        supplierId = "sup_pacific_seafood",
+                        reorderQty = 15
+                    ),
+                    ProductEntity(
+                        id = "prod_slm_0201",
+                        sku = "SLM-0201",
+                        name = "Atlantic Salmon Fillet (Fresh Cut)",
+                        category = "Seafood",
+                        costPrice = 22.50,
+                        sellingPrice = 32.00,
+                        quantity = 40,
+                        unit = "Kg",
+                        supplierId = "sup_pacific_seafood",
+                        reorderQty = 20
+                    ),
+                    ProductEntity(
+                        id = "prod_lob_0402",
+                        sku = "LOB-0402",
+                        name = "Boston Live Lobster (1.5 lb)",
+                        category = "Seafood",
+                        costPrice = 48.00,
+                        sellingPrice = 65.00,
+                        quantity = 18,
+                        unit = "Pcs",
+                        supplierId = "sup_pacific_seafood",
+                        reorderQty = 10
+                    ),
+                    // Foodie Supplier
+                    ProductEntity(
+                        id = "prod_wgy_0801",
+                        sku = "WGY-0801",
+                        name = "A5 Japanese Wagyu Ribeye",
+                        category = "Meats",
+                        costPrice = 85.00,
+                        sellingPrice = 120.00,
+                        quantity = 15,
+                        unit = "Kg",
+                        supplierId = "sup_foodie",
+                        reorderQty = 10
+                    ),
+                    ProductEntity(
+                        id = "prod_trf_0305",
+                        sku = "TRF-0305",
+                        name = "Black Truffle Olive Oil (250ml)",
+                        category = "Gourmet",
+                        costPrice = 28.00,
+                        sellingPrice = 39.50,
+                        quantity = 30,
+                        unit = "Bottle",
+                        supplierId = "sup_foodie",
+                        reorderQty = 12
+                    ),
+                    ProductEntity(
+                        id = "prod_cvr_0104",
+                        sku = "CVR-0104",
+                        name = "Imperial Ossetra Caviar (50g)",
+                        category = "Gourmet",
+                        costPrice = 110.00,
+                        sellingPrice = 165.00,
+                        quantity = 8,
+                        unit = "Tin",
+                        supplierId = "sup_foodie",
+                        reorderQty = 5
+                    ),
+                    // Vegan Community
+                    ProductEntity(
+                        id = "prod_tofu_0501",
+                        sku = "TOFU-0501",
+                        name = "Organic Silken Tofu (Twin Pack)",
+                        category = "Produce",
+                        costPrice = 4.50,
+                        sellingPrice = 6.80,
+                        quantity = 50,
+                        unit = "Pack",
+                        supplierId = "sup_vegan",
+                        reorderQty = 25
+                    ),
+                    ProductEntity(
+                        id = "prod_oat_0702",
+                        sku = "OAT-0702",
+                        name = "Barista Blend Oat Milk (1L)",
+                        category = "Dairy-Free",
+                        costPrice = 5.20,
+                        sellingPrice = 7.50,
+                        quantity = 60,
+                        unit = "Carton",
+                        supplierId = "sup_vegan",
+                        reorderQty = 30
+                    ),
+                    ProductEntity(
+                        id = "prod_mush_0903",
+                        sku = "MUSH-0903",
+                        name = "Wild Forest Shiitake Mushrooms",
+                        category = "Produce",
+                        costPrice = 8.00,
+                        sellingPrice = 12.00,
+                        quantity = 35,
+                        unit = "Pack",
+                        supplierId = "sup_vegan",
+                        reorderQty = 15
+                    ),
+                    // Apex Supply & Hardware Co.
+                    ProductEntity(
+                        id = "prod_box_1001",
+                        sku = "BOX-1001",
+                        name = "Heavy Duty Corrugated Carton (Large)",
+                        category = "Packaging",
+                        costPrice = 3.50,
+                        sellingPrice = 5.50,
+                        quantity = 120,
+                        unit = "Pcs",
+                        supplierId = "sup_apex",
+                        reorderQty = 50
+                    ),
+                    ProductEntity(
+                        id = "prod_tpe_2002",
+                        sku = "TPE-2002",
+                        name = "Industrial Reinforced Packing Tape",
+                        category = "Packaging",
+                        costPrice = 6.00,
+                        sellingPrice = 9.00,
+                        quantity = 80,
+                        unit = "Roll",
+                        supplierId = "sup_apex",
+                        reorderQty = 40
+                    ),
+                    ProductEntity(
+                        id = "prod_thrm_3003",
+                        sku = "THRM-3003",
+                        name = "Cold Chain Thermal Insulated Liner",
+                        category = "Packaging",
+                        costPrice = 12.50,
+                        sellingPrice = 18.00,
+                        quantity = 45,
+                        unit = "Pcs",
+                        supplierId = "sup_apex",
+                        reorderQty = 20
+                    )
+                )
+
+                for (p in partnerProducts) {
+                    val existing = productDao.getProductBySku(p.sku)
+                    if (existing == null) {
+                        productDao.insertProduct(p)
+                    } else if (existing.supplierId != p.supplierId) {
+                        productDao.updateProduct(existing.copy(supplierId = p.supplierId))
+                    }
+                }
             } catch (e: Exception) {
                 Log.e("AppDatabase", "Error seeding default suppliers", e)
             }

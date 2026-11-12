@@ -38,6 +38,7 @@ fun SupplierCatalogTab(
     onAddProduct: () -> Unit = {},
     onEditProduct: (ProductEntity) -> Unit,
     onDeleteProduct: (ProductEntity) -> Unit,
+    onRestockProduct: (ProductEntity) -> Unit = {},
     onQuantityChange: ((ProductEntity, Int) -> Unit)? = null,
     onScanClicked: (() -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -94,7 +95,7 @@ fun SupplierCatalogTab(
             }
         }
 
-        // 2. Summary & Action Bar: Count and Minimal Sort Button
+        // 2. Summary & Action Bar: Count, Sort Button, and Add Product Button
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -102,35 +103,62 @@ fun SupplierCatalogTab(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "${filteredProducts.size} Wholesale Products",
+                    text = "${filteredProducts.size} Products",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = textPrimary
                 )
 
-                // Minimal Sort Button
-                Surface(
-                    onClick = onToggleSort,
-                    shape = RoundedCornerShape(10.dp),
-                    color = cardBg,
-                    border = BorderStroke(1.dp, cardBorder)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    // Minimal Sort Button
+                    Surface(
+                        onClick = onToggleSort,
+                        shape = RoundedCornerShape(10.dp),
+                        color = cardBg,
+                        border = BorderStroke(1.dp, cardBorder)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SwapVert,
+                                contentDescription = "Sort",
+                                tint = NawanoPrimary200,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(Modifier.width(2.dp))
+                            Text(
+                                text = if (isSortAscending) "Price" else "Recent",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textPrimary
+                            )
+                        }
+                    }
+
+                    // Prominent Add Product Button
+                    Button(
+                        onClick = onAddProduct,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.SwapVert,
-                            contentDescription = "Sort",
-                            tint = NawanoPrimary200,
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            tint = Color.White,
                             modifier = Modifier.size(15.dp)
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            text = if (isSortAscending) "Price ↑" else "Recent ↓",
-                            fontSize = 11.sp,
+                            text = "Add Product",
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.Bold,
-                            color = textPrimary
+                            color = Color.White
                         )
                     }
                 }
@@ -142,9 +170,11 @@ fun SupplierCatalogTab(
             item {
                 EmptyZeroState(
                     title = "No Products in $selectedCategory",
-                    subtitle = "Tap '+ Add' to register wholesale inventory items.",
+                    subtitle = "Tap '+ Add Product' to register wholesale inventory items.",
                     icon = Icons.Default.Category,
-                    isDarkTheme = isDarkTheme
+                    isDarkTheme = isDarkTheme,
+                    actionLabel = "+ Add Product",
+                    onAction = onAddProduct
                 )
             }
         } else {
@@ -154,6 +184,7 @@ fun SupplierCatalogTab(
                     isDarkTheme = isDarkTheme,
                     onEdit = { onEditProduct(product) },
                     onDelete = { onDeleteProduct(product) },
+                    onRestock = { onRestockProduct(product) },
                     onQuantityChange = onQuantityChange
                 )
             }
@@ -170,6 +201,7 @@ fun SupplierCatalogProductCard(
     isDarkTheme: Boolean = false,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onRestock: () -> Unit = {},
     onQuantityChange: ((ProductEntity, Int) -> Unit)? = null
 ) {
     val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
@@ -329,49 +361,81 @@ fun SupplierCatalogProductCard(
                     }
                 }
 
-                // Tactile Stepper buttons (matching Middleman stock adjuster)
-                if (onQuantityChange != null) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                // Restock button & Tactile Stepper buttons (matching Middleman stock adjuster)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Quick Restock Dialog Button
+                    Surface(
+                        onClick = onRestock,
+                        shape = RoundedCornerShape(8.dp),
+                        color = NawanoPrimary200.copy(alpha = 0.12f),
+                        border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.35f))
                     ) {
-                        Surface(
-                            onClick = { onQuantityChange(product, -1) },
-                            shape = CircleShape,
-                            color = if (isDarkTheme) NawanoDark400 else Color(0xFFF1F5F9),
-                            modifier = Modifier.size(30.dp)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "−",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp,
-                                    color = textPrimary
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = null,
+                                tint = NawanoPrimary200,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(Modifier.width(3.dp))
+                            Text(
+                                text = "Restock",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = NawanoPrimary200
+                            )
                         }
+                    }
 
-                        Text(
-                            text = "${product.quantity}",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = textPrimary,
-                            modifier = Modifier.padding(horizontal = 4.dp)
-                        )
-
-                        Surface(
-                            onClick = { onQuantityChange(product, 1) },
-                            shape = CircleShape,
-                            color = NawanoPrimary200,
-                            modifier = Modifier.size(30.dp)
+                    if (onQuantityChange != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "+",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp,
-                                    color = Color.White
-                                )
+                            Surface(
+                                onClick = { onQuantityChange(product, -1) },
+                                shape = CircleShape,
+                                color = if (isDarkTheme) NawanoDark400 else Color(0xFFF1F5F9),
+                                modifier = Modifier.size(30.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "−",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp,
+                                        color = textPrimary
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "${product.quantity}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = textPrimary,
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            )
+
+                            Surface(
+                                onClick = { onQuantityChange(product, 1) },
+                                shape = CircleShape,
+                                color = NawanoPrimary200,
+                                modifier = Modifier.size(30.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "+",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp,
+                                        color = Color.White
+                                    )
+                                }
                             }
                         }
                     }

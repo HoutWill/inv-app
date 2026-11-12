@@ -1,17 +1,21 @@
 package com.example.inventoryapp.ui.supplier
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.ui.theme.*
 
@@ -246,6 +250,184 @@ fun EditCatalogProductDialog(
                 shape = RoundedCornerShape(10.dp)
             ) {
                 Text("Save", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = textSecondary)
+            }
+        }
+    )
+}
+
+/**
+ * Dialog to restock wholesale quantity for a product in the Supplier portal.
+ * Features quick addition chips (+5, +10, +25, +50, +100) and custom quantity input.
+ */
+@Composable
+fun RestockProductDialog(
+    product: ProductEntity,
+    isDarkTheme: Boolean = false,
+    onDismiss: () -> Unit,
+    onRestockConfirmed: (quantityToAdd: Int) -> Unit
+) {
+    val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
+    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
+    val fieldBorder = if (isDarkTheme) NawanoDarkOutline else Color(0xFFCBD5E1)
+
+    var addQtyText by remember { mutableStateOf("10") }
+    val addQtyInt = addQtyText.toIntOrNull() ?: 0
+    val newTotal = (product.quantity + addQtyInt).coerceAtLeast(0)
+
+    val quickAmounts = listOf(5, 10, 25, 50, 100)
+
+    AlertDialog(
+        containerColor = cardBg,
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = NawanoPrimary200.copy(alpha = 0.15f),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.AddBusiness,
+                            contentDescription = null,
+                            tint = NawanoPrimary200,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = "Restock Product",
+                        fontWeight = FontWeight.Bold,
+                        color = textPrimary,
+                        fontSize = 17.sp
+                    )
+                    Text(
+                        text = product.name,
+                        fontSize = 12.sp,
+                        color = textSecondary
+                    )
+                }
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // Current Stock Indicator
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isDarkTheme) NawanoDark400 else Color(0xFFF1F5F9),
+                    border = BorderStroke(1.dp, fieldBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Current Stock", fontSize = 11.sp, color = textSecondary)
+                            Text(
+                                "${product.quantity} ${product.unit}",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = textPrimary
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.ArrowForward,
+                            contentDescription = null,
+                            tint = textSecondary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("After Restock", fontSize = 11.sp, color = textSecondary)
+                            Text(
+                                "$newTotal ${product.unit}",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFF047857)
+                            )
+                        }
+                    }
+                }
+
+                // Quick Increment Chips (+5, +10, +25, +50, +100)
+                Text(
+                    "Quick Add Quantity",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = textPrimary
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    quickAmounts.forEach { amt ->
+                        val isSelected = addQtyText == amt.toString()
+                        Surface(
+                            onClick = { addQtyText = amt.toString() },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSelected) NawanoPrimary200 else (if (isDarkTheme) NawanoDark400 else Color(0xFFF1F5F9)),
+                            border = BorderStroke(1.dp, if (isSelected) NawanoPrimary200 else fieldBorder),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = "+$amt",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) Color.White else textPrimary,
+                                modifier = Modifier.padding(vertical = 7.dp),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+
+                // Custom Quantity Field
+                OutlinedTextField(
+                    value = addQtyText,
+                    onValueChange = { addQtyText = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("Units to Add", color = textSecondary) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = textPrimary,
+                        unfocusedTextColor = textPrimary,
+                        focusedBorderColor = NawanoPrimary200,
+                        unfocusedBorderColor = fieldBorder
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (addQtyInt > 0) {
+                        onRestockConfirmed(addQtyInt)
+                    }
+                },
+                enabled = addQtyInt > 0,
+                colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = "Restock +$addQtyInt",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
             }
         },
         dismissButton = {

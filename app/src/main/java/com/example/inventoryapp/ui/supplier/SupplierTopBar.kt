@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -48,6 +49,7 @@ fun SupplierTopBar(
     onToggleTheme: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenScanner: () -> Unit = {},
+    onQuickAdd: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
@@ -190,6 +192,27 @@ fun SupplierTopBar(
                             tint = if (pendingNotificationCount > 0) NawanoPrimary200 else textSecondary,
                             modifier = Modifier.size(21.dp)
                         )
+                    }
+                }
+
+                // Primary Quick Add / Restock Action Button
+                IconButton(
+                    onClick = onQuickAdd,
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = NawanoPrimary200,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Add Product or Restock",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             }

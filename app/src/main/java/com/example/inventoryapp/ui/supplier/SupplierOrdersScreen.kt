@@ -103,6 +103,8 @@ fun SupplierOrdersScreen(
     // Catalog Modals
     var showAddCatalogItemDialog by remember { mutableStateOf(false) }
     var catalogItemToEdit by remember { mutableStateOf<ProductEntity?>(null) }
+    var productToRestock by remember { mutableStateOf<ProductEntity?>(null) }
+    var showQuickAddChoiceSheet by remember { mutableStateOf(false) }
 
     // Metrics calculations
     val totalOrders = orders.size
@@ -267,7 +269,15 @@ fun SupplierOrdersScreen(
                     onOpenDrawer = { scope.launch { drawerState.open() } },
                     onToggleTheme = onToggleTheme,
                     onOpenNotifications = { showNotificationSheet = true },
-                    onOpenScanner = { scannerTarget = SupplierScannerTarget.GENERAL_SCAN }
+                    onOpenScanner = { scannerTarget = SupplierScannerTarget.GENERAL_SCAN },
+                    onQuickAdd = {
+                        if (activeViewTab == 1) {
+                            scannedSkuForCatalog = ""
+                            showAddCatalogItemDialog = true
+                        } else {
+                            showQuickAddChoiceSheet = true
+                        }
+                    }
                 )
 
                 // Main Content Switching by Tab
@@ -399,6 +409,28 @@ fun SupplierOrdersScreen(
                                             }
                                         }
 
+                                        // + Restock Order Button
+                                        Button(
+                                            onClick = { showCreateDialog = true },
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Add,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(Modifier.width(3.dp))
+                                            Text(
+                                                text = "Restock",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        }
+
                                         Text(
                                             text = "View all >",
                                             fontSize = 12.sp,
@@ -419,7 +451,9 @@ fun SupplierOrdersScreen(
                                         title = "No Incoming Goods",
                                         subtitle = "There are no incoming goods requests matching this filter.",
                                         icon = Icons.Default.LocalShipping,
-                                        isDarkTheme = isDarkTheme
+                                        isDarkTheme = isDarkTheme,
+                                        actionLabel = "+ Create Restock Order",
+                                        onAction = { showCreateDialog = true }
                                     )
                                 }
                             } else {
@@ -467,6 +501,7 @@ fun SupplierOrdersScreen(
                                 onDeleteProduct(it)
                                 Toast.makeText(context, "Removed ${it.name}", Toast.LENGTH_SHORT).show()
                             },
+                            onRestockProduct = { prod -> productToRestock = prod },
                             onQuantityChange = { prod, delta ->
                                 val newQty = (prod.quantity + delta).coerceAtLeast(0)
                                 onUpdateProduct(prod.copy(quantity = newQty))
@@ -672,6 +707,179 @@ fun SupplierOrdersScreen(
             }
         )
     }
+
+    // Modal 9: Quick Restock Quantity Dialog
+    productToRestock?.let { prod ->
+        RestockProductDialog(
+            product = prod,
+            isDarkTheme = isDarkTheme,
+            onDismiss = { productToRestock = null },
+            onRestockConfirmed = { qtyToAdd ->
+                val newQty = prod.quantity + qtyToAdd
+                onUpdateProduct(prod.copy(quantity = newQty, updatedAt = System.currentTimeMillis()))
+                productToRestock = null
+                Toast.makeText(context, "Restocked +$qtyToAdd ${prod.unit} of ${prod.name}!", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    // Modal 10: Top Bar Quick Actions Bottom Sheet
+    if (showQuickAddChoiceSheet) {
+        SupplierQuickActionSheet(
+            isDarkTheme = isDarkTheme,
+            onDismiss = { showQuickAddChoiceSheet = false },
+            onAddProduct = {
+                showQuickAddChoiceSheet = false
+                scannedSkuForCatalog = ""
+                showAddCatalogItemDialog = true
+            },
+            onRestockOrder = {
+                showQuickAddChoiceSheet = false
+                showCreateDialog = true
+            },
+            onScan = {
+                showQuickAddChoiceSheet = false
+                scannerTarget = SupplierScannerTarget.GENERAL_SCAN
+            }
+        )
+    }
+}
+
+/**
+ * Bottom Sheet opened by the top-bar '+' button, giving instant access to:
+ * - Add Wholesale Product to catalog
+ * - Issue Restock Order to Middleman HQ
+ * - Scan Item Barcode
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SupplierQuickActionSheet(
+    isDarkTheme: Boolean = false,
+    onDismiss: () -> Unit,
+    onAddProduct: () -> Unit,
+    onRestockOrder: () -> Unit,
+    onScan: () -> Unit
+) {
+    val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
+    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = cardBg,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                color = if (isDarkTheme) NawanoDarkOutline else Color(0xFFCBD5E1)
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 36.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Quick Actions",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.ExtraBold,
+                color = textPrimary,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+
+            // Action 1: Add New Product to Catalog
+            QuickActionOptionCard(
+                title = "Add Wholesale Product",
+                subtitle = "Register a new product, SKU, and wholesale price",
+                icon = Icons.Default.AddBox,
+                isDarkTheme = isDarkTheme,
+                onClick = onAddProduct
+            )
+
+            // Action 2: Restock / Issue Inbound Order
+            QuickActionOptionCard(
+                title = "Issue Restock Order",
+                subtitle = "Create a restock shipment to Middleman HQ",
+                icon = Icons.Default.AddBusiness,
+                isDarkTheme = isDarkTheme,
+                onClick = onRestockOrder
+            )
+
+            // Action 3: Scan Barcode
+            QuickActionOptionCard(
+                title = "Scan Barcode / SKU",
+                subtitle = "Scan physical item to look up, pack, or register",
+                icon = Icons.Default.QrCodeScanner,
+                isDarkTheme = isDarkTheme,
+                onClick = onScan
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuickActionOptionCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    isDarkTheme: Boolean,
+    onClick: () -> Unit
+) {
+    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
+    val cardBorder = if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0)
+    val cardBg = if (isDarkTheme) NawanoDark400 else Color(0xFFF8FAFC)
+
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = cardBg,
+        border = BorderStroke(1.dp, cardBorder),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = NawanoPrimary200.copy(alpha = 0.15f),
+                modifier = Modifier.size(44.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = NawanoPrimary200,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = textPrimary
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = textSecondary
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = textSecondary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
 }
 
 /**
@@ -723,7 +931,9 @@ fun EmptyZeroState(
     title: String,
     subtitle: String,
     icon: ImageVector,
-    isDarkTheme: Boolean = false
+    isDarkTheme: Boolean = false,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null
 ) {
     val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
     val cardBorder = if (isDarkTheme) NawanoDarkOutline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
@@ -762,6 +972,29 @@ fun EmptyZeroState(
                 fontSize = 12.sp,
                 color = textSecondary
             )
+            if (actionLabel != null && onAction != null) {
+                Spacer(Modifier.height(14.dp))
+                Button(
+                    onClick = onAction,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = actionLabel,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+            }
         }
     }
 }
