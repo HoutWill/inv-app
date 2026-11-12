@@ -718,7 +718,7 @@ private fun DashboardOverviewTab(
     onOrderClick: (String) -> Unit = {},
     onReceiveOrder: (String) -> Unit = {}
 ) {
-    var selectedActivityFilter by remember { mutableStateOf("Incoming") }
+    var selectedActivityFilter by remember { mutableStateOf("Stock In") }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -1572,7 +1572,7 @@ private fun NawanoActivityFilterChips(
     isDarkTheme: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val filters = listOf("All Activity", "Incoming", "Inbound", "Outbound")
+    val filters = listOf("All", "Stock In", "Stock Out")
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -1706,18 +1706,16 @@ private fun NawanoIncomingGoodsSection(
     // Filter by the currently selected chip
     val filteredActivities = remember(allActivities, selectedFilter) {
         when (selectedFilter) {
-            "Incoming" -> allActivities.filter { it.type == "INCOMING" || it.type == "INBOUND" }
-            "Inbound" -> allActivities.filter { it.type == "INBOUND" }
-            "Outbound" -> allActivities.filter { it.type == "OUTBOUND" }
-            else -> allActivities // "All Activity"
+            "Stock In" -> allActivities.filter { it.isPositive || it.type == "INCOMING" || it.type == "INBOUND" }
+            "Stock Out" -> allActivities.filter { !it.isPositive || it.type == "OUTBOUND" }
+            else -> allActivities // "All"
         }
     }
 
     val sectionTitle = when (selectedFilter) {
-        "Incoming" -> "Incoming Goods Req (${filteredActivities.size})"
-        "Inbound" -> "Inbound Deliveries (${filteredActivities.size})"
-        "Outbound" -> "Outbound Dispatches (${filteredActivities.size})"
-        else -> "All Activity Movement (${filteredActivities.size})"
+        "Stock In" -> "Stock In (${filteredActivities.size})"
+        "Stock Out" -> "Stock Out (${filteredActivities.size})"
+        else -> "Activity (${filteredActivities.size})"
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
