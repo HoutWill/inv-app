@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
 import com.example.inventoryapp.ui.theme.*
+import com.example.inventoryapp.util.ProductThumbnail
 import java.util.Locale
 
 /**
@@ -206,7 +207,7 @@ fun SupplierDashboardCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 2. Middle Row: Bold Title ("0603 - Items lobster in from...") & Estimated Arrival Subtitle
+            // 2. Middle Row: Product Thumbnail + Bold Title & Estimated Arrival Subtitle
             val displayTitle = if (order.title.isNotBlank()) {
                 if (order.title.startsWith(order.orderNumber, ignoreCase = true)) {
                     order.title
@@ -217,22 +218,41 @@ fun SupplierDashboardCard(
                 "${order.orderNumber} - Items inbound from supplier"
             }
 
-            Text(
-                text = displayTitle,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ProductThumbnail(
+                    sku = order.orderNumber,
+                    name = order.title,
+                    category = null,
+                    imageUri = null,
+                    supplier = order.supplierName,
+                    modifier = Modifier.size(52.dp),
+                    shape = RoundedCornerShape(14.dp)
+                )
 
-            Spacer(modifier = Modifier.height(3.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
-            Text(
-                text = "Est. arrival time: ${order.estArrival.ifBlank { "09:30 - 11:30 AM" }}",
-                style = MaterialTheme.typography.bodySmall,
-                color = textSecondary
-            )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = displayTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(modifier = Modifier.height(3.dp))
+
+                    Text(
+                        text = "Est. arrival time: ${order.estArrival.ifBlank { "09:30 - 11:30 AM" }}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = textSecondary
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
             HorizontalDivider(color = dividerColor)

@@ -58,6 +58,7 @@ import com.example.inventoryapp.data.remote.OnlineProductData
 import com.example.inventoryapp.data.repository.OrderWithItems
 import com.example.inventoryapp.ui.scanner.BarcodeScannerScreen
 import com.example.inventoryapp.ui.supplier.NewPurchaseOrderDialog
+import com.example.inventoryapp.util.ProductImageHelper
 import com.example.inventoryapp.util.ProductThumbnail
 import com.example.inventoryapp.ui.supplier.SupplierAddEditDialog
 import com.example.inventoryapp.ui.supplier.SuppliersManagementScreen
@@ -788,6 +789,7 @@ private fun DashboardOverviewTab(
                 selectedFilter = selectedActivityFilter,
                 transactions = uiState.transactions,
                 orders = uiState.orders,
+                products = uiState.products,
                 onViewAll = onNavigateToMoveSummary,
                 onOrderClick = onOrderClick,
                 onAcceptOrder = onReceiveOrder
@@ -1565,7 +1567,9 @@ private data class NawanoDashboardActivity(
     val quantityChange: String,
     val isPositive: Boolean,
     val orderId: String? = null,
-    val isDeliveredOrder: Boolean = false
+    val isDeliveredOrder: Boolean = false,
+    val imageUri: String? = null,
+    val supplierName: String? = null
 )
 
 @Composable
@@ -1626,13 +1630,14 @@ private fun NawanoIncomingGoodsSection(
     selectedFilter: String,
     transactions: List<StockTransactionEntity>,
     orders: List<PurchaseOrderEntity> = emptyList(),
+    products: List<ProductEntity> = emptyList(),
     onViewAll: () -> Unit,
     onOrderClick: ((String) -> Unit)? = null,
     onAcceptOrder: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     // Collect all activities from real Room orders and transactions
-    val allActivities = remember(transactions, orders) {
+    val allActivities = remember(transactions, orders, products) {
         val list = mutableListOf<NawanoDashboardActivity>()
 
         // 1. Live purchase orders from suppliers (Delivered / Confirmed / Pending)
@@ -1645,6 +1650,16 @@ private fun NawanoIncomingGoodsSection(
             val badgeText = if (isInbound) "In Delivery" else if (po.status == PurchaseOrderStatus.CONFIRMED) "Confirmed" else "Incoming Req"
             val badgeColor = if (isInbound) Color(0xFF4338CA) else if (po.status == PurchaseOrderStatus.CONFIRMED) NawanoPrimary200 else Color(0xFFF59E0B)
             val type = if (isInbound) "INBOUND" else "INCOMING"
+
+            // Auto-resolve product photo by title, supplier, or SKU match
+            val matchedProduct = products.find { prod ->
+                po.title.contains(prod.name, ignoreCase = true) ||
+                po.title.contains(prod.sku, ignoreCase = true) ||
+                prod.name.contains(po.title, ignoreCase = true) ||
+                (po.supplierId.isNotBlank() && prod.supplierId == po.supplierId)
+            }
+            val resolvedImage = matchedProduct?.imageUri
+                ?: ProductImageHelper.getAutoMatchedResourceUri(po.orderNumber, po.title, null, po.supplierName)
 
             list.add(
                 NawanoDashboardActivity(
@@ -1659,7 +1674,9 @@ private fun NawanoIncomingGoodsSection(
                     quantityChange = "+${po.totalQuantity} units",
                     isPositive = true,
                     orderId = po.id,
-                    isDeliveredOrder = isInbound
+                    isDeliveredOrder = isInbound,
+                    imageUri = resolvedImage,
+                    supplierName = po.supplierName
                 )
             )
         }
@@ -1688,6 +1705,10 @@ private fun NawanoIncomingGoodsSection(
             val timeFormat = SimpleDateFormat("hh:mm a", Locale.US)
             val timeStr = timeFormat.format(Date(tx.timestamp))
 
+            val matchedProduct = products.find { it.sku.equals(tx.sku, ignoreCase = true) }
+            val resolvedImage = matchedProduct?.imageUri
+                ?: ProductImageHelper.getAutoMatchedResourceUri(tx.sku, tx.productName, null, null)
+
             list.add(
                 NawanoDashboardActivity(
                     id = tx.id,
@@ -1699,7 +1720,8 @@ private fun NawanoIncomingGoodsSection(
                     arrivalTime = "Today • $timeStr",
                     reference = "Ref: ${tx.note?.takeIf { it.isNotBlank() } ?: "Direct Inventory Update"}",
                     quantityChange = "${if (tx.quantityDelta >= 0) "+" else ""}${tx.quantityDelta} units",
-                    isPositive = tx.quantityDelta >= 0
+                    isPositive = tx.quantityDelta >= 0,
+                    imageUri = resolvedImage
                 )
             )
         }
@@ -1881,23 +1903,44 @@ private fun NawanoGoodsReqCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Title & arrival
-            Text(
-                text = "${activity.sku} - ${activity.title}",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            // Middle Content: Product Thumbnail + Title & Arrival metadata
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ProductThumbnail(
+                    sku = activity.sku,
+                    name = activity.title,
+                    category = null,
+                    imageUri = activity.imageUri,
+                    supplier = activity.supplierName,
+                    modifier = Modifier.size(52.dp),
+                    shape = RoundedCornerShape(14.dp)
+                )
 
-            Text(
-                text = activity.arrivalTime,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "${activity.sku} - ${activity.title}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(modifier = Modifier.height(3.dp))
+
+                    Text(
+                        text = activity.arrivalTime,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(10.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))

@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import coil.compose.AsyncImage
 import com.example.inventoryapp.R
 import com.example.inventoryapp.data.local.entity.ProductEntity
@@ -35,12 +36,16 @@ object ProductImageHelper {
         sku: String?,
         name: String?,
         category: String? = null,
-        imageUri: String? = null
+        imageUri: String? = null,
+        supplier: String? = null
     ): Any? {
+        val drawableRes = getDrawableForProduct(sku, name, category, supplier)
+        if (drawableRes != null && (imageUri.isNullOrBlank() || imageUri.startsWith("android.resource://"))) {
+            return drawableRes
+        }
         if (!imageUri.isNullOrBlank()) {
             return imageUri
         }
-        val drawableRes = getDrawableForProduct(sku, name, category)
         return drawableRes
     }
 
@@ -54,13 +59,19 @@ object ProductImageHelper {
     }
 
     /**
-     * Matches known SKUs and keywords to bundled high-res product photos.
+     * Matches known SKUs, product names, categories, or supplier names to bundled high-res product photos.
      */
     @DrawableRes
-    fun getDrawableForProduct(sku: String?, name: String?, category: String? = null): Int? {
+    fun getDrawableForProduct(
+        sku: String?,
+        name: String?,
+        category: String? = null,
+        supplier: String? = null
+    ): Int? {
         val s = sku?.trim()?.uppercase(Locale.ROOT) ?: ""
         val n = name?.trim()?.lowercase(Locale.ROOT) ?: ""
         val c = category?.trim()?.lowercase(Locale.ROOT) ?: ""
+        val sup = supplier?.trim()?.lowercase(Locale.ROOT) ?: ""
 
         return when {
             // By SKU
@@ -91,6 +102,13 @@ object ProductImageHelper {
             n.contains("tofu") || n.contains("soy") -> R.drawable.img_organic_tofu
             n.contains("carton") || n.contains("box") || n.contains("corrugated") || n.contains("packaging") -> R.drawable.img_carton_box
 
+            // By Supplier or Inbound Title keyword
+            n.contains("foodie") || sup.contains("foodie") -> R.drawable.img_nutella
+            n.contains("pacific") || sup.contains("pacific") -> R.drawable.img_king_crab
+            n.contains("tokyo") || sup.contains("tokyo") -> R.drawable.img_wagyu_ribeye
+            n.contains("vegan") || sup.contains("vegan") || sup.contains("greenleaf") -> R.drawable.img_organic_tofu
+            n.contains("apex") || sup.contains("apex") -> R.drawable.img_carton_box
+
             // Fallback by Category
             c.contains("seafood") -> R.drawable.img_atlantic_salmon
             c.contains("meat") -> R.drawable.img_wagyu_ribeye
@@ -107,8 +125,13 @@ object ProductImageHelper {
     /**
      * Returns an Android resource URI string for a product if matched.
      */
-    fun getAutoMatchedResourceUri(sku: String?, name: String?, category: String? = null): String? {
-        val res = getDrawableForProduct(sku, name, category) ?: return null
+    fun getAutoMatchedResourceUri(
+        sku: String?,
+        name: String?,
+        category: String? = null,
+        supplier: String? = null
+    ): String? {
+        val res = getDrawableForProduct(sku, name, category, supplier) ?: return null
         return "android.resource://com.example.inventoryapp/$res"
     }
 
@@ -160,23 +183,26 @@ fun ProductThumbnail(
     category: String?,
     imageUri: String?,
     modifier: Modifier = Modifier.size(54.dp),
+    supplier: String? = null,
     shape: Shape = RoundedCornerShape(14.dp),
     contentScale: ContentScale = ContentScale.Crop,
     borderColor: Color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
 ) {
-    val model = ProductImageHelper.getProductImageModel(sku, name, category, imageUri)
+    val model = ProductImageHelper.getProductImageModel(sku, name, category, imageUri, supplier)
+    val fallbackIcon = ProductImageHelper.getCategoryIcon(category ?: "")
 
     if (model != null) {
         AsyncImage(
             model = model,
             contentDescription = name ?: "Product Image",
             contentScale = contentScale,
+            placeholder = rememberVectorPainter(fallbackIcon),
+            error = rememberVectorPainter(fallbackIcon),
             modifier = modifier
                 .clip(shape)
                 .border(1.dp, borderColor, shape)
         )
     } else {
-        val icon = ProductImageHelper.getCategoryIcon(category ?: "")
         Surface(
             color = MaterialTheme.colorScheme.primaryContainer,
             shape = shape,
@@ -185,7 +211,7 @@ fun ProductThumbnail(
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    imageVector = icon,
+                    imageVector = fallbackIcon,
                     contentDescription = category,
                     tint = NawanoPrimary200,
                     modifier = Modifier.size(24.dp)
