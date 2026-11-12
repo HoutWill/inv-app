@@ -197,7 +197,7 @@ fun InventoryDrawerSheet(
 
             DrawerNavRow(
                 painter = painterResource(R.drawable.ic_inventory_box),
-                label = "Items Catalog",
+                label = "Items",
                 isSelected = currentDestination == DrawerDestination.ITEMS,
                 badge = "$totalSkus",
                 onClick = { onDestinationSelected(DrawerDestination.ITEMS) }
@@ -205,7 +205,7 @@ fun InventoryDrawerSheet(
 
             DrawerNavRow(
                 icon = Icons.Default.BarChart,
-                label = "Statistics (Sales & Target)",
+                label = "Statistics",
                 isSelected = currentDestination == DrawerDestination.STATISTICS,
                 badge = null,
                 onClick = { onDestinationSelected(DrawerDestination.STATISTICS) }
@@ -217,7 +217,7 @@ fun InventoryDrawerSheet(
 
             // Logistics & Inventory Section
             Text(
-                text = "LOGISTICS & AUDIT",
+                text = "LOGISTICS",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
@@ -225,38 +225,19 @@ fun InventoryDrawerSheet(
             )
 
             DrawerNavRow(
-                painter = painterResource(R.drawable.ic_inventory_packages),
-                label = "Inventory Summary",
-                isSelected = currentDestination == DrawerDestination.INVENTORY_SUMMARY,
-                badge = "New",
-                badgeColor = NawanoPrimary200,
-                onClick = { onDestinationSelected(DrawerDestination.INVENTORY_SUMMARY) }
-            )
-
-            DrawerNavRow(
-                painter = painterResource(R.drawable.ic_bus_intro),
-                label = "Movement List",
-                isSelected = currentDestination == DrawerDestination.MOVEMENT_LIST,
-                badge = "Logistics",
-                badgeColor = Color(0xFF06B6D4),
+                icon = Icons.Default.History,
+                label = "Movements",
+                isSelected = currentDestination == DrawerDestination.MOVEMENT_LIST || currentDestination == DrawerDestination.AUDIT_LOGS,
+                badge = null,
                 onClick = { onDestinationSelected(DrawerDestination.MOVEMENT_LIST) }
             )
 
             DrawerNavRow(
                 icon = Icons.Default.LocalShipping,
-                label = "Suppliers Directory",
+                label = "Suppliers",
                 isSelected = currentDestination == DrawerDestination.SUPPLIERS,
-                badge = "Vendor",
-                badgeColor = NawanoPrimary200,
-                onClick = { onDestinationSelected(DrawerDestination.SUPPLIERS) }
-            )
-
-            DrawerNavRow(
-                icon = Icons.Default.History,
-                label = "Stock Audit Logs",
-                isSelected = currentDestination == DrawerDestination.AUDIT_LOGS,
                 badge = null,
-                onClick = { onDestinationSelected(DrawerDestination.AUDIT_LOGS) }
+                onClick = { onDestinationSelected(DrawerDestination.SUPPLIERS) }
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -274,7 +255,7 @@ fun InventoryDrawerSheet(
 
             DrawerNavRow(
                 icon = Icons.Default.Settings,
-                label = "Settings & Database",
+                label = "Settings",
                 isSelected = currentDestination == DrawerDestination.SETTINGS,
                 badge = null,
                 onClick = { onDestinationSelected(DrawerDestination.SETTINGS) }
