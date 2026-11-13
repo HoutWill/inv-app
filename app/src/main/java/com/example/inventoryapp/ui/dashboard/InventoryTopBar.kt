@@ -89,6 +89,7 @@ fun InventoryTopBar(
     onOpenDrawer: () -> Unit,
     onToggleTheme: () -> Unit,
     onOpenNotifications: () -> Unit,
+    showTitleAndLogo: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     TopAppBar(
@@ -106,31 +107,33 @@ fun InventoryTopBar(
             }
         },
         title = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(vertical = 4.dp)
-            ) {
-                NawanoLogoBadge()
-                Spacer(modifier = Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f, fill = false)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+            if (showTitleAndLogo) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                ) {
+                    NawanoLogoBadge()
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f, fill = false)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Nawano",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(1.dp))
                         Text(
-                            text = "Nawano",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            text = "Smart Stock Manager • $totalSkus SKUs",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    Spacer(modifier = Modifier.height(1.dp))
-                    Text(
-                        text = "Smart Stock Manager • $totalSkus SKUs",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
             }
         },
@@ -179,7 +182,8 @@ fun InventoryTopBar(
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = Color.Transparent,
+            scrolledContainerColor = MaterialTheme.colorScheme.surface
         )
     )
 }
@@ -196,6 +200,7 @@ fun NawanoTopBar(
     onOpenDrawer: () -> Unit,
     onToggleTheme: () -> Unit,
     onOpenNotifications: () -> Unit,
+    showTitleAndLogo: Boolean = false,
     modifier: Modifier = Modifier
 ) = InventoryTopBar(
     totalSkus = totalSkus,
@@ -204,5 +209,6 @@ fun NawanoTopBar(
     onOpenDrawer = onOpenDrawer,
     onToggleTheme = onToggleTheme,
     onOpenNotifications = onOpenNotifications,
+    showTitleAndLogo = showTitleAndLogo,
     modifier = modifier
 )

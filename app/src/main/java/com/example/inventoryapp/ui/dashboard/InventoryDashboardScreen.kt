@@ -103,6 +103,7 @@ fun InventoryDashboardScreen(
     var viewingProductDetails by remember { mutableStateOf<ProductEntity?>(null) }
     var addProductDraft by remember { mutableStateOf(AddProductDraft()) }
     var scannedNotFoundSku by remember { mutableStateOf<String?>(null) }
+    var isLowStockSheetOpen by remember { mutableStateOf(false) }
     var isUpcomingSheetOpen by remember { mutableStateOf(false) }
     var isStockHistorySheetOpen by remember { mutableStateOf(false) }
     var isStockTransfersSheetOpen by remember { mutableStateOf(false) }
@@ -175,7 +176,20 @@ fun InventoryDashboardScreen(
         totalSkus = uiState.totalSkus
     ) {
         Scaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) }
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            topBar = {
+                if (drawerDestination == null) {
+                    InventoryTopBar(
+                        totalSkus = uiState.totalSkus,
+                        lowStockCount = uiState.lowStockCount,
+                        isDarkTheme = isDarkTheme,
+                        onOpenDrawer = { scope.launch { drawerState.open() } },
+                        onToggleTheme = onToggleTheme,
+                        onOpenNotifications = { isNotificationsOpen = true },
+                        showTitleAndLogo = false
+                    )
+                }
+            }
         ) { innerPadding ->
             // System back button returns from full-screen drawer destination back to the dashboard
             BackHandler(enabled = drawerDestination != null) {
@@ -185,10 +199,8 @@ fun InventoryDashboardScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(
-                        if (drawerDestination == null) Modifier.statusBarsPadding() else Modifier
-                    )
                     .padding(
+                        top = if (drawerDestination == null) innerPadding.calculateTopPadding() else 0.dp,
                         bottom = if (drawerDestination == null) innerPadding.calculateBottomPadding() else 0.dp
                     )
             ) {
@@ -322,8 +334,7 @@ fun InventoryDashboardScreen(
                                 },
                                 onNavigateToItems = { activeTab = 1 },
                                 onNavigateToLowStock = {
-                                    viewModel.onCategorySelected("Low Stock")
-                                    activeTab = 1
+                                    isLowStockSheetOpen = true
                                 },
                                 onNavigateToMoveSummary = {
                                     isStockTransfersSheetOpen = true
@@ -630,6 +641,29 @@ fun InventoryDashboardScreen(
                         isNotificationsOpen = false
                         activeTab = 1
                         viewModel.onCategorySelected("Low Stock")
+                    }
+                )
+            }
+
+            // Low Stock BottomSheet (Swipe-up modal)
+            if (isLowStockSheetOpen) {
+                LowStockBottomSheet(
+                    products = uiState.products,
+                    isDarkTheme = isDarkTheme,
+                    onDismiss = { isLowStockSheetOpen = false },
+                    onProductClick = { product ->
+                        isLowStockSheetOpen = false
+                        viewingProductDetails = product
+                    },
+                    onRestockProduct = { product, delta ->
+                        viewModel.adjustStock(product, delta, "STOCK_IN", "Restock from Low Stock Alerts")
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Restocked +$delta ${product.unit} for '${product.name}'")
+                        }
+                    },
+                    onRequestSupply = { product ->
+                        isLowStockSheetOpen = false
+                        handleRequestSupply(product)
                     }
                 )
             }
