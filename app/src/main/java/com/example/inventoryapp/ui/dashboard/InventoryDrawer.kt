@@ -184,7 +184,7 @@ fun InventoryDrawerSheet(
 
             // Main Views Section
             Text(
-                text = "MAIN OVERVIEW",
+                text = "OVERVIEW",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
@@ -230,7 +230,7 @@ fun InventoryDrawerSheet(
 
             DrawerNavRow(
                 icon = Icons.Default.History,
-                label = "Stock Transfers",
+                label = "Transfers",
                 isSelected = currentDestination == DrawerDestination.MOVEMENT_LIST || currentDestination == DrawerDestination.AUDIT_LOGS,
                 badge = null,
                 onClick = { onDestinationSelected(DrawerDestination.MOVEMENT_LIST) }
@@ -250,7 +250,7 @@ fun InventoryDrawerSheet(
 
             // Settings & Quick Actions
             Text(
-                text = "SYSTEM & TOOLS",
+                text = "SYSTEM",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
@@ -267,7 +267,7 @@ fun InventoryDrawerSheet(
 
             DrawerNavRow(
                 icon = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
-                label = if (isDarkTheme) "Switch to Light Mode" else "Switch to Dark Mode",
+                label = "Theme",
                 isSelected = false,
                 badge = if (isDarkTheme) "Dark" else "Light",
                 onClick = onToggleTheme
@@ -276,9 +276,9 @@ fun InventoryDrawerSheet(
             if (onSwitchToSupplier != null) {
                 DrawerNavRow(
                     icon = Icons.Default.SwapHoriz,
-                    label = "Switch to Supplier Portal",
+                    label = "Supplier",
                     isSelected = false,
-                    badge = "Demo",
+                    badge = "Portal",
                     onClick = onSwitchToSupplier
                 )
             }
@@ -286,7 +286,7 @@ fun InventoryDrawerSheet(
             if (onLogout != null) {
                 DrawerNavRow(
                     icon = Icons.AutoMirrored.Filled.ExitToApp,
-                    label = "Log Out",
+                    label = "Logout",
                     isSelected = false,
                     badge = null,
                     onClick = onLogout

@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.R
 import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.ui.theme.*
+import com.example.inventoryapp.util.ProductImageHelper
 import com.example.inventoryapp.util.ProductThumbnail
 import java.util.Locale
 
@@ -377,17 +378,21 @@ fun SupplierCatalogProductCard(
 
                 Spacer(modifier = Modifier.width(12.dp))
 
+                val cleanTitle = remember(product.name) {
+                    ProductImageHelper.cleanOneWordTitle(product.name)
+                }
+
                 // Title + Category/SKU badge
                 Column(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        text = product.name,
+                        text = cleanTitle,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
                         color = textPrimary,
-                        maxLines = 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
 

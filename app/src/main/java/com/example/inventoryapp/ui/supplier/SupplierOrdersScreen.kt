@@ -128,7 +128,7 @@ fun SupplierOrdersScreen(
             "All (${orders.size})",
             "Incoming ($pendingCount)",
             "Confirmed ($confirmedCount)",
-            "In Delivery ($inTransitCount)",
+            "Transit ($inTransitCount)",
             "Completed ($completedCount)"
         )
     }
@@ -451,7 +451,7 @@ fun SupplierOrdersScreen(
                                 val sectionTitle = when (selectedFilterIndex) {
                                     1 -> "Incoming (${filteredOrders.size})"
                                     2 -> "Confirmed (${filteredOrders.size})"
-                                    3 -> "Delivered (${filteredOrders.size})"
+                                    3 -> "Transit (${filteredOrders.size})"
                                     4 -> "Completed (${filteredOrders.size})"
                                     else -> "Orders (${filteredOrders.size})"
                                 }

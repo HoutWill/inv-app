@@ -150,6 +150,77 @@ object ProductImageHelper {
             else -> Icons.Default.Category
         }
     }
+
+    /**
+     * Extracts a clean, single-word product/brand name from any order title, PO manifest, or item description.
+     */
+    fun cleanOneWordTitle(rawTitle: String): String {
+        var title = rawTitle.trim()
+        if (title.contains("•")) {
+            title = title.substringAfterLast("•").trim()
+        }
+        title = title.replace(Regex("^PO-\\d{4}-\\d+\\s*[-•:]?\\s*", RegexOption.IGNORE_CASE), "")
+        title = title.replace(Regex("^PO-\\d+\\s*[-•:]?\\s*", RegexOption.IGNORE_CASE), "")
+        title = title.replace(Regex("^(Inbound Request|Cold-Chain Restock|Gourmet Pantry Inbound|Warehouse Restock)\\s*[-•:]?\\s*", RegexOption.IGNORE_CASE), "")
+        title = title.replace(Regex("^Stock (In|Out):\\s*", RegexOption.IGNORE_CASE), "")
+        title = title.replace(Regex("\\s+(Restock|Inbound|Outbound|Request|Batch)$", RegexOption.IGNORE_CASE), "")
+
+        val lower = title.lowercase(Locale.ROOT)
+        return when {
+            lower.contains("coca") || lower.contains("coke") -> "Coca-Cola"
+            lower.contains("red bull") || lower.contains("redbull") -> "RedBull"
+            lower.contains("nutella") -> "Nutella"
+            lower.contains("pesto") || lower.contains("barilla") -> "Barilla"
+            lower.contains("ketchup") || lower.contains("heinz") -> "Ketchup"
+            lower.contains("oreo") -> "Oreo"
+            lower.contains("salmon") -> "Salmon"
+            lower.contains("lobster") -> "Lobster"
+            lower.contains("crab") -> "Crab"
+            lower.contains("prawn") || lower.contains("shrimp") -> "Prawns"
+            lower.contains("wagyu") || lower.contains("ribeye") || (lower.contains("beef") && !lower.contains("pantry")) -> "Wagyu"
+            lower.contains("tofu") -> "Tofu"
+            lower.contains("carton") || lower.contains("box") -> "Boxes"
+            lower.contains("heineken") || lower.contains("beer") -> "Heineken"
+            lower.contains("coffee") -> "Coffee"
+            lower.contains("tea") -> "Tea"
+            lower.contains("milk") -> "Milk"
+            lower.contains("bread") -> "Bread"
+            lower.contains("rice") -> "Rice"
+            lower.contains("apple") -> "Apple"
+            lower.contains("banana") -> "Banana"
+            lower.contains("orange") -> "Orange"
+            else -> {
+                var firstItem = title.split(Regex("[&,]")).first().trim()
+                firstItem = firstItem.replace(Regex("\\s*\\([^)]*\\)", RegexOption.IGNORE_CASE), "").trim()
+                firstItem = firstItem.replace(Regex("\\s+(Cans?|Bottles?|Pack|Boxes|Pieces?|Bags?|Jar|Pcs)$", RegexOption.IGNORE_CASE), "").trim()
+                val firstWord = firstItem.split(Regex("\\s+")).firstOrNull()?.trim() ?: "Item"
+                firstWord.replace(Regex("[^a-zA-Z0-9_-]"), "").ifBlank { "Item" }
+            }
+        }
+    }
+
+    /**
+     * Extracts a concise single-word supplier name to prevent line overflows and ellipsis truncation.
+     */
+    fun cleanSupplierName(rawSupplier: String): String {
+        val clean = rawSupplier.trim()
+        val lower = clean.lowercase(Locale.ROOT)
+        return when {
+            lower.contains("pacific") -> "Pacific"
+            lower.contains("foodie") -> "Foodie"
+            lower.contains("tokyo") -> "Tokyo"
+            lower.contains("greenleaf") || lower.contains("vegan") -> "GreenLeaf"
+            lower.contains("apex") -> "Apex"
+            lower.contains("nawano") || lower.contains("hq") || lower.contains("central") -> "HQ"
+            else -> {
+                val stripped = clean
+                    .replace(Regex("\\s+(Supply|Supplier|Suppliers|Ltd|Inc|Co|Corporation|Logistics|Freight|Pte|LLC)$", RegexOption.IGNORE_CASE), "")
+                    .trim()
+                val firstWord = stripped.split(Regex("\\s+")).firstOrNull()?.trim() ?: "Supplier"
+                firstWord.replace(Regex("[^a-zA-Z0-9]"), "").ifBlank { "Supplier" }
+            }
+        }
+    }
 }
 
 /**

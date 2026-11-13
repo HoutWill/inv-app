@@ -182,27 +182,6 @@ fun SupplierTopBar(
                         )
                     }
                 }
-
-                // Primary Quick Add / Restock Action Button
-                IconButton(
-                    onClick = onQuickAdd,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = NawanoPrimary200,
-                        modifier = Modifier.size(30.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Add Product or Restock",
-                                tint = Color.White,
-                                modifier = Modifier.size(17.dp)
-                            )
-                        }
-                    }
-                }
             }
         }
     }

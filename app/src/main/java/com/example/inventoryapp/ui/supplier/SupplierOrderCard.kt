@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
 import com.example.inventoryapp.ui.theme.*
+import com.example.inventoryapp.util.ProductImageHelper
 import com.example.inventoryapp.util.ProductThumbnail
 
 /**
@@ -45,15 +46,21 @@ fun SupplierDashboardCard(
     val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
 
     val cleanTitle = remember(order.title, order.supplierName) {
-        cleanItemTitle(order.title.ifBlank { "Items from ${order.supplierName}" })
+        ProductImageHelper.cleanOneWordTitle(order.title.ifBlank { "Items from ${order.supplierName}" })
     }
 
     val shortPo = remember(order.orderNumber) { formatShortPoCode(order.orderNumber) }
     val partnerName = remember(order.supplierName) {
-        cleanSupplierName(order.supplierName.ifBlank { "Nawano HQ" })
+        ProductImageHelper.cleanSupplierName(order.supplierName.ifBlank { "HQ" })
     }
     val eta = remember(order.estArrival) {
-        order.estArrival.ifBlank { "In 2 days" }
+        val arrival = order.estArrival.trim()
+        val base = if (arrival.contains(",")) arrival.substringBefore(",").trim() else arrival
+        when {
+            base.contains("Tomorrow", ignoreCase = true) -> "Tomorrow"
+            base.contains("Today", ignoreCase = true) -> "Today"
+            else -> base.ifBlank { "In 2 days" }
+        }
     }
     val metadataLine = "$shortPo • $partnerName • $eta"
 
@@ -70,7 +77,7 @@ fun SupplierDashboardCard(
             if (isDarkTheme) Color(0xFF818CF8) else Color(0xFF4338CA)
         )
         PurchaseOrderStatus.DELIVERED -> Triple(
-            "In Delivery",
+            "Transit",
             if (isDarkTheme) Color(0xFF0369A1).copy(alpha = 0.35f) else Color(0xFFE0F2FE),
             if (isDarkTheme) Color(0xFF38BDF8) else Color(0xFF0284C7)
         )
@@ -125,7 +132,7 @@ fun SupplierDashboardCard(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(end = 8.dp)
+                    .padding(end = 4.dp)
             ) {
                 Text(
                     text = cleanTitle,
@@ -137,12 +144,13 @@ fun SupplierDashboardCard(
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(3.dp))
 
                 Text(
                     text = metadataLine,
                     style = MaterialTheme.typography.bodySmall,
-                    fontSize = 11.5.sp,
+                    fontSize = 11.sp,
+                    letterSpacing = (-0.2).sp,
                     color = textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -207,7 +215,7 @@ fun SupplierDashboardCard(
                             modifier = Modifier.defaultMinSize(minWidth = 64.dp, minHeight = 24.dp)
                         ) {
                             Box(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
@@ -232,7 +240,7 @@ fun SupplierDashboardCard(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "In Transit",
+                                    text = "Track",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isDarkTheme) Color(0xFF38BDF8) else Color(0xFF0284C7)
@@ -290,13 +298,43 @@ private fun cleanItemTitle(rawTitle: String): String {
     if (title.contains("•")) {
         title = title.substringAfterLast("•").trim()
     }
-    title = title.replace(Regex("^PO-\\d{4}-\\d+\\s*-\\s*", RegexOption.IGNORE_CASE), "")
-    title = title.replace(Regex("^PO-\\d+\\s*-\\s*", RegexOption.IGNORE_CASE), "")
-    title = title.replace(Regex("^(Inbound Request|Cold-Chain Restock|Gourmet Pantry Inbound)\\s*[-•:]?\\s*", RegexOption.IGNORE_CASE), "")
+    title = title.replace(Regex("^PO-\\d{4}-\\d+\\s*[-•:]?\\s*", RegexOption.IGNORE_CASE), "")
+    title = title.replace(Regex("^PO-\\d+\\s*[-•:]?\\s*", RegexOption.IGNORE_CASE), "")
+    title = title.replace(Regex("^(Inbound Request|Cold-Chain Restock|Gourmet Pantry Inbound|Warehouse Restock)\\s*[-•:]?\\s*", RegexOption.IGNORE_CASE), "")
     title = title.replace(Regex("^Stock (In|Out):\\s*", RegexOption.IGNORE_CASE), "")
-    title = title.replace(Regex("\\s+Restock$", RegexOption.IGNORE_CASE), "")
-    title = title.replace(Regex("\\s+Inbound$", RegexOption.IGNORE_CASE), "")
-    return title.trim().ifBlank { rawTitle.trim() }
+    title = title.replace(Regex("\\s+(Restock|Inbound|Outbound|Request|Batch)$", RegexOption.IGNORE_CASE), "")
+
+    val lower = title.lowercase()
+    return when {
+        lower.contains("coca") || lower.contains("coke") -> "Coca-Cola"
+        lower.contains("red bull") || lower.contains("redbull") -> "RedBull"
+        lower.contains("nutella") -> "Nutella"
+        lower.contains("pesto") || lower.contains("barilla") -> "Barilla"
+        lower.contains("ketchup") || lower.contains("heinz") -> "Ketchup"
+        lower.contains("oreo") -> "Oreo"
+        lower.contains("salmon") -> "Salmon"
+        lower.contains("lobster") -> "Lobster"
+        lower.contains("crab") -> "Crab"
+        lower.contains("prawn") || lower.contains("shrimp") -> "Prawns"
+        lower.contains("wagyu") || lower.contains("ribeye") || (lower.contains("beef") && !lower.contains("pantry")) -> "Wagyu"
+        lower.contains("tofu") -> "Tofu"
+        lower.contains("carton") || lower.contains("box") -> "Boxes"
+        lower.contains("heineken") || lower.contains("beer") -> "Heineken"
+        lower.contains("coffee") -> "Coffee"
+        lower.contains("tea") -> "Tea"
+        lower.contains("milk") -> "Milk"
+        lower.contains("bread") -> "Bread"
+        lower.contains("rice") -> "Rice"
+        lower.contains("apple") -> "Apple"
+        lower.contains("banana") -> "Banana"
+        lower.contains("orange") -> "Orange"
+        else -> {
+            var firstItem = title.split(Regex("[&,]")).first().trim()
+            firstItem = firstItem.replace(Regex("\\s+(Cans?|Bottles?|Pack|Boxes|Pieces?|Bags?|Jar|Pcs)$", RegexOption.IGNORE_CASE), "").trim()
+            val firstWord = firstItem.split(Regex("\\s+")).firstOrNull()?.trim() ?: "Item"
+            firstWord.replace(Regex("[^a-zA-Z0-9_-]"), "").ifBlank { "Item" }
+        }
+    }
 }
 
 private fun formatShortPoCode(orderNumber: String): String {
@@ -314,8 +352,21 @@ private fun formatShortPoCode(orderNumber: String): String {
 }
 
 private fun cleanSupplierName(rawSupplier: String): String {
-    return rawSupplier
-        .replace(Regex("\\s+Supply$", RegexOption.IGNORE_CASE), "")
-        .trim()
-        .ifBlank { rawSupplier.trim() }
+    val clean = rawSupplier.trim()
+    val lower = clean.lowercase()
+    return when {
+        lower.contains("pacific") -> "Pacific"
+        lower.contains("foodie") -> "Foodie"
+        lower.contains("tokyo") -> "Tokyo"
+        lower.contains("greenleaf") || lower.contains("vegan") -> "GreenLeaf"
+        lower.contains("apex") -> "Apex"
+        lower.contains("nawano") || lower.contains("hq") || lower.contains("central") -> "HQ"
+        else -> {
+            val stripped = clean
+                .replace(Regex("\\s+(Supply|Supplier|Suppliers|Ltd|Inc|Co|Corporation|Logistics|Freight|Pte|LLC)$", RegexOption.IGNORE_CASE), "")
+                .trim()
+            val firstWord = stripped.split(Regex("\\s+")).firstOrNull()?.trim() ?: "Supplier"
+            firstWord.replace(Regex("[^a-zA-Z0-9]"), "").ifBlank { "Supplier" }
+        }
+    }
 }

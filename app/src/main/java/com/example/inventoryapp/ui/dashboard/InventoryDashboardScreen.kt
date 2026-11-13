@@ -1732,13 +1732,43 @@ private fun cleanItemTitle(rawTitle: String): String {
     if (title.contains("•")) {
         title = title.substringAfterLast("•").trim()
     }
-    title = title.replace(Regex("^PO-\\d{4}-\\d+\\s*-\\s*", RegexOption.IGNORE_CASE), "")
-    title = title.replace(Regex("^PO-\\d+\\s*-\\s*", RegexOption.IGNORE_CASE), "")
-    title = title.replace(Regex("^(Inbound Request|Cold-Chain Restock|Gourmet Pantry Inbound)\\s*[-•:]?\\s*", RegexOption.IGNORE_CASE), "")
+    title = title.replace(Regex("^PO-\\d{4}-\\d+\\s*[-•:]?\\s*", RegexOption.IGNORE_CASE), "")
+    title = title.replace(Regex("^PO-\\d+\\s*[-•:]?\\s*", RegexOption.IGNORE_CASE), "")
+    title = title.replace(Regex("^(Inbound Request|Cold-Chain Restock|Gourmet Pantry Inbound|Warehouse Restock)\\s*[-•:]?\\s*", RegexOption.IGNORE_CASE), "")
     title = title.replace(Regex("^Stock (In|Out):\\s*", RegexOption.IGNORE_CASE), "")
-    title = title.replace(Regex("\\s+Restock$", RegexOption.IGNORE_CASE), "")
-    title = title.replace(Regex("\\s+Inbound$", RegexOption.IGNORE_CASE), "")
-    return title.trim().ifBlank { rawTitle.trim() }
+    title = title.replace(Regex("\\s+(Restock|Inbound|Outbound|Request|Batch)$", RegexOption.IGNORE_CASE), "")
+
+    val lower = title.lowercase()
+    return when {
+        lower.contains("coca") || lower.contains("coke") -> "Coca-Cola"
+        lower.contains("red bull") || lower.contains("redbull") -> "RedBull"
+        lower.contains("nutella") -> "Nutella"
+        lower.contains("pesto") || lower.contains("barilla") -> "Barilla"
+        lower.contains("ketchup") || lower.contains("heinz") -> "Ketchup"
+        lower.contains("oreo") -> "Oreo"
+        lower.contains("salmon") -> "Salmon"
+        lower.contains("lobster") -> "Lobster"
+        lower.contains("crab") -> "Crab"
+        lower.contains("prawn") || lower.contains("shrimp") -> "Prawns"
+        lower.contains("wagyu") || lower.contains("ribeye") || (lower.contains("beef") && !lower.contains("pantry")) -> "Wagyu"
+        lower.contains("tofu") -> "Tofu"
+        lower.contains("carton") || lower.contains("box") -> "Boxes"
+        lower.contains("heineken") || lower.contains("beer") -> "Heineken"
+        lower.contains("coffee") -> "Coffee"
+        lower.contains("tea") -> "Tea"
+        lower.contains("milk") -> "Milk"
+        lower.contains("bread") -> "Bread"
+        lower.contains("rice") -> "Rice"
+        lower.contains("apple") -> "Apple"
+        lower.contains("banana") -> "Banana"
+        lower.contains("orange") -> "Orange"
+        else -> {
+            var firstItem = title.split(Regex("[&,]")).first().trim()
+            firstItem = firstItem.replace(Regex("\\s+(Cans?|Bottles?|Pack|Boxes|Pieces?|Bags?|Jar|Pcs)$", RegexOption.IGNORE_CASE), "").trim()
+            val firstWord = firstItem.split(Regex("\\s+")).firstOrNull()?.trim() ?: "Item"
+            firstWord.replace(Regex("[^a-zA-Z0-9_-]"), "").ifBlank { "Item" }
+        }
+    }
 }
 
 private fun formatShortPoCode(orderNumber: String): String {
@@ -1756,10 +1786,23 @@ private fun formatShortPoCode(orderNumber: String): String {
 }
 
 private fun cleanSupplierName(rawSupplier: String): String {
-    return rawSupplier
-        .replace(Regex("\\s+Supply$", RegexOption.IGNORE_CASE), "")
-        .trim()
-        .ifBlank { rawSupplier.trim() }
+    val clean = rawSupplier.trim()
+    val lower = clean.lowercase()
+    return when {
+        lower.contains("pacific") -> "Pacific"
+        lower.contains("foodie") -> "Foodie"
+        lower.contains("tokyo") -> "Tokyo"
+        lower.contains("greenleaf") || lower.contains("vegan") -> "GreenLeaf"
+        lower.contains("apex") -> "Apex"
+        lower.contains("nawano") || lower.contains("hq") || lower.contains("central") -> "HQ"
+        else -> {
+            val stripped = clean
+                .replace(Regex("\\s+(Supply|Supplier|Suppliers|Ltd|Inc|Co|Corporation|Logistics|Freight|Pte|LLC)$", RegexOption.IGNORE_CASE), "")
+                .trim()
+            val firstWord = stripped.split(Regex("\\s+")).firstOrNull()?.trim() ?: "Supplier"
+            firstWord.replace(Regex("[^a-zA-Z0-9]"), "").ifBlank { "Supplier" }
+        }
+    }
 }
 
 /**
@@ -1865,10 +1908,10 @@ private fun NawanoIncomingGoodsSection(
                 else -> ActivityLifecycleState.INCOMING
             }
 
-            val cleanTitle = cleanItemTitle(po.title.ifBlank { "Items from ${po.supplierName}" })
+            val cleanTitle = ProductImageHelper.cleanOneWordTitle(po.title.ifBlank { "Items from ${po.supplierName}" })
             val shortPo = formatShortPoCode(po.orderNumber)
-            val shortSupplier = cleanSupplierName(po.supplierName)
-            val eta = po.estArrival.ifBlank { "In 2 days" }
+            val shortSupplier = ProductImageHelper.cleanSupplierName(po.supplierName)
+            val eta = if (po.estArrival.contains(",")) po.estArrival.substringBefore(",").trim() else po.estArrival.ifBlank { "In 2 days" }
             val metadataLine = "$shortPo • $shortSupplier • $eta"
 
             // Auto-resolve product photo by title, supplier, or SKU match
@@ -1901,7 +1944,7 @@ private fun NawanoIncomingGoodsSection(
         // 2. Map real transactions (most recent on top)
         transactions.forEach { tx ->
             val isPositive = tx.quantityDelta >= 0
-            val cleanTitle = cleanItemTitle(tx.productName)
+            val cleanTitle = ProductImageHelper.cleanOneWordTitle(tx.productName)
             val shortTx = "#TX-${tx.id.takeLast(6).uppercase()}"
             val timeFormat = SimpleDateFormat("hh:mm a", Locale.US)
             val timeStr = timeFormat.format(Date(tx.timestamp))

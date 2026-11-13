@@ -48,7 +48,7 @@ fun SupplierShipmentsScreen(
 ) {
     val context = LocalContext.current
     var selectedShipmentFilter by remember { mutableIntStateOf(0) }
-    val shipmentFilterTabs = listOf("All Shipments", "In Transit", "Ready to Dispatch", "Received")
+    val shipmentFilterTabs = listOf("All", "Transit", "Confirmed", "Completed")
 
     val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
     val cardBorder = if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0)
