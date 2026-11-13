@@ -230,7 +230,7 @@ fun InventoryDrawerSheet(
 
             DrawerNavRow(
                 icon = Icons.Default.History,
-                label = "Movements",
+                label = "Stock Transfers",
                 isSelected = currentDestination == DrawerDestination.MOVEMENT_LIST || currentDestination == DrawerDestination.AUDIT_LOGS,
                 badge = null,
                 onClick = { onDestinationSelected(DrawerDestination.MOVEMENT_LIST) }

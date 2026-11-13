@@ -104,6 +104,8 @@ fun InventoryDashboardScreen(
     var addProductDraft by remember { mutableStateOf(AddProductDraft()) }
     var scannedNotFoundSku by remember { mutableStateOf<String?>(null) }
     var isUpcomingSheetOpen by remember { mutableStateOf(false) }
+    var isStockHistorySheetOpen by remember { mutableStateOf(false) }
+    var isStockTransfersSheetOpen by remember { mutableStateOf(false) }
     var viewingOrderWithItems by remember { mutableStateOf<OrderWithItems?>(null) }
     var showNewPoDialog by remember { mutableStateOf(false) }
     var showAddSupplierDialog by remember { mutableStateOf(false) }
@@ -152,10 +154,12 @@ fun InventoryDashboardScreen(
                     drawerDestination = DrawerDestination.INVENTORY_SUMMARY
                 }
                 DrawerDestination.MOVEMENT_LIST -> {
-                    drawerDestination = DrawerDestination.MOVEMENT_LIST
+                    drawerDestination = null
+                    isStockTransfersSheetOpen = true
                 }
                 DrawerDestination.AUDIT_LOGS -> {
-                    drawerDestination = DrawerDestination.AUDIT_LOGS
+                    drawerDestination = null
+                    isStockHistorySheetOpen = true
                 }
                 DrawerDestination.SUPPLIERS -> {
                     drawerDestination = DrawerDestination.SUPPLIERS
@@ -322,13 +326,13 @@ fun InventoryDashboardScreen(
                                     activeTab = 1
                                 },
                                 onNavigateToMoveSummary = {
-                                    drawerDestination = DrawerDestination.MOVEMENT_LIST
+                                    isStockTransfersSheetOpen = true
                                 },
                                 onNavigateToUpcoming = {
                                     isUpcomingSheetOpen = true
                                 },
                                 onNavigateToQtyChanges = {
-                                    drawerDestination = DrawerDestination.AUDIT_LOGS
+                                    isStockHistorySheetOpen = true
                                 },
                                 onProductClick = { product -> viewingProductDetails = product },
                                 onQuantityChange = { item, delta ->
@@ -649,6 +653,30 @@ fun InventoryDashboardScreen(
                         isUpcomingSheetOpen = false
                         handleRequestSupply(product)
                     }
+                )
+            }
+
+            // Stock History BottomSheet (Swipe-up modal)
+            if (isStockHistorySheetOpen) {
+                StockHistoryBottomSheet(
+                    transactions = uiState.transactions,
+                    products = uiState.products,
+                    isDarkTheme = isDarkTheme,
+                    onDismiss = { isStockHistorySheetOpen = false }
+                )
+            }
+
+            // Stock Transfers BottomSheet (Swipe-up modal)
+            if (isStockTransfersSheetOpen) {
+                StockTransfersBottomSheet(
+                    transactions = uiState.transactions,
+                    products = uiState.products,
+                    isDarkTheme = isDarkTheme,
+                    onAddTransfer = {
+                        isStockTransfersSheetOpen = false
+                        showNewPoDialog = true
+                    },
+                    onDismiss = { isStockTransfersSheetOpen = false }
                 )
             }
 
@@ -1452,9 +1480,9 @@ private fun NawanoOperationalCardsGrid(
                 modifier = Modifier.weight(1f)
             )
 
-            // Movements: Soft indigo/slate swap arrows (⇄)
+            // Stock Transfers: Soft indigo/slate swap arrows (⇄)
             NawanoOperationalCard(
-                title = "Movements",
+                title = "Stock Transfers",
                 count = uiState.transactions.size,
                 unit = "Orders",
                 icon = Icons.Outlined.SwapHoriz,
@@ -1467,7 +1495,7 @@ private fun NawanoOperationalCardsGrid(
             )
         }
 
-        // Row 2: Upcoming Expiry + Audits
+        // Row 2: Upcoming Expiry + Stock History
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             val upcomingCount = uiState.products.count { it.quantity <= it.reorderLevel || it.quantity <= 5 }
             // Expiring: Soft purple clock
@@ -1484,9 +1512,9 @@ private fun NawanoOperationalCardsGrid(
                 modifier = Modifier.weight(1f)
             )
 
-            // Audits: Soft emerald clipboard-check
+            // Stock History: Soft emerald clipboard-check
             NawanoOperationalCard(
-                title = "Audits",
+                title = "Stock History",
                 count = uiState.transactions.size,
                 unit = "Items",
                 icon = Icons.Outlined.FactCheck,
