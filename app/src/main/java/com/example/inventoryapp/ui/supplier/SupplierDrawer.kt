@@ -43,6 +43,7 @@ fun SupplierDrawerSheet(
     onSwitchToMiddleman: (() -> Unit)? = null,
     onOpenShipments: () -> Unit = {},
     onOpenNotifications: () -> Unit = {},
+    onAddProduct: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
@@ -150,6 +151,19 @@ fun SupplierDrawerSheet(
                 isSelected = activeViewTab == 1,
                 isDarkTheme = isDarkTheme,
                 onClick = { onTabSelected(1) }
+            )
+
+            // Add Product Action
+            SupplierDrawerItem(
+                label = "Add Product",
+                icon = Icons.Default.AddCircleOutline,
+                badge = null,
+                isSelected = false,
+                isDarkTheme = isDarkTheme,
+                onClick = {
+                    onCloseDrawer()
+                    onAddProduct()
+                }
             )
 
             // Item 2: Analytics

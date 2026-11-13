@@ -37,12 +37,20 @@ enum class ProductSortOption(val displayName: String) {
  */
 object CategoryHierarchy {
     val HIERARCHY: Map<String, List<String>> = mapOf(
+        "Seafood" to listOf("Fish", "Crab & Shrimp", "Shellfish", "Frozen"),
+        "Meat" to listOf("Beef", "Pork", "Poultry", "Sausages"),
+        "Meats" to listOf("Beef", "Pork", "Poultry", "Sausages"),
+        "Produce" to listOf("Fruits", "Vegetables", "Herbs"),
+        "Dairy" to listOf("Milk", "Cheese", "Butter", "Yogurt"),
+        "Beverages" to listOf("Soda", "Energy Drinks", "Water", "Juice", "Coffee & Tea"),
+        "Pantry" to listOf("Pasta & Grains", "Sauces", "Canned Goods", "Spices"),
+        "Snacks" to listOf("Chips", "Cookies", "Nuts", "Candy"),
         "Electronics" to listOf("Audio", "Computers", "Mobile", "Cables", "Components"),
         "Accessories" to listOf("Bags", "Cases", "Chargers", "Screen Protectors"),
         "Furniture" to listOf("Chairs", "Desks", "Storage", "Lighting"),
         "Hardware" to listOf("Tools", "Fasteners", "Safety Gear", "Electrical"),
         "Grocery" to listOf("Beverages", "Snacks", "Pantry", "Household"),
-        "Other" to listOf("General", "Supplies", "Misc")
+        "Other" to listOf("General", "Supplies", "Packaging", "Misc")
     )
 
     fun getSubcategories(category: String): List<String> {
@@ -178,9 +186,10 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             val matchesCategory = when (category) {
                 "All" -> true
                 "Low Stock" -> item.quantity <= item.reorderLevel
+                "Meat", "Meats" -> item.category.equals("Meat", ignoreCase = true) || item.category.equals("Meats", ignoreCase = true)
                 "Other" -> item.category.equals("Other", ignoreCase = true) ||
                         item.category.isBlank() ||
-                        !CategoryHierarchy.HIERARCHY.keys.any { it != "Other" && it.equals(item.category, ignoreCase = true) }
+                        !CategoryHierarchy.HIERARCHY.keys.any { it != "Other" && (it.equals(item.category, ignoreCase = true) || (it == "Meat" && item.category.equals("Meats", ignoreCase = true))) }
                 else -> item.category.equals(category, ignoreCase = true)
             }
 

@@ -42,9 +42,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.inventoryapp.R
@@ -122,7 +125,7 @@ fun InventoryDashboardScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var drawerDestination by remember { mutableStateOf<DrawerDestination?>(null) }
 
-    val categoryList = listOf("All", "Electronics", "Accessories", "Furniture", "Hardware", "Grocery", "Other", "Low Stock")
+    val categoryList = listOf("All", "Seafood", "Meat", "Produce", "Dairy", "Beverages", "Pantry", "Snacks", "Other")
 
     InventoryNavigationDrawer(
         drawerState = drawerState,
@@ -436,6 +439,7 @@ fun InventoryDashboardScreen(
                             InventoryItemsCatalogTab(
                                 uiState = uiState,
                                 categoryList = categoryList,
+                                isDarkTheme = isDarkTheme,
                                 onSearchChanged = { viewModel.onSearchQueryChanged(it) },
                                 onCategorySelected = { viewModel.onCategorySelected(it) },
                                 onSubcategorySelected = { viewModel.onSubcategorySelected(it) },
@@ -937,6 +941,7 @@ private fun DashboardOverviewTab(
                 InventoryItemCard(
                     item = item,
                     isHighlighted = item.sku.equals(uiState.scannedSku, ignoreCase = true),
+                    isDarkTheme = isDarkTheme,
                     onQuantityChange = { delta -> onQuantityChange(item, delta) },
                     onCardClick = { onProductClick(item) },
                     onDelete = null,
@@ -955,6 +960,7 @@ private fun DashboardOverviewTab(
 private fun InventoryItemsCatalogTab(
     uiState: DashboardUiState,
     categoryList: List<String>,
+    isDarkTheme: Boolean = false,
     onSearchChanged: (String) -> Unit,
     onCategorySelected: (String) -> Unit,
     onSubcategorySelected: (String) -> Unit,
@@ -970,6 +976,17 @@ private fun InventoryItemsCatalogTab(
     onRequestSupply: (ProductEntity) -> Unit = {}
 ) {
     var sortMenuExpanded by remember { mutableStateOf(false) }
+    var isInStockOnly by remember { mutableStateOf(false) }
+
+    val displayedProducts = remember(uiState.filteredProducts, isInStockOnly) {
+        if (isInStockOnly) uiState.filteredProducts.filter { it.quantity > 0 }
+        else uiState.filteredProducts
+    }
+
+    val cardBg = if (isDarkTheme) Color(0xFF191D2D) else Color.White
+    val cardBorder = if (isDarkTheme) Color(0xFF2E334D) else Color(0xFFE2E8F0)
+    val textPrimary = if (isDarkTheme) Color.White else Color(0xFF1E293B)
+    val textSecondary = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B)
 
     Column(
         modifier = Modifier
@@ -995,94 +1012,103 @@ private fun InventoryItemsCatalogTab(
             Spacer(modifier = Modifier.height(10.dp))
         }
 
-        // Search Bar with Scan Shortcut
-        OutlinedTextField(
-            value = uiState.searchQuery,
-            onValueChange = onSearchChanged,
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = {
-                Text(
-                    text = "Search catalog by name, SKU, brand...",
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            },
-            leadingIcon = {
+        // 1. Sleek Search Bar with Scan Shortcut (Matching reference Image 3: Search 13 products, SKU... [barcode])
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = cardBg,
+            border = BorderStroke(1.dp, cardBorder),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Icon(
                     imageVector = Icons.Default.Search,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    contentDescription = "Search",
+                    tint = textSecondary,
+                    modifier = Modifier.size(20.dp)
                 )
-            },
-            trailingIcon = {
+                Spacer(modifier = Modifier.width(10.dp))
+                BasicTextField(
+                    value = uiState.searchQuery,
+                    onValueChange = onSearchChanged,
+                    singleLine = true,
+                    cursorBrush = SolidColor(NawanoPrimary200),
+                    textStyle = TextStyle(
+                        color = textPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    modifier = Modifier.weight(1f),
+                    decorationBox = { innerTextField ->
+                        if (uiState.searchQuery.isEmpty()) {
+                            Text(
+                                text = "Search ${uiState.products.size} products, SKU...",
+                                color = textSecondary,
+                                fontSize = 14.sp
+                            )
+                        }
+                        innerTextField()
+                    }
+                )
                 if (uiState.searchQuery.isNotEmpty()) {
                     IconButton(
                         onClick = { onSearchChanged("") },
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.size(28.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Clear,
+                            imageVector = Icons.Default.Close,
                             contentDescription = "Clear search",
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                } else {
-                    IconButton(
-                        onClick = onScanClicked,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_pos_barcode),
-                            contentDescription = "Scan SKU to Search",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
+                            tint = textSecondary,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
-            },
-            shape = RoundedCornerShape(16.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f),
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.8f),
-                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                focusedBorderColor = MaterialTheme.colorScheme.primary
-            ),
-            singleLine = true
-        )
+                IconButton(
+                    onClick = onScanClicked,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_pos_barcode),
+                        contentDescription = "Scan SKU to Search",
+                        tint = textSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Category Filter Chips Row
+        // 2. Category Filter Capsules (All, Seafood, Meat, Produce, Dairy, etc.)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            categoryList.forEach { category ->
-                val isSelected = uiState.selectedCategory == category
-                FilterChip(
-                    selected = isSelected,
-                    onClick = { onCategorySelected(category) },
-                    label = {
-                        Text(
-                            text = category,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                        )
-                    },
-                    shape = RoundedCornerShape(10.dp),
-                    leadingIcon = if (category == "Low Stock" && uiState.lowStockCount > 0) {
-                        {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    } else null
-                )
+            categoryList.forEach { cat ->
+                val isSelected = uiState.selectedCategory == cat
+                Surface(
+                    onClick = { onCategorySelected(cat) },
+                    shape = CircleShape,
+                    color = if (isSelected) Color(0xFF6C63FF) else cardBg,
+                    border = if (isSelected) null else BorderStroke(1.dp, cardBorder),
+                    shadowElevation = if (isSelected) 3.dp else 0.dp
+                ) {
+                    Text(
+                        text = cat,
+                        fontSize = 13.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) Color.White else textSecondary,
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+                    )
+                }
             }
         }
 
@@ -1101,7 +1127,7 @@ private fun InventoryItemsCatalogTab(
             exit = fadeOut(tween(120)) + shrinkVertically(tween(150))
         ) {
             Column {
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1113,30 +1139,27 @@ private fun InventoryItemsCatalogTab(
                         text = "↳ Subcategory:",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = NawanoPrimary200,
                         modifier = Modifier.padding(end = 4.dp)
                     )
                     subcategories.forEach { sub ->
                         val isAll = sub.startsWith("All ")
                         val subValue = if (isAll) "All" else sub
                         val isSubSelected = uiState.selectedSubcategory == subValue
-                        FilterChip(
-                            selected = isSubSelected,
+                        Surface(
                             onClick = { onSubcategorySelected(subValue) },
-                            label = {
-                                Text(
-                                    text = sub,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = if (isSubSelected) FontWeight.Bold else FontWeight.Normal
-                                )
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.height(28.dp),
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            shape = CircleShape,
+                            color = if (isSubSelected) NawanoPrimary200.copy(alpha = 0.2f) else cardBg,
+                            border = BorderStroke(1.dp, if (isSubSelected) NawanoPrimary200 else cardBorder)
+                        ) {
+                            Text(
+                                text = sub,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = if (isSubSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSubSelected) NawanoPrimary200 else textSecondary,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
                             )
-                        )
+                        }
                     }
                 }
             }
@@ -1144,81 +1167,88 @@ private fun InventoryItemsCatalogTab(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Subheader: Total Results Count + Unified Action Buttons (Add & Sort)
+        // 3. Sub-header Row: "Products" on left, "● In Stock" and "⇅ Recent ▾" on right (Exact match with Image 3)
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "${uiState.filteredProducts.size} Items Displayed",
-                style = MaterialTheme.typography.titleSmall,
+                text = "Products",
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
+                color = textPrimary
             )
-
-            Spacer(modifier = Modifier.width(8.dp))
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Primary Add Product Button (Matching Nawano UI Kit)
-                Button(
-                    onClick = onAddProductClicked,
+                // "● In Stock" toggle filter with green dot
+                Surface(
+                    onClick = { isInStockOnly = !isInStockOnly },
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = NawanoPrimary200,
-                        contentColor = Color.White
-                    ),
-                    modifier = Modifier.height(34.dp),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
+                    color = if (isInStockOnly) Color(0xFF10B981).copy(alpha = 0.15f) else cardBg,
+                    border = BorderStroke(
+                        1.dp,
+                        if (isInStockOnly) Color(0xFF10B981).copy(alpha = 0.45f) else cardBorder
+                    )
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Add Product",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Add",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(if (isInStockOnly) Color(0xFF10B981) else textSecondary.copy(alpha = 0.5f))
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "In Stock",
+                            fontSize = 12.sp,
+                            fontWeight = if (isInStockOnly) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isInStockOnly) Color(0xFF10B981) else textSecondary
+                        )
+                    }
                 }
 
-                // Sort Dropdown Pill
+                // "⇅ Recent ▾" Sort button
                 Box {
                     Surface(
                         onClick = { sortMenuExpanded = true },
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.height(34.dp)
+                        color = cardBg,
+                        border = BorderStroke(1.dp, cardBorder)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                Icons.AutoMirrored.Filled.Sort,
+                                imageVector = Icons.Default.SwapVert,
                                 contentDescription = "Sort",
-                                modifier = Modifier.size(15.dp),
-                                tint = NawanoPrimary200
+                                tint = textSecondary,
+                                modifier = Modifier.size(14.dp)
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(Modifier.width(4.dp))
                             Text(
-                                text = "Sort",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold
+                                text = when (uiState.sortOption) {
+                                    ProductSortOption.NAME_ASC -> "Recent"
+                                    ProductSortOption.STOCK_LOW_TO_HIGH -> "Stock ↑"
+                                    ProductSortOption.STOCK_HIGH_TO_LOW -> "Stock ↓"
+                                    ProductSortOption.PRICE_HIGH_TO_LOW -> "Price"
+                                },
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = textPrimary
                             )
+                            Spacer(Modifier.width(2.dp))
                             Icon(
-                                Icons.Default.ArrowDropDown,
+                                imageVector = Icons.Default.ArrowDropDown,
                                 contentDescription = null,
+                                tint = textSecondary,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -1248,10 +1278,10 @@ private fun InventoryItemsCatalogTab(
             }
         }
 
-    Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // Inventory Items List / Empty State
-        if (uiState.filteredProducts.isEmpty()) {
+        // 4. Products List / Empty State
+        if (displayedProducts.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1263,17 +1293,17 @@ private fun InventoryItemsCatalogTab(
                         .fillMaxWidth()
                         .padding(horizontal = 8.dp, vertical = 24.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        containerColor = cardBg
                     ),
                     shape = RoundedCornerShape(20.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    border = BorderStroke(1.dp, cardBorder)
                 ) {
                     Column(
                         modifier = Modifier.padding(28.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                            color = NawanoPrimary200.copy(alpha = 0.15f),
                             shape = CircleShape,
                             modifier = Modifier.size(68.dp)
                         ) {
@@ -1282,7 +1312,7 @@ private fun InventoryItemsCatalogTab(
                                     painter = painterResource(R.drawable.ic_inventory_box),
                                     contentDescription = null,
                                     modifier = Modifier.size(34.dp),
-                                    tint = MaterialTheme.colorScheme.primary
+                                    tint = NawanoPrimary200
                                 )
                             }
                         }
@@ -1291,21 +1321,25 @@ private fun InventoryItemsCatalogTab(
                             text = "No catalog products found",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = textPrimary
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = if (uiState.searchQuery.isNotBlank() || uiState.selectedCategory != "All")
-                                "No items match '${uiState.searchQuery}'. Try resetting filters or search query."
+                            text = if (uiState.searchQuery.isNotBlank() || uiState.selectedCategory != "All" || isInStockOnly)
+                                "No items match your filters or search query."
                             else "Your inventory is currently empty. Tap below to register your first product.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = textSecondary,
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(20.dp))
                         Button(
                             onClick = onAddProductClicked,
                             shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = NawanoPrimary200,
+                                contentColor = Color.White
+                            ),
                             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -1318,14 +1352,15 @@ private fun InventoryItemsCatalogTab(
         } else {
             LazyColumn(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
                 contentPadding = PaddingValues(top = 4.dp, bottom = 120.dp)
             ) {
-                items(items = uiState.filteredProducts, key = { item -> item.id }) { item ->
+                items(items = displayedProducts, key = { item -> item.id }) { item ->
                     val isHighlighted = item.sku.equals(uiState.scannedSku, ignoreCase = true)
                     InventoryItemCard(
                         item = item,
                         isHighlighted = isHighlighted,
+                        isDarkTheme = isDarkTheme,
                         onQuantityChange = { delta -> onQuantityChange(item, delta) },
                         onCardClick = { onProductClick(item) },
                         onDelete = { onDeleteProduct(item) },
@@ -2843,36 +2878,52 @@ internal fun getCategoryIcon(category: String): ImageVector {
 private fun InventoryItemCard(
     item: ProductEntity,
     isHighlighted: Boolean,
+    isDarkTheme: Boolean = false,
     onQuantityChange: (Int) -> Unit,
     onCardClick: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
     onRequestSupply: (() -> Unit)? = null
 ) {
-    val isLowStock = item.quantity <= item.reorderLevel
-    val categoryIcon = getCategoryIcon(item.category)
-    val showRequestBtn = item.canRequestSupply && onRequestSupply != null
+    val cardBg = if (isDarkTheme) Color(0xFF191D2D) else Color.White
+    val cardBorder = if (isDarkTheme) Color(0xFF2E334D) else Color(0xFFE2E8F0)
+    val textPrimary = if (isDarkTheme) Color.White else Color(0xFF1E293B)
+    val textSecondary = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B)
 
-    val (stockText, stockColor, stockContainerColor) = when {
-        item.quantity <= 0 -> Triple("Out of Stock", Color(0xFFEF4444), Color(0xFFEF4444).copy(alpha = 0.12f))
-        isLowStock -> Triple("Low Stock (${item.quantity} ${item.unit})", Color(0xFFF59E0B), Color(0xFFF59E0B).copy(alpha = 0.12f))
-        else -> Triple("${item.quantity} ${item.unit} in stock", Color(0xFF10B981), Color(0xFF10B981).copy(alpha = 0.12f))
+    val isLowStock = item.quantity <= item.reorderLevel
+    val stockPillBg = when {
+        item.quantity <= 0 -> if (isDarkTheme) Color(0xFF3B1818) else Color(0xFFFEE2E2)
+        isLowStock -> if (isDarkTheme) Color(0xFF382710) else Color(0xFFFEF3C7)
+        else -> if (isDarkTheme) Color(0xFF102E29) else Color(0xFFD1FAE5)
+    }
+    val stockPillTextColor = when {
+        item.quantity <= 0 -> Color(0xFFEF4444)
+        isLowStock -> Color(0xFFF59E0B)
+        else -> Color(0xFF10B981)
+    }
+    val stockPillLabel = when {
+        item.quantity <= 0 -> "Out of stock"
+        isLowStock -> "Low Stock (${item.quantity} ${item.unit})"
+        else -> "${item.quantity} in stock"
     }
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onCardClick != null) Modifier.clickable { onCardClick() } else Modifier),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(18.dp),
+    val skuLabel = if (item.sku.startsWith("#")) item.sku else "#${item.sku}"
+
+    Surface(
+        onClick = { onCardClick?.invoke() },
+        shape = RoundedCornerShape(20.dp),
+        color = cardBg,
         border = BorderStroke(
             width = if (isHighlighted) 2.dp else 1.dp,
-            color = if (isHighlighted) NawanoPrimary200 else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+            color = if (isHighlighted) NawanoPrimary200 else cardBorder
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isHighlighted) 4.dp else 1.5.dp)
+        shadowElevation = if (isDarkTheme) 0.dp else 2.dp,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp)
+        ) {
             // Scanned Highlight Banner inside the card (Nawano Primary highlight)
             if (isHighlighted) {
                 Surface(
@@ -2904,280 +2955,228 @@ private fun InventoryItemCard(
                         Text(
                             text = "Tap +/- to adjust",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = textSecondary
                         )
                     }
                 }
             }
 
-            // Top Content Row: Thumbnail + Product Name & Metadata + Delete Action
+            // ROW 1: Thumbnail + Title & Tags + Edit & Delete Action Icons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Top
             ) {
-                // Product Thumbnail (54dp with rounded corners)
+                // 54dp Rounded Product Thumbnail
                 ProductThumbnail(
                     product = item,
-                    modifier = Modifier.size(54.dp)
+                    modifier = Modifier.size(54.dp),
+                    shape = RoundedCornerShape(14.dp)
                 )
 
                 Spacer(modifier = Modifier.width(12.dp))
 
-                Column(modifier = Modifier.weight(1f)) {
-                    // Title and Delete Row
+                // Title + Category/SKU badge
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = item.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = textPrimary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Top
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = item.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-
-                        if (onDelete != null) {
-                            IconButton(
-                                onClick = onDelete,
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .offset(x = 4.dp, y = (-4).dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Delete,
-                                    contentDescription = "Delete product",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (isDarkTheme) Color(0xFF282B44) else Color(0xFFEEF2FF)
+                        ) {
+                            Text(
+                                text = item.category.ifBlank { "General" },
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isDarkTheme) Color(0xFFA5B4FC) else NawanoPrimary200,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
                         }
-                    }
 
-                    // Author / Brand subtitle if present
-                    if (item.brand.isNotBlank()) {
+                        Spacer(modifier = Modifier.width(6.dp))
+
                         Text(
-                            text = "by ${item.brand}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = "• $skuLabel",
+                            fontSize = 11.sp,
+                            letterSpacing = (-0.2).sp,
+                            color = textSecondary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
-                    // Meta Chips: Monospace SKU + Category Pill (Row 1) and Location (Row 2)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.fillMaxWidth()
+                // Edit pencil & Delete trash
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    IconButton(
+                        onClick = { onCardClick?.invoke() },
+                        modifier = Modifier.size(24.dp)
                     ) {
-                        // Monospace SKU Chip
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(6.dp),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
-                        ) {
-                            Text(
-                                text = "#${item.sku}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.SemiBold,
-                                color = NawanoPrimary200,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit Product",
+                            tint = textSecondary,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
 
-                        // Hierarchical Category > Subcategory Pill
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(6.dp),
-                            modifier = Modifier.weight(1f, fill = false)
+                    if (onDelete != null) {
+                        IconButton(
+                            onClick = onDelete,
+                            modifier = Modifier.size(24.dp)
                         ) {
-                            val catBreadcrumb = if (item.subcategory.isNotBlank()) "${item.category} > ${item.subcategory}" else item.category
-                            Text(
-                                text = catBreadcrumb,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = NawanoPrimary200,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete Product",
+                                tint = Color(0xFFEF4444),
+                                modifier = Modifier.size(15.dp)
                             )
                         }
                     }
+                }
+            }
 
-                    if (item.location.isNotBlank() || showRequestBtn) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            if (item.location.isNotBlank()) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f, fill = false)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.LocationOn,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Spacer(Modifier.width(3.dp))
-                                    Text(
-                                        text = item.location,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            } else {
-                                Spacer(Modifier.width(1.dp))
-                            }
+            Spacer(modifier = Modifier.height(14.dp))
 
-                            if (showRequestBtn) {
-                                Spacer(Modifier.width(6.dp))
-                                Surface(
-                                    onClick = { onRequestSupply?.invoke() },
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = NawanoPrimary200.copy(alpha = 0.12f),
-                                    border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.35f))
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.LocalShipping,
-                                            contentDescription = "Request Supply",
-                                            tint = NawanoPrimary200,
-                                            modifier = Modifier.size(11.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(3.dp))
-                                        Text(
-                                            text = "Request",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = NawanoPrimary200,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
-                                    }
-                                }
-                            }
-                        }
+            // ROW 2: Selling Price ($X.XX / Unit) on Left, Stock Status Pill on Right
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Bright emerald green price
+                Text(
+                    text = "$${String.format(Locale.US, "%.2f", item.sellingPrice)} / ${item.unit}",
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 17.sp,
+                    color = Color(0xFF10B981)
+                )
+
+                // Stock status pill: ● X in stock
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = stockPillBg
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(stockPillTextColor)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = stockPillLabel,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = stockPillTextColor
+                        )
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Bottom Flexible Row: Stock Status Pill (left) + Price & Tactile Stepper (right)
+            // ROW 3: [+ Restock] Button on Left, Tactile Stepper [ - ] Qty [ + ] on Right
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Stock Status Chip with rounded pill
+                // [+ Restock] pill button (opens supply request or stock dialog)
                 Surface(
-                    color = stockContainerColor,
-                    shape = RoundedCornerShape(20.dp),
-                    border = BorderStroke(1.dp, stockColor.copy(alpha = 0.35f)),
-                    modifier = Modifier.weight(1f, fill = false)
+                    onClick = { onRequestSupply?.invoke() ?: onCardClick?.invoke() },
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (isDarkTheme) Color(0xFF22263C) else Color(0xFFF1F5F9),
+                    border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF333856) else Color(0xFFE2E8F0))
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(stockColor)
-                        )
-                        Spacer(modifier = Modifier.width(5.dp))
                         Text(
-                            text = stockText,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = stockColor,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            text = "+ Restock",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isDarkTheme) Color(0xFFA5B4FC) else NawanoPrimary200
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Price and Tactile Stepper (Nawano UI Kit styling)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "$${String.format(Locale.US, "%.2f", item.sellingPrice)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = NawanoPrimary200,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = RoundedCornerShape(20.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+                // Tactile Stepper: [ - ]  Quantity  [ + ]
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = if (isDarkTheme) Color(0xFF22263C) else Color(0xFFF1F5F9),
+                    border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF333856) else Color(0xFFE2E8F0))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp)
+                        // Minus Button
+                        Surface(
+                            onClick = { onQuantityChange(-1) },
+                            shape = CircleShape,
+                            color = if (isDarkTheme) Color(0xFF2D324E) else Color.White,
+                            modifier = Modifier.size(28.dp)
                         ) {
-                            Surface(
-                                onClick = { onQuantityChange(-1) },
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surface,
-                                shadowElevation = 1.dp,
-                                modifier = Modifier.size(26.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Remove,
-                                        contentDescription = "Decrease Stock",
-                                        tint = MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                }
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Remove,
+                                    contentDescription = "Decrease",
+                                    tint = textPrimary,
+                                    modifier = Modifier.size(15.dp)
+                                )
                             }
-                            Text(
-                                text = "${item.quantity}",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier
-                                    .padding(horizontal = 6.dp)
-                                    .defaultMinSize(minWidth = 18.dp),
-                                textAlign = TextAlign.Center
-                            )
-                            Surface(
-                                onClick = { onQuantityChange(1) },
-                                shape = CircleShape,
-                                color = NawanoPrimary200,
-                                shadowElevation = 1.5.dp,
-                                modifier = Modifier.size(26.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
-                                        contentDescription = "Increase Stock",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                }
+                        }
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Text(
+                            text = "${item.quantity}",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textPrimary
+                        )
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        // Plus Button (Solid Purple)
+                        Surface(
+                            onClick = { onQuantityChange(1) },
+                            shape = CircleShape,
+                            color = Color(0xFF6C63FF),
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Increase",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(15.dp)
+                                )
                             }
                         }
                     }

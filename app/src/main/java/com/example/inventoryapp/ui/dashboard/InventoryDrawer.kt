@@ -2,10 +2,12 @@ package com.example.inventoryapp.ui.dashboard
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
@@ -13,18 +15,23 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.R
 import com.example.inventoryapp.ui.theme.NawanoPrimary200
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * Destinations accessible from the Navigation Drawer.
@@ -38,6 +45,48 @@ enum class DrawerDestination {
     SUPPLIERS,
     AUDIT_LOGS,
     SETTINGS
+}
+
+/**
+ * Edge swipe zone along the left of the screen that allows the user to swipe
+ * right to smoothly pull open the Navigation Drawer without triggering Android's system back gesture.
+ */
+@Composable
+fun DrawerEdgeSwipeZone(
+    drawerState: DrawerState,
+    scope: CoroutineScope,
+    modifier: Modifier = Modifier,
+    width: Dp = 44.dp
+) {
+    if (drawerState.isClosed) {
+        Box(
+            modifier = modifier
+                .fillMaxHeight()
+                .width(width)
+                .systemGestureExclusion()
+                .pointerInput(drawerState) {
+                    var totalDrag = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { totalDrag = 0f },
+                        onDragEnd = { totalDrag = 0f },
+                        onDragCancel = { totalDrag = 0f },
+                        onHorizontalDrag = { change, dragAmount ->
+                            if (dragAmount > 0) {
+                                totalDrag += dragAmount
+                                if (totalDrag > 25f) {
+                                    change.consume()
+                                    scope.launch {
+                                        if (drawerState.isClosed) {
+                                            drawerState.open()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    )
+                }
+        )
+    }
 }
 
 /**
@@ -59,6 +108,8 @@ fun InventoryNavigationDrawer(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    val scope = rememberCoroutineScope()
+
     ModalNavigationDrawer(
         modifier = modifier,
         drawerState = drawerState,
@@ -76,7 +127,19 @@ fun InventoryNavigationDrawer(
                 onSwitchToSupplier = onSwitchToSupplier
             )
         },
-        content = content
+        content = {
+            Box(modifier = Modifier.fillMaxSize()) {
+                content()
+
+                DrawerEdgeSwipeZone(
+                    drawerState = drawerState,
+                    scope = scope,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(top = 80.dp, bottom = 90.dp)
+                )
+            }
+        }
     )
 }
 

@@ -124,14 +124,14 @@ fun AppNavHost(
                 onLogout = {
                     authViewModel.logout {
                         navController.navigate(Routes.LOGIN) {
-                            popUpTo(0) { inclusive = true }
+                            popUpTo(Routes.HOME) { inclusive = true }
                         }
                     }
                 },
                 onSwitchToSupplier = {
                     authViewModel.quickDemoLogin(UserRole.SUPPLIER) {
                         navController.navigate(Routes.SUPPLIER_ORDERS) {
-                            popUpTo(0) { inclusive = true }
+                            popUpTo(Routes.HOME) { inclusive = true }
                         }
                     }
                 }
@@ -207,14 +207,14 @@ fun AppNavHost(
                 onLogout = {
                     authViewModel.logout {
                         navController.navigate(Routes.LOGIN) {
-                            popUpTo(0) { inclusive = true }
+                            popUpTo(Routes.SUPPLIER_ORDERS) { inclusive = true }
                         }
                     }
                 },
                 onSwitchToMiddleman = {
                     authViewModel.quickDemoLogin(UserRole.OWNER) {
                         navController.navigate(Routes.HOME) {
-                            popUpTo(0) { inclusive = true }
+                            popUpTo(Routes.SUPPLIER_ORDERS) { inclusive = true }
                         }
                     }
                 }

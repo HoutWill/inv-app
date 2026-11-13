@@ -1,6 +1,7 @@
 package com.example.inventoryapp.ui.supplier
 
 import android.widget.Toast
+import com.example.inventoryapp.ui.dashboard.DrawerEdgeSwipeZone
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -767,6 +768,15 @@ fun SupplierOrdersScreen(
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 12.dp)
+            )
+
+            // Left edge swipe zone to open navigation drawer without triggering Android system back
+            DrawerEdgeSwipeZone(
+                drawerState = drawerState,
+                scope = scope,
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(top = 80.dp, bottom = 90.dp)
             )
         }
     }
