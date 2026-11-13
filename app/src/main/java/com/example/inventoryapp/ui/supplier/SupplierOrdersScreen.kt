@@ -298,7 +298,8 @@ fun SupplierOrdersScreen(
                         } else {
                             showQuickAddChoiceSheet = true
                         }
-                    }
+                    },
+                    showTitleAndLogo = false
                 )
 
                 // Main Content Switching by Tab

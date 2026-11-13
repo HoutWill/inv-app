@@ -50,6 +50,7 @@ fun SupplierTopBar(
     onOpenNotifications: () -> Unit,
     onOpenScanner: () -> Unit = {},
     onQuickAdd: () -> Unit = {},
+    showTitleAndLogo: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
@@ -70,11 +71,11 @@ fun SupplierTopBar(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left Group: Hamburger + Nawano Logo Badge + Title & Subtitle
+            // Left Group: Hamburger (and conditionally Nawano Logo Badge + Title & Subtitle)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.weight(1f)
+                modifier = if (showTitleAndLogo) Modifier.weight(1f) else Modifier
             ) {
                 IconButton(
                     onClick = onOpenDrawer,
@@ -87,48 +88,50 @@ fun SupplierTopBar(
                     )
                 }
 
-                NawanoLogoBadge()
+                if (showTitleAndLogo) {
+                    NawanoLogoBadge()
 
-                Spacer(modifier = Modifier.width(2.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
 
-                Column(modifier = Modifier.weight(1f, fill = false)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f, fill = false)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Nawano",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = textPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = NawanoPrimary200.copy(alpha = 0.16f)
+                            ) {
+                                Text(
+                                    text = "Supplier",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = NawanoPrimary200,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(1.dp))
                         Text(
-                            text = "Nawano",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = textPrimary,
+                            text = when (activeViewTab) {
+                                0 -> "Orders • $ordersCount"
+                                1 -> "Catalog • $catalogCount"
+                                2 -> "Analytics"
+                                else -> "Settings"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = textSecondary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = NawanoPrimary200.copy(alpha = 0.16f)
-                        ) {
-                            Text(
-                                text = "Supplier",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = NawanoPrimary200,
-                                maxLines = 1,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
                     }
-                    Spacer(modifier = Modifier.height(1.dp))
-                    Text(
-                        text = when (activeViewTab) {
-                            0 -> "Orders • $ordersCount"
-                            1 -> "Catalog • $catalogCount"
-                            2 -> "Analytics"
-                            else -> "Settings"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
             }
 
