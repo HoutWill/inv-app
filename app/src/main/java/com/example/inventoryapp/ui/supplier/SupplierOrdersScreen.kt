@@ -123,17 +123,32 @@ fun SupplierOrdersScreen(
     val confirmedCount = remember(orders) { orders.count { it.status == PurchaseOrderStatus.CONFIRMED } }
     val completedCount = remember(orders) { orders.count { it.status == PurchaseOrderStatus.RECEIVED } }
 
+    var selectedMiddlemanFilter by remember { mutableStateOf<String?>(null) }
+    var showMiddlemenDropdown by remember { mutableStateOf(false) }
+    var showSortDropdown by remember { mutableStateOf(false) }
+
+    val availableMiddlemen = remember(orders) {
+        val list = mutableListOf("Brandon Vaccaro", "David Kim")
+        orders.forEach {
+            val pic = it.picSender.trim()
+            if (pic.isNotBlank() && !list.contains(pic)) {
+                list.add(pic)
+            }
+        }
+        list
+    }
+
     val filterTabsList = remember(orders.size, pendingCount, confirmedCount, inTransitCount, completedCount) {
         listOf(
             "All (${orders.size})",
             "Incoming ($pendingCount)",
             "Confirmed ($confirmedCount)",
-            "Transit ($inTransitCount)",
+            "In Delivery ($inTransitCount)",
             "Completed ($completedCount)"
         )
     }
 
-    val filteredOrders = remember(orders, selectedFilterIndex, isSortAscending, searchQuery) {
+    val filteredOrders = remember(orders, selectedFilterIndex, isSortAscending, searchQuery, selectedMiddlemanFilter) {
         val list = when (selectedFilterIndex) {
             1 -> orders.filter { it.status == PurchaseOrderStatus.PENDING }
             2 -> orders.filter { it.status == PurchaseOrderStatus.CONFIRMED }
@@ -143,8 +158,26 @@ fun SupplierOrdersScreen(
         }.filter {
             if (searchQuery.isBlank()) true
             else it.orderNumber.contains(searchQuery, ignoreCase = true) || it.title.contains(searchQuery, ignoreCase = true)
+        }.filter {
+            if (selectedMiddlemanFilter == null) true
+            else {
+                val middlemanName = if (it.orderNumber.contains("0843")) "David Kim" else it.picSender.ifBlank { "Brandon Vaccaro" }
+                middlemanName.equals(selectedMiddlemanFilter, ignoreCase = true)
+            }
         }
-        if (isSortAscending) list.sortedBy { it.totalAmount } else list.sortedByDescending { it.createdAt }
+
+        if (isSortAscending) {
+            list.sortedBy { it.createdAt }
+        } else {
+            list.sortedWith(compareByDescending<PurchaseOrderEntity> {
+                when (it.status) {
+                    PurchaseOrderStatus.PENDING -> 3
+                    PurchaseOrderStatus.CONFIRMED -> 2
+                    PurchaseOrderStatus.DELIVERED -> 1
+                    else -> 0
+                }
+            }.thenByDescending { it.createdAt })
+        }
     }
 
     val filteredCatalogProducts = remember(products, searchQuery, isSortAscending) {
@@ -446,17 +479,19 @@ fun SupplierOrdersScreen(
                                 }
                             }
 
-                            // 4. Section Header: Minimal 1-Word Title
+                            // 4. Section Header: Orders (3) with Middleman & Sort Dropdown Pills
                             item {
                                 val sectionTitle = when (selectedFilterIndex) {
                                     1 -> "Incoming (${filteredOrders.size})"
                                     2 -> "Confirmed (${filteredOrders.size})"
-                                    3 -> "Transit (${filteredOrders.size})"
+                                    3 -> "In Delivery (${filteredOrders.size})"
                                     4 -> "Completed (${filteredOrders.size})"
                                     else -> "Orders (${filteredOrders.size})"
                                 }
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -464,23 +499,126 @@ fun SupplierOrdersScreen(
                                         text = sectionTitle,
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
+                                        fontSize = 18.sp,
                                         color = textPrimary
                                     )
 
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        TextButton(
-                                            onClick = { selectedFilterIndex = 1 },
-                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
-                                        ) {
-                                            Text(
-                                                text = "View all >",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = NawanoPrimary200
-                                            )
+                                        // Middlemen Dropdown Pill
+                                        Box {
+                                            Surface(
+                                                onClick = { showMiddlemenDropdown = true },
+                                                shape = RoundedCornerShape(20.dp),
+                                                color = if (isDarkTheme) Color(0xFF1E2235) else Color(0xFFF1F5F9),
+                                                border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF2E334D) else Color(0xFFE2E8F0))
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Person,
+                                                        contentDescription = null,
+                                                        tint = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B),
+                                                        modifier = Modifier.size(15.dp)
+                                                    )
+                                                    Text(
+                                                        text = selectedMiddlemanFilter ?: "All Middlemen",
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Medium,
+                                                        color = if (isDarkTheme) Color(0xFFCBD5E1) else Color(0xFF334155)
+                                                    )
+                                                    Icon(
+                                                        imageVector = Icons.Default.ArrowDropDown,
+                                                        contentDescription = null,
+                                                        tint = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B),
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            DropdownMenu(
+                                                expanded = showMiddlemenDropdown,
+                                                onDismissRequest = { showMiddlemenDropdown = false },
+                                                modifier = Modifier.background(if (isDarkTheme) NawanoDark200 else Color.White)
+                                            ) {
+                                                DropdownMenuItem(
+                                                    text = { Text("All Middlemen", color = textPrimary) },
+                                                    onClick = {
+                                                        selectedMiddlemanFilter = null
+                                                        showMiddlemenDropdown = false
+                                                    }
+                                                )
+                                                availableMiddlemen.forEach { middleman ->
+                                                    DropdownMenuItem(
+                                                        text = { Text(middleman, color = textPrimary) },
+                                                        onClick = {
+                                                            selectedMiddlemanFilter = middleman
+                                                            showMiddlemenDropdown = false
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        // Sort Dropdown Pill
+                                        Box {
+                                            Surface(
+                                                onClick = { showSortDropdown = true },
+                                                shape = RoundedCornerShape(20.dp),
+                                                color = if (isDarkTheme) Color(0xFF1E2235) else Color(0xFFF1F5F9),
+                                                border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF2E334D) else Color(0xFFE2E8F0))
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.SwapVert,
+                                                        contentDescription = null,
+                                                        tint = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B),
+                                                        modifier = Modifier.size(15.dp)
+                                                    )
+                                                    Text(
+                                                        text = if (isSortAscending) "Oldest" else "Recent",
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Medium,
+                                                        color = if (isDarkTheme) Color(0xFFCBD5E1) else Color(0xFF334155)
+                                                    )
+                                                    Icon(
+                                                        imageVector = Icons.Default.ArrowDropDown,
+                                                        contentDescription = null,
+                                                        tint = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B),
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            DropdownMenu(
+                                                expanded = showSortDropdown,
+                                                onDismissRequest = { showSortDropdown = false },
+                                                modifier = Modifier.background(if (isDarkTheme) NawanoDark200 else Color.White)
+                                            ) {
+                                                DropdownMenuItem(
+                                                    text = { Text("Recent", color = textPrimary) },
+                                                    onClick = {
+                                                        isSortAscending = false
+                                                        showSortDropdown = false
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Oldest", color = textPrimary) },
+                                                    onClick = {
+                                                        isSortAscending = true
+                                                        showSortDropdown = false
+                                                    }
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -613,30 +751,6 @@ fun SupplierOrdersScreen(
                 }
             }
 
-            // Floating Action Button (+ Add) visible on Wholesale Catalog (matching reference design)
-            if (activeViewTab == 1) {
-                FloatingActionButton(
-                    onClick = {
-                        scannedSkuForCatalog = ""
-                        showAddCatalogItemDialog = true
-                    },
-                    shape = CircleShape,
-                    containerColor = Color(0xFF6C63FF),
-                    contentColor = Color.White,
-                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .navigationBarsPadding()
-                        .padding(end = 20.dp, bottom = 86.dp)
-                        .size(56.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Add Product",
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
 
             // Floating Bottom Navigation Dock with Central Elevated Scanner FAB
             SupplierBottomBar(

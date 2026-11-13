@@ -199,39 +199,51 @@ abstract class AppDatabase : RoomDatabase() {
                 val productDao = database.productDao()
                 val userDao = database.userDao()
 
-                // Seed default users if not yet present
-                if (userDao.findByEmail("middleman@nawano.com") == null) {
-                    userDao.insert(
-                        UserEntity(
-                            id = "user_middleman",
-                            fullName = "Anthony (Middle Man)",
-                            email = "middleman@nawano.com",
-                            passwordHash = PasswordHasher.hash("password123"),
-                            role = UserRole.OWNER
+                // Seed default users safely without aborting seeding on conflict
+                try {
+                    if (userDao.findByEmail("middleman@nawano.com") == null) {
+                        userDao.insert(
+                            UserEntity(
+                                id = "user_middleman",
+                                fullName = "Anthony (Middle Man)",
+                                email = "middleman@nawano.com",
+                                passwordHash = PasswordHasher.hash("password123"),
+                                role = UserRole.OWNER
+                            )
                         )
-                    )
+                    }
+                } catch (e: Exception) {
+                    Log.w("AppDatabase", "Middleman user exists: ${e.message}")
                 }
-                if (userDao.findByEmail("supplier@nawano.com") == null) {
-                    userDao.insert(
-                        UserEntity(
-                            id = "user_supplier_pacific",
-                            fullName = "Pacific Seafood Supply (Supplier)",
-                            email = "supplier@nawano.com",
-                            passwordHash = PasswordHasher.hash("password123"),
-                            role = UserRole.SUPPLIER
+                try {
+                    if (userDao.findByEmail("supplier@nawano.com") == null) {
+                        userDao.insert(
+                            UserEntity(
+                                id = "user_supplier_pacific",
+                                fullName = "Pacific Seafood Supply (Supplier)",
+                                email = "supplier@nawano.com",
+                                passwordHash = PasswordHasher.hash("password123"),
+                                role = UserRole.SUPPLIER
+                            )
                         )
-                    )
+                    }
+                } catch (e: Exception) {
+                    Log.w("AppDatabase", "Supplier user exists: ${e.message}")
                 }
-                if (userDao.findByEmail("foodie@nawano.com") == null) {
-                    userDao.insert(
-                        UserEntity(
-                            id = "user_supplier_foodie",
-                            fullName = "Foodie Supplier (Supplier)",
-                            email = "foodie@nawano.com",
-                            passwordHash = PasswordHasher.hash("password123"),
-                            role = UserRole.SUPPLIER
+                try {
+                    if (userDao.findByEmail("foodie@nawano.com") == null) {
+                        userDao.insert(
+                            UserEntity(
+                                id = "user_supplier_foodie",
+                                fullName = "Foodie Supplier (Supplier)",
+                                email = "foodie@nawano.com",
+                                passwordHash = PasswordHasher.hash("password123"),
+                                role = UserRole.SUPPLIER
+                            )
                         )
-                    )
+                    }
+                } catch (e: Exception) {
+                    Log.w("AppDatabase", "Foodie user exists: ${e.message}")
                 }
 
                 // Purge legacy mock supplier records if any
@@ -512,7 +524,7 @@ abstract class AppDatabase : RoomDatabase() {
                         supplierId = "sup_pacific_seafood",
                         supplierName = "Pacific Seafood Supply",
                         status = PurchaseOrderStatus.CONFIRMED,
-                        totalAmount = 101.50,
+                        totalAmount = 112.00,
                         totalQuantity = 90,
                         title = "Cold-Chain Restock • Coca-Cola & Red Bull",
                         movementType = "Inbound PO",
@@ -549,18 +561,18 @@ abstract class AppDatabase : RoomDatabase() {
                     orderDao.insertOrder(po1)
                     orderDao.insertOrderItems(po1Items)
 
-                    // Order 2: DELIVERED (In-Transit) - Foodie Supplier (Nutella & Barilla Pesto)
+                    // Order 2: DELIVERED (In-Transit) - Foodie Supplier Co. (Nutella & Barilla Pesto)
                     val po2 = PurchaseOrderEntity(
                         id = "po_real_002",
                         orderNumber = "PO-2026-0843",
                         supplierId = "sup_foodie",
-                        supplierName = "Foodie Supplier",
+                        supplierName = "Foodie Supplier Co.",
                         status = PurchaseOrderStatus.DELIVERED,
-                        totalAmount = 148.80,
+                        totalAmount = 243.00,
                         totalQuantity = 54,
                         title = "Gourmet Pantry Inbound • Nutella & Barilla Pesto",
                         movementType = "Inbound PO",
-                        picSender = "Brandon Vaccaro",
+                        picSender = "David Kim",
                         trackingNumber = "DHL-SG-5849201",
                         ownerNote = "Weekly Italian pantry batch.",
                         supplierNote = "Dispatched via DHL Express Freight. Driver ETA 2:30 PM.",
