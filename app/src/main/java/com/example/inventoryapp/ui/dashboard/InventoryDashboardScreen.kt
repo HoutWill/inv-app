@@ -831,6 +831,11 @@ private fun DashboardOverviewTab(
             }
         }
 
+        // Signature Nawano Hero Gradient Card: Inventory Summary (Purple design display)
+        item {
+            NawanoHeroInventorySummaryCard(uiState = uiState)
+        }
+
         // 1. Summary Metric Cards ("0 Items" / "5 Items")
         item {
             NawanoOperationalCardsGrid(
