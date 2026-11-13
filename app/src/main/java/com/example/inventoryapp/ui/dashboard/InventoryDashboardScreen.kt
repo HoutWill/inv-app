@@ -171,19 +171,7 @@ fun InventoryDashboardScreen(
         totalSkus = uiState.totalSkus
     ) {
         Scaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            topBar = {
-                if (drawerDestination == null) {
-                    InventoryTopBar(
-                        totalSkus = uiState.totalSkus,
-                        lowStockCount = uiState.lowStockCount,
-                        isDarkTheme = isDarkTheme,
-                        onOpenDrawer = { scope.launch { drawerState.open() } },
-                        onToggleTheme = onToggleTheme,
-                        onOpenNotifications = { isNotificationsOpen = true }
-                    )
-                }
-            }
+            snackbarHost = { SnackbarHost(snackbarHostState) }
         ) { innerPadding ->
             // System back button returns from full-screen drawer destination back to the dashboard
             BackHandler(enabled = drawerDestination != null) {
@@ -193,8 +181,10 @@ fun InventoryDashboardScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .then(
+                        if (drawerDestination == null) Modifier.statusBarsPadding() else Modifier
+                    )
                     .padding(
-                        top = if (drawerDestination == null) innerPadding.calculateTopPadding() else 0.dp,
                         bottom = if (drawerDestination == null) innerPadding.calculateBottomPadding() else 0.dp
                     )
             ) {
@@ -370,14 +360,55 @@ fun InventoryDashboardScreen(
                                 },
                                 onOrderClick = { orderId ->
                                     scope.launch {
-                                        viewingOrderWithItems = viewModel.getOrderWithItems(orderId)
+                                        val loaded = viewModel.getOrderWithItems(orderId)
+                                        viewingOrderWithItems = loaded ?: uiState.orders.find { it.id == orderId }?.let { OrderWithItems(it, emptyList()) }
+                                    }
+                                },
+                                onActivityClick = { activity ->
+                                    if (activity.orderId != null) {
+                                        scope.launch {
+                                            val loaded = viewModel.getOrderWithItems(activity.orderId)
+                                            viewingOrderWithItems = loaded ?: uiState.orders.find { it.id == activity.orderId }?.let { OrderWithItems(it, emptyList()) }
+                                        }
+                                    } else {
+                                        val dummyOrder = PurchaseOrderEntity(
+                                            id = activity.id,
+                                            orderNumber = activity.sku.ifBlank { "#TX-${activity.id.takeLast(6).uppercase()}" },
+                                            supplierId = "direct_warehouse",
+                                            supplierName = activity.supplierName ?: "Internal Warehouse",
+                                            status = PurchaseOrderStatus.RECEIVED,
+                                            totalAmount = 0.0,
+                                            totalQuantity = activity.quantityDeltaText.replace("+", "").replace("-", "").toIntOrNull() ?: 1,
+                                            title = activity.cleanTitle,
+                                            movementType = if (activity.isPositive) "Stock In" else "Stock Out",
+                                            picSender = "Inventory Controller",
+                                            estArrival = "Completed",
+                                            ownerNote = "Internal stock adjustment / verified physical record.",
+                                            createdAt = System.currentTimeMillis()
+                                        )
+                                        val dummyItem = PurchaseOrderItemEntity(
+                                            id = "item_${activity.id}",
+                                            orderId = activity.id,
+                                            productId = activity.sku,
+                                            sku = activity.sku,
+                                            productName = activity.cleanTitle,
+                                            quantity = activity.quantityDeltaText.replace("+", "").replace("-", "").toIntOrNull() ?: 1,
+                                            unitCost = 0.0
+                                        )
+                                        viewingOrderWithItems = OrderWithItems(dummyOrder, listOf(dummyItem))
+                                    }
+                                },
+                                onConfirmOrder = { orderId ->
+                                    viewModel.confirmOrder(orderId)
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Order accepted & confirmed with supplier!")
                                     }
                                 },
                                 onReceiveOrder = { orderId ->
                                     viewModel.receiveOrder(orderId) { success ->
                                         if (success) {
                                             scope.launch {
-                                                snackbarHostState.showSnackbar("Shipment accepted & stock updated!")
+                                                snackbarHostState.showSnackbar("Shipment received & inventory stocked successfully!")
                                             }
                                         }
                                     }
@@ -648,26 +679,26 @@ fun InventoryDashboardScreen(
                 )
             }
 
-            // Movement Detail Fullscreen overlay
+            // Stock In Detail Bottom Sheet (Progressive Disclosure Modal)
             viewingOrderWithItems?.let { currentOrderWithItems ->
-                MovementDetailScreen(
-                    order = currentOrderWithItems.order,
-                    items = currentOrderWithItems.items,
-                    onBack = { viewingOrderWithItems = null },
+                StockInDetailBottomSheet(
+                    orderWithItems = currentOrderWithItems,
+                    isDarkTheme = isDarkTheme,
+                    onDismiss = { viewingOrderWithItems = null },
+                    onAcceptOrder = { orderId ->
+                        viewModel.confirmOrder(orderId)
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Order accepted & confirmed with supplier!")
+                        }
+                        viewingOrderWithItems = null
+                    },
                     onReceiveOrder = { orderId ->
                         viewModel.receiveOrder(orderId) { success ->
                             if (success) {
                                 scope.launch {
                                     snackbarHostState.showSnackbar("Shipment received & inventory stocked successfully!")
                                 }
-                                viewingOrderWithItems = null
                             }
-                        }
-                    },
-                    onRejectOrder = { orderId ->
-                        viewModel.rejectOrder(orderId, "Rejected by store receiving")
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Shipment rejected")
                         }
                         viewingOrderWithItems = null
                     }
@@ -742,6 +773,8 @@ private fun DashboardOverviewTab(
     onRestockSupplier: (SupplierEntity) -> Unit = {},
     onViewAllSuppliers: () -> Unit = {},
     onOrderClick: (String) -> Unit = {},
+    onActivityClick: (NawanoDashboardActivity) -> Unit = {},
+    onConfirmOrder: (String) -> Unit = {},
     onReceiveOrder: (String) -> Unit = {},
     onRequestSupply: (ProductEntity) -> Unit = {}
 ) {
@@ -749,7 +782,7 @@ private fun DashboardOverviewTab(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 100.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 100.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Scanned SKU Banner (with online fetching state)
@@ -770,15 +803,11 @@ private fun DashboardOverviewTab(
             }
         }
 
-        // 1. Signature Nawano Hero Gradient Card: Inventory Summary (Behance: 174422339)
-        item {
-            NawanoHeroInventorySummaryCard(uiState = uiState)
-        }
-
-        // 2. 4 Quick Operational Cards (Low Stock, Move Summary, Upcoming, Qty Changes)
+        // 1. Summary Metric Cards ("0 Items" / "5 Items")
         item {
             NawanoOperationalCardsGrid(
                 uiState = uiState,
+                isDarkTheme = isDarkTheme,
                 onNavigateToLowStock = onNavigateToLowStock,
                 onNavigateToMoveSummary = onNavigateToMoveSummary,
                 onNavigateToUpcoming = onNavigateToUpcoming,
@@ -786,7 +815,7 @@ private fun DashboardOverviewTab(
             )
         }
 
-        // 3. Activity Filter Chips Row (All, Stock In, Stock Out)
+        // 2. Activity Filter Chips Row (All, Stock In, Stock Out)
         item {
             NawanoActivityFilterChips(
                 selectedFilter = selectedActivityFilter,
@@ -795,15 +824,18 @@ private fun DashboardOverviewTab(
             )
         }
 
-        // 4. Incoming Goods Req Section (from Behance slide_2.png)
+        // 3. Incoming Goods Req Section (from Behance slide_2.png)
         item {
             NawanoIncomingGoodsSection(
                 selectedFilter = selectedActivityFilter,
                 transactions = uiState.transactions,
                 orders = uiState.orders,
                 products = uiState.products,
+                isDarkTheme = isDarkTheme,
                 onViewAll = onNavigateToMoveSummary,
                 onOrderClick = onOrderClick,
+                onActivityClick = onActivityClick,
+                onConfirmOrder = onConfirmOrder,
                 onAcceptOrder = onReceiveOrder
             )
         }
@@ -1396,6 +1428,7 @@ private fun NawanoHeroInventorySummaryCard(
 @Composable
 private fun NawanoOperationalCardsGrid(
     uiState: DashboardUiState,
+    isDarkTheme: Boolean = false,
     onNavigateToLowStock: () -> Unit,
     onNavigateToMoveSummary: () -> Unit,
     onNavigateToUpcoming: () -> Unit,
@@ -1405,22 +1438,30 @@ private fun NawanoOperationalCardsGrid(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         // Row 1: Low Stock + Movements
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // Low Stock: Amber warning triangle
             NawanoOperationalCard(
                 title = "Low Stock",
-                description = "All stock items that are low inventory",
-                stat = "${uiState.lowStockCount} Items",
+                count = uiState.lowStockCount,
+                unit = "Items",
                 icon = Icons.Outlined.Warning,
-                iconTint = if (uiState.lowStockCount > 0) Color(0xFFEF4444) else Color(0xFFF59E0B),
+                iconTint = Color(0xFFF59E0B),
+                badgeBgColor = if (isDarkTheme) Color(0xFF451A03) else Color(0xFFFEF3C7),
+                badgeTextColor = if (isDarkTheme) Color(0xFFFBBF24) else Color(0xFFB45309),
+                isDarkTheme = isDarkTheme,
                 onClick = onNavigateToLowStock,
                 modifier = Modifier.weight(1f)
             )
 
+            // Movements: Soft indigo/slate swap arrows (⇄)
             NawanoOperationalCard(
                 title = "Movements",
-                description = "Track inventory that has moved locations",
-                stat = "${uiState.transactions.size} Orders",
-                painter = painterResource(R.drawable.ic_bus_intro),
-                iconTint = NawanoPrimary200,
+                count = uiState.transactions.size,
+                unit = "Orders",
+                icon = Icons.Outlined.SwapHoriz,
+                iconTint = Color(0xFF6366F1),
+                badgeBgColor = if (isDarkTheme) Color(0xFF334155) else Color(0xFFE2E8F0),
+                badgeTextColor = if (isDarkTheme) Color(0xFFE2E8F0) else Color(0xFF334155),
+                isDarkTheme = isDarkTheme,
                 onClick = onNavigateToMoveSummary,
                 modifier = Modifier.weight(1f)
             )
@@ -1429,22 +1470,30 @@ private fun NawanoOperationalCardsGrid(
         // Row 2: Upcoming Expiry + Audits
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             val upcomingCount = uiState.products.count { it.quantity <= it.reorderLevel || it.quantity <= 5 }
+            // Expiring: Soft purple clock
             NawanoOperationalCard(
                 title = "Expiring",
-                description = "Items in inventory set to expire soon",
-                stat = "$upcomingCount Items",
+                count = upcomingCount,
+                unit = "Items",
                 icon = Icons.Outlined.Schedule,
                 iconTint = Color(0xFF8B5CF6),
+                badgeBgColor = if (isDarkTheme) Color(0xFF3B0764) else Color(0xFFF3E8FF),
+                badgeTextColor = if (isDarkTheme) Color(0xFFD8B4FE) else Color(0xFF7E22CE),
+                isDarkTheme = isDarkTheme,
                 onClick = onNavigateToUpcoming,
                 modifier = Modifier.weight(1f)
             )
 
+            // Audits: Soft emerald clipboard-check
             NawanoOperationalCard(
                 title = "Audits",
-                description = "All inflows and outflows for an item",
-                stat = "${uiState.transactions.size} Items",
-                icon = Icons.Outlined.BarChart,
+                count = uiState.transactions.size,
+                unit = "Items",
+                icon = Icons.Outlined.FactCheck,
                 iconTint = Color(0xFF10B981),
+                badgeBgColor = if (isDarkTheme) Color(0xFF064E3B) else Color(0xFFD1FAE5),
+                badgeTextColor = if (isDarkTheme) Color(0xFF6EE7B7) else Color(0xFF047857),
+                isDarkTheme = isDarkTheme,
                 onClick = onNavigateToQtyChanges,
                 modifier = Modifier.weight(1f)
             )
@@ -1452,83 +1501,115 @@ private fun NawanoOperationalCardsGrid(
     }
 }
 
+/**
+ * Compact 2-row flex operational card matching the redesign specification:
+ * - Top Row: Rounded square icon badge (36x36px, radius: 10dp) + Metric count (muted gray if zero, subtle tinted pill badge if active)
+ * - Bottom Row: Bold card title + Right-pointing chevron (›)
+ * - Helper text removed to reduce card height by ~45% and bring Stock In/Out above the fold.
+ */
 @Composable
 private fun NawanoOperationalCard(
     title: String,
-    description: String,
-    stat: String,
-    icon: ImageVector? = null,
-    painter: Painter? = null,
+    count: Int,
+    unit: String,
+    icon: ImageVector,
     iconTint: Color,
+    badgeBgColor: Color,
+    badgeTextColor: Color,
+    isDarkTheme: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isZero = count == 0
+    val statText = "$count $unit"
+
+    val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
+    val cardBorder = if (isDarkTheme) NawanoDarkOutline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val textMuted = if (isDarkTheme) NawanoTextSecondaryDark else Color(0xFF94A3B8)
+
     Surface(
         onClick = onClick,
         modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        shadowElevation = 2.dp
+        shape = RoundedCornerShape(18.dp),
+        color = cardBg,
+        border = BorderStroke(1.dp, cardBorder),
+        shadowElevation = if (isDarkTheme) 0.dp else 1.5.dp
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = iconTint.copy(alpha = 0.12f),
-                modifier = Modifier.size(32.dp)
+            // Top Row: Rounded square icon badge (Left) + Metric count (Right)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    if (painter != null) {
-                        Icon(
-                            painter = painter,
-                            contentDescription = null,
-                            tint = iconTint,
-                            modifier = Modifier.size(17.dp)
-                        )
-                    } else if (icon != null) {
+                // Left: 36x36px icon badge with 10px radius
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = iconTint.copy(alpha = if (isDarkTheme) 0.18f else 0.12f),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = icon,
                             contentDescription = null,
                             tint = iconTint,
-                            modifier = Modifier.size(17.dp)
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                // Right: Metric Count (Zero: muted gray; Non-zero: tinted pill badge)
+                if (isZero) {
+                    Text(
+                        text = statText,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = textMuted.copy(alpha = 0.70f)
+                    )
+                } else {
+                    Surface(
+                        shape = CircleShape,
+                        color = badgeBgColor
+                    ) {
+                        Text(
+                            text = statText,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = badgeTextColor,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            // Bottom Row: Bold Card Title (Left) + Subtle Chevron (Right)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
 
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(2.dp))
-
-            Text(
-                text = description,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                lineHeight = 14.sp
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Text(
-                text = stat,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = textMuted.copy(alpha = 0.50f),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 }
@@ -1537,19 +1618,59 @@ private fun NawanoOperationalCard(
  * Visual model representing an activity card on the Dashboard, supporting both
  * real stock transactions and logistics requisition items.
  */
+private enum class ActivityLifecycleState {
+    INCOMING, CONFIRMED, COMPLETED
+}
+
+private fun cleanItemTitle(rawTitle: String): String {
+    var title = rawTitle.trim()
+    if (title.contains("•")) {
+        title = title.substringAfterLast("•").trim()
+    }
+    title = title.replace(Regex("^PO-\\d{4}-\\d+\\s*-\\s*", RegexOption.IGNORE_CASE), "")
+    title = title.replace(Regex("^PO-\\d+\\s*-\\s*", RegexOption.IGNORE_CASE), "")
+    title = title.replace(Regex("^(Inbound Request|Cold-Chain Restock|Gourmet Pantry Inbound)\\s*[-•:]?\\s*", RegexOption.IGNORE_CASE), "")
+    title = title.replace(Regex("^Stock (In|Out):\\s*", RegexOption.IGNORE_CASE), "")
+    title = title.replace(Regex("\\s+Restock$", RegexOption.IGNORE_CASE), "")
+    title = title.replace(Regex("\\s+Inbound$", RegexOption.IGNORE_CASE), "")
+    return title.trim().ifBlank { rawTitle.trim() }
+}
+
+private fun formatShortPoCode(orderNumber: String): String {
+    val clean = orderNumber.trim()
+    val match = Regex("PO-\\d{4}-(\\d+)").find(clean)
+    return if (match != null) {
+        "#PO-${match.groupValues[1]}"
+    } else if (clean.startsWith("#")) {
+        clean
+    } else if (clean.isNotBlank()) {
+        "#$clean"
+    } else {
+        "#PO-REF"
+    }
+}
+
+private fun cleanSupplierName(rawSupplier: String): String {
+    return rawSupplier
+        .replace(Regex("\\s+Supply$", RegexOption.IGNORE_CASE), "")
+        .trim()
+        .ifBlank { rawSupplier.trim() }
+}
+
+/**
+ * Visual model representing an activity card on the Dashboard, supporting both
+ * real stock transactions and logistics requisition items with minimal 3-column layout.
+ */
 private data class NawanoDashboardActivity(
     val id: String,
     val sku: String,
-    val title: String,
-    val type: String, // "INCOMING", "INBOUND", "OUTBOUND"
-    val badgeText: String,
-    val badgeColor: Color,
-    val arrivalTime: String,
-    val reference: String,
-    val quantityChange: String,
+    val rawTitle: String,
+    val cleanTitle: String,
+    val metadataLine: String,
+    val lifecycleState: ActivityLifecycleState,
+    val quantityDeltaText: String,
     val isPositive: Boolean,
     val orderId: String? = null,
-    val isDeliveredOrder: Boolean = false,
     val imageUri: String? = null,
     val supplierName: String? = null
 )
@@ -1613,8 +1734,11 @@ private fun NawanoIncomingGoodsSection(
     transactions: List<StockTransactionEntity>,
     orders: List<PurchaseOrderEntity> = emptyList(),
     products: List<ProductEntity> = emptyList(),
+    isDarkTheme: Boolean = false,
     onViewAll: () -> Unit,
     onOrderClick: ((String) -> Unit)? = null,
+    onActivityClick: ((NawanoDashboardActivity) -> Unit)? = null,
+    onConfirmOrder: ((String) -> Unit)? = null,
     onAcceptOrder: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -1622,16 +1746,25 @@ private fun NawanoIncomingGoodsSection(
     val allActivities = remember(transactions, orders, products) {
         val list = mutableListOf<NawanoDashboardActivity>()
 
-        // 1. Live purchase orders from suppliers (Delivered / Confirmed / Pending)
+        // 1. Live purchase orders from suppliers (Delivered / Confirmed / Pending / Received)
         orders.filter {
             it.status == PurchaseOrderStatus.DELIVERED ||
             it.status == PurchaseOrderStatus.CONFIRMED ||
-            it.status == PurchaseOrderStatus.PENDING
+            it.status == PurchaseOrderStatus.PENDING ||
+            it.status == PurchaseOrderStatus.RECEIVED
         }.forEach { po ->
-            val isInbound = po.status == PurchaseOrderStatus.DELIVERED
-            val badgeText = if (isInbound) "In Delivery" else if (po.status == PurchaseOrderStatus.CONFIRMED) "Confirmed" else "Incoming Req"
-            val badgeColor = if (isInbound) Color(0xFF4338CA) else if (po.status == PurchaseOrderStatus.CONFIRMED) NawanoPrimary200 else Color(0xFFF59E0B)
-            val type = if (isInbound) "INBOUND" else "INCOMING"
+            val lifecycleState = when (po.status) {
+                PurchaseOrderStatus.PENDING -> ActivityLifecycleState.INCOMING
+                PurchaseOrderStatus.CONFIRMED, PurchaseOrderStatus.DELIVERED -> ActivityLifecycleState.CONFIRMED
+                PurchaseOrderStatus.RECEIVED -> ActivityLifecycleState.COMPLETED
+                else -> ActivityLifecycleState.INCOMING
+            }
+
+            val cleanTitle = cleanItemTitle(po.title.ifBlank { "Items from ${po.supplierName}" })
+            val shortPo = formatShortPoCode(po.orderNumber)
+            val shortSupplier = cleanSupplierName(po.supplierName)
+            val eta = po.estArrival.ifBlank { "In 2 days" }
+            val metadataLine = "$shortPo • $shortSupplier • $eta"
 
             // Auto-resolve product photo by title, supplier, or SKU match
             val matchedProduct = products.find { prod ->
@@ -1647,16 +1780,13 @@ private fun NawanoIncomingGoodsSection(
                 NawanoDashboardActivity(
                     id = "order_${po.id}",
                     sku = po.orderNumber,
-                    title = po.title.ifBlank { "Items from ${po.supplierName}" },
-                    type = type,
-                    badgeText = badgeText,
-                    badgeColor = badgeColor,
-                    arrivalTime = "Est: ${po.estArrival.ifBlank { "Today" }} • ${po.supplierName}",
-                    reference = "Supplier: ${po.supplierName} • PIC: ${po.picSender.ifBlank { "Leslie Alexander" }}",
-                    quantityChange = "+${po.totalQuantity} units",
+                    rawTitle = po.title,
+                    cleanTitle = cleanTitle,
+                    metadataLine = metadataLine,
+                    lifecycleState = lifecycleState,
+                    quantityDeltaText = "+${po.totalQuantity}",
                     isPositive = true,
                     orderId = po.id,
-                    isDeliveredOrder = isInbound,
                     imageUri = resolvedImage,
                     supplierName = po.supplierName
                 )
@@ -1665,27 +1795,13 @@ private fun NawanoIncomingGoodsSection(
 
         // 2. Map real transactions (most recent on top)
         transactions.forEach { tx ->
-            val isInbound = tx.quantityDelta > 0 || tx.transactionType == "STOCK_IN" || tx.transactionType == "NEW_ITEM"
-            val isRequisition = tx.transactionType.contains("REQ", ignoreCase = true) ||
-                    (tx.note != null && tx.note.contains("req", ignoreCase = true))
-
-            val type = when {
-                isRequisition -> "INCOMING"
-                isInbound -> "INBOUND"
-                else -> "OUTBOUND"
-            }
-            val badgeText = when (type) {
-                "INCOMING" -> "Incoming Req"
-                "INBOUND" -> "Goods Inbound"
-                else -> "Goods Outbound"
-            }
-            val badgeColor = when (type) {
-                "INCOMING" -> Color(0xFF8B5CF6)
-                "INBOUND" -> Color(0xFF10B981)
-                else -> Color(0xFFEF4444)
-            }
+            val isPositive = tx.quantityDelta >= 0
+            val cleanTitle = cleanItemTitle(tx.productName)
+            val shortTx = "#TX-${tx.id.takeLast(6).uppercase()}"
             val timeFormat = SimpleDateFormat("hh:mm a", Locale.US)
             val timeStr = timeFormat.format(Date(tx.timestamp))
+            val metadataLine = "$shortTx • Warehouse • Today, $timeStr"
+            val lifecycleState = ActivityLifecycleState.COMPLETED
 
             val matchedProduct = products.find { it.sku.equals(tx.sku, ignoreCase = true) }
             val resolvedImage = matchedProduct?.imageUri
@@ -1695,15 +1811,15 @@ private fun NawanoIncomingGoodsSection(
                 NawanoDashboardActivity(
                     id = tx.id,
                     sku = tx.sku,
-                    title = tx.productName,
-                    type = type,
-                    badgeText = badgeText,
-                    badgeColor = badgeColor,
-                    arrivalTime = "Today • $timeStr",
-                    reference = "Ref: ${tx.note?.takeIf { it.isNotBlank() } ?: "Direct Inventory Update"}",
-                    quantityChange = "${if (tx.quantityDelta >= 0) "+" else ""}${tx.quantityDelta} units",
-                    isPositive = tx.quantityDelta >= 0,
-                    imageUri = resolvedImage
+                    rawTitle = tx.productName,
+                    cleanTitle = cleanTitle,
+                    metadataLine = metadataLine,
+                    lifecycleState = lifecycleState,
+                    quantityDeltaText = "${if (isPositive) "+" else ""}${tx.quantityDelta}",
+                    isPositive = isPositive,
+                    orderId = null,
+                    imageUri = resolvedImage,
+                    supplierName = "Warehouse"
                 )
             )
         }
@@ -1713,8 +1829,8 @@ private fun NawanoIncomingGoodsSection(
     // Filter by the currently selected chip
     val filteredActivities = remember(allActivities, selectedFilter) {
         when (selectedFilter) {
-            "Stock In" -> allActivities.filter { it.isPositive || it.type == "INCOMING" || it.type == "INBOUND" }
-            "Stock Out" -> allActivities.filter { !it.isPositive || it.type == "OUTBOUND" }
+            "Stock In" -> allActivities.filter { it.isPositive || it.lifecycleState != ActivityLifecycleState.COMPLETED }
+            "Stock Out" -> allActivities.filter { !it.isPositive }
             else -> allActivities // "All"
         }
     }
@@ -1751,7 +1867,7 @@ private fun NawanoIncomingGoodsSection(
             }
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         if (filteredActivities.isEmpty()) {
             val emptyTitle = when (selectedFilter) {
@@ -1798,15 +1914,23 @@ private fun NawanoIncomingGoodsSection(
             }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                filteredActivities.take(3).forEach { activity ->
+                filteredActivities.take(5).forEach { activity ->
                     NawanoGoodsReqCard(
                         activity = activity,
+                        isDarkTheme = isDarkTheme,
                         onClick = {
-                            if (activity.orderId != null) {
+                            if (onActivityClick != null) {
+                                onActivityClick(activity)
+                            } else if (activity.orderId != null) {
                                 onOrderClick?.invoke(activity.orderId)
                             }
                         },
                         onAccept = {
+                            if (activity.orderId != null) {
+                                onConfirmOrder?.invoke(activity.orderId)
+                            }
+                        },
+                        onReceive = {
                             if (activity.orderId != null) {
                                 onAcceptOrder?.invoke(activity.orderId)
                             }
@@ -1818,147 +1942,199 @@ private fun NawanoIncomingGoodsSection(
     }
 }
 
+/**
+ * Minimal 3-Column Item Card Layout:
+ * - Left Column: Square rounded product/brand thumbnail (48x48px, border-radius: 12px)
+ * - Middle Column (Flex-grow): Line 1 (Clean Title), Line 2 (#PO-XXXX • Supplier Name • ETA)
+ * - Right Column (Right-aligned stack):
+ *     - Top: Status badge pill (Incoming: soft amber, Confirmed: soft indigo, Completed: soft green)
+ *     - Middle: Bold quantity delta in emerald green (+50, +90, +120)
+ *     - Bottom: State-specific compact pill button (Accept / Receive / Done)
+ */
 @Composable
 private fun NawanoGoodsReqCard(
     activity: NawanoDashboardActivity,
+    isDarkTheme: Boolean = false,
     onClick: () -> Unit = {},
-    onAccept: () -> Unit = {}
+    onAccept: () -> Unit = {},
+    onReceive: () -> Unit = {}
 ) {
-    var isActioned by remember(activity.id) { mutableStateOf(false) }
+    var localState by remember(activity.id, activity.lifecycleState) {
+        mutableStateOf(activity.lifecycleState)
+    }
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        shadowElevation = 1.5.dp,
+        shape = RoundedCornerShape(16.dp),
+        color = if (isDarkTheme) NawanoDarkCard else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.dp,
+            if (isDarkTheme) NawanoDarkOutline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+        ),
+        shadowElevation = if (isDarkTheme) 0.dp else 1.5.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            // Header: Badge on left + Action button on right
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 1. Left Column: Square rounded product/brand thumbnail (48x48px, border-radius: 12px)
+            ProductThumbnail(
+                sku = activity.sku,
+                name = activity.cleanTitle,
+                category = null,
+                imageUri = activity.imageUri,
+                supplier = activity.supplierName,
+                modifier = Modifier.size(48.dp),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // 2. Middle Column (Flex-grow): Clean product name + muted metadata subtext line
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
             ) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = activity.badgeColor.copy(alpha = 0.12f),
-                    modifier = Modifier.weight(1f, fill = false)
-                ) {
-                    Text(
-                        text = activity.badgeText,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = activity.badgeColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                Text(
+                    text = activity.cleanTitle,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = activity.metadataLine,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 11.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            // 3. Right Column (Right-aligned stack: Status Pill -> Quantity Delta -> Pill Button)
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Top: Status badge pill
+                val (badgeText, badgeBg, badgeFg) = when (localState) {
+                    ActivityLifecycleState.INCOMING -> Triple(
+                        "Incoming",
+                        if (isDarkTheme) Color(0xFF78350F).copy(alpha = 0.45f) else Color(0xFFFEF3C7),
+                        if (isDarkTheme) Color(0xFFFBBF24) else Color(0xFFD97706)
+                    )
+                    ActivityLifecycleState.CONFIRMED -> Triple(
+                        "Confirmed",
+                        if (isDarkTheme) Color(0xFF312E81).copy(alpha = 0.45f) else Color(0xFFE0E7FF),
+                        if (isDarkTheme) Color(0xFF818CF8) else Color(0xFF4338CA)
+                    )
+                    ActivityLifecycleState.COMPLETED -> Triple(
+                        "Completed",
+                        if (isDarkTheme) Color(0xFF064E3B).copy(alpha = 0.45f) else Color(0xFFD1FAE5),
+                        if (isDarkTheme) Color(0xFF34D399) else Color(0xFF059669)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
-
                 Surface(
-                    onClick = {
-                        isActioned = true
-                        onAccept()
-                    },
-                    shape = RoundedCornerShape(14.dp),
-                    color = if (isActioned) Color(0xFFD1FAE5) else if (activity.type == "OUTBOUND") Color(0xFFEDE9FE) else NawanoPrimary200
+                    shape = RoundedCornerShape(6.dp),
+                    color = badgeBg
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        if (isActioned) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = null,
-                                tint = Color(0xFF047857),
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(Modifier.width(4.dp))
-                        }
-                        Text(
-                            text = if (isActioned) {
-                                if (activity.type == "OUTBOUND") "Dispatched" else "Accepted"
-                            } else {
-                                if (activity.type == "OUTBOUND") "Dispatch" else "Accept"
+                    Text(
+                        text = badgeText,
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = badgeFg,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                    )
+                }
+
+                // Middle: Bold quantity delta in emerald green
+                Text(
+                    text = activity.quantityDeltaText,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 14.5.sp,
+                    color = if (activity.isPositive) Color(0xFF10B981) else Color(0xFFEF4444)
+                )
+
+                // Bottom: State-specific compact pill button
+                when (localState) {
+                    ActivityLifecycleState.INCOMING -> {
+                        Surface(
+                            onClick = {
+                                localState = ActivityLifecycleState.CONFIRMED
+                                onAccept()
                             },
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isActioned) Color(0xFF047857) else if (activity.type == "OUTBOUND") NawanoPrimary200 else Color.White
-                        )
+                            shape = RoundedCornerShape(12.dp),
+                            color = NawanoPrimary200,
+                            modifier = Modifier.defaultMinSize(minWidth = 64.dp, minHeight = 24.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Accept",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+                    ActivityLifecycleState.CONFIRMED -> {
+                        Surface(
+                            onClick = {
+                                localState = ActivityLifecycleState.COMPLETED
+                                onReceive()
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = NawanoPrimary200,
+                            modifier = Modifier.defaultMinSize(minWidth = 64.dp, minHeight = 24.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Receive",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+                    ActivityLifecycleState.COMPLETED -> {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFF1F5F9),
+                            modifier = Modifier.defaultMinSize(minWidth = 64.dp, minHeight = 24.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Done",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isDarkTheme) Color(0xFF64748B) else Color(0xFF94A3B8)
+                                )
+                            }
+                        }
                     }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Middle Content: Product Thumbnail + Title & Arrival metadata
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                ProductThumbnail(
-                    sku = activity.sku,
-                    name = activity.title,
-                    category = null,
-                    imageUri = activity.imageUri,
-                    supplier = activity.supplierName,
-                    modifier = Modifier.size(52.dp),
-                    shape = RoundedCornerShape(14.dp)
-                )
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "${activity.sku} - ${activity.title}",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 2,
-                        lineHeight = 18.sp,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Spacer(modifier = Modifier.height(3.dp))
-
-                    Text(
-                        text = activity.arrivalTime,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Footer reference and quantity change
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = activity.reference,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Total: ${activity.quantityChange}",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (activity.isPositive) Color(0xFF047857) else Color(0xFFB91C1C)
-                )
             }
         }
     }
