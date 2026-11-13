@@ -71,11 +71,10 @@ fun SupplierTopBar(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left Group: Hamburger (and conditionally Nawano Logo Badge + Title & Subtitle)
+            // Left Group: Hamburger + Title ("Nawano") & Subtitle ("Wholesale • X SKUs")
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = if (showTitleAndLogo) Modifier.weight(1f) else Modifier
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 IconButton(
                     onClick = onOpenDrawer,
@@ -88,54 +87,28 @@ fun SupplierTopBar(
                     )
                 }
 
-                if (showTitleAndLogo) {
-                    NawanoLogoBadge()
-
-                    Spacer(modifier = Modifier.width(2.dp))
-
-                    Column(modifier = Modifier.weight(1f, fill = false)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Nawano",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = textPrimary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = NawanoPrimary200.copy(alpha = 0.16f)
-                            ) {
-                                Text(
-                                    text = "Supplier",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = NawanoPrimary200,
-                                    maxLines = 1,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(1.dp))
-                        Text(
-                            text = when (activeViewTab) {
-                                0 -> "Orders • $ordersCount"
-                                1 -> "Catalog • $catalogCount"
-                                2 -> "Analytics"
-                                else -> "Settings"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = textSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                Column {
+                    Text(
+                        text = "Nawano",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(1.dp))
+                    Text(
+                        text = "Wholesale • $catalogCount SKUs",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = textSecondary,
+                        fontSize = 11.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
 
-            // Right Group: Dark/Light Theme Toggle, Notification Bell & Add Action
+            // Right Group: Dark/Light Theme Toggle, Notification Bell & "+ Add" Quick Action
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -149,7 +122,7 @@ fun SupplierTopBar(
                         imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
                         contentDescription = if (isDarkTheme) "Light Mode" else "Dark Mode",
                         tint = if (isDarkTheme) Color(0xFFFBBF24) else textSecondary,
-                        modifier = Modifier.size(19.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
@@ -181,6 +154,19 @@ fun SupplierTopBar(
                             modifier = Modifier.size(20.dp)
                         )
                     }
+                }
+
+                // "+ Add" Button
+                TextButton(
+                    onClick = onQuickAdd,
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "+ Add",
+                        color = NawanoPrimary200,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
                 }
             }
         }

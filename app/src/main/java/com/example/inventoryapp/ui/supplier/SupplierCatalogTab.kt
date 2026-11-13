@@ -215,7 +215,7 @@ fun SupplierCatalogTab(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // "In Stock" toggle filter with green dot
+                    // "● In Stock" toggle filter with green dot
                     Surface(
                         onClick = { isInStockOnly = !isInStockOnly },
                         shape = RoundedCornerShape(12.dp),
@@ -378,21 +378,17 @@ fun SupplierCatalogProductCard(
 
                 Spacer(modifier = Modifier.width(12.dp))
 
-                val cleanTitle = remember(product.name) {
-                    ProductImageHelper.cleanOneWordTitle(product.name)
-                }
-
                 // Title + Category/SKU badge
                 Column(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        text = cleanTitle,
+                        text = product.name,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
                         color = textPrimary,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
 
