@@ -206,7 +206,7 @@ fun SupplierShipmentsScreen(
         // Shipments Count
         item {
             Text(
-                text = "${filteredList.size} Logistics Movements",
+                text = "Shipments (${filteredList.size})",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = textPrimary

@@ -119,10 +119,10 @@ fun SupplierTopBar(
                     Spacer(modifier = Modifier.height(1.dp))
                     Text(
                         text = when (activeViewTab) {
-                            0 -> "Wholesale Hub • $ordersCount Orders"
-                            1 -> "Catalog • $catalogCount SKUs"
-                            2 -> "Vendor Analytics"
-                            else -> "Supplier Settings"
+                            0 -> "Orders • $ordersCount"
+                            1 -> "Catalog • $catalogCount"
+                            2 -> "Analytics"
+                            else -> "Settings"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = textSecondary,
@@ -132,41 +132,28 @@ fun SupplierTopBar(
                 }
             }
 
-            // Right Group: Search, Dark/Light Theme Toggle & Notification Bell
+            // Right Group: Dark/Light Theme Toggle, Notification Bell & Add Action
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // Search Expand / Collapse Toggle
-                IconButton(
-                    onClick = { isSearchExpanded = !isSearchExpanded },
-                    modifier = Modifier.size(34.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isSearchExpanded) Icons.Default.Close else Icons.Default.Search,
-                        contentDescription = "Search",
-                        tint = if (isSearchExpanded) NawanoPrimary200 else textSecondary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
                 // Dark / Light Mode Toggle
                 IconButton(
                     onClick = onToggleTheme,
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
                         contentDescription = if (isDarkTheme) "Light Mode" else "Dark Mode",
                         tint = if (isDarkTheme) Color(0xFFFBBF24) else textSecondary,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(19.dp)
                     )
                 }
 
                 // Notification Bell with Badge
                 IconButton(
                     onClick = onOpenNotifications,
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(36.dp)
                 ) {
                     BadgedBox(
                         badge = {
@@ -188,7 +175,7 @@ fun SupplierTopBar(
                             imageVector = if (pendingNotificationCount > 0) Icons.Default.Notifications else Icons.Outlined.Notifications,
                             contentDescription = "Notifications",
                             tint = if (pendingNotificationCount > 0) NawanoPrimary200 else textSecondary,
-                            modifier = Modifier.size(21.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
@@ -196,76 +183,24 @@ fun SupplierTopBar(
                 // Primary Quick Add / Restock Action Button
                 IconButton(
                     onClick = onQuickAdd,
-                    modifier = Modifier.size(38.dp)
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Surface(
                         shape = CircleShape,
                         color = NawanoPrimary200,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(30.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.Add,
                                 contentDescription = "Add Product or Restock",
                                 tint = Color.White,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(17.dp)
                             )
                         }
                     }
                 }
             }
-        }
-
-        // Collapsible Search Bar Input
-        AnimatedVisibility(
-            visible = isSearchExpanded,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = onSearchQueryChange,
-                placeholder = {
-                    Text(
-                        text = if (activeViewTab == 1) "Search catalog by name or SKU..." else "Search PO number, items, carrier...",
-                        color = textSecondary,
-                        fontSize = 13.sp
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = null,
-                        tint = NawanoPrimary200,
-                        modifier = Modifier.size(18.dp)
-                    )
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotBlank()) {
-                        IconButton(onClick = { onSearchQueryChange("") }) {
-                            Icon(
-                                imageVector = Icons.Default.Clear,
-                                contentDescription = "Clear search",
-                                tint = textSecondary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = NawanoPrimary200,
-                    unfocusedBorderColor = if (isDarkTheme) NawanoDarkOutline else Color(0xFFCBD5E1),
-                    focusedContainerColor = if (isDarkTheme) NawanoDark200 else Color.White,
-                    unfocusedContainerColor = if (isDarkTheme) NawanoDark200 else Color.White
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp)
-            )
         }
     }
 }

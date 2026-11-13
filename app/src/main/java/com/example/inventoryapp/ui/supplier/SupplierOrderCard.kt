@@ -1,14 +1,11 @@
 package com.example.inventoryapp.ui.supplier
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -20,15 +17,15 @@ import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
 import com.example.inventoryapp.ui.theme.*
 import com.example.inventoryapp.util.ProductThumbnail
-import java.util.Locale
 
 /**
- * Purchase Order Card for the Supplier Portal, matching the Behance "Supply Chain Mastery" design.
- * Features:
- * - Top Row: Status Tag ("Goods Inbound") on left, primary "Accept" pill + "Reject" text on right
- * - Middle Row: Bold title ("0603 - Items lobster in from...") & "Est. arrival time: 09:30 - 11:30 AM"
- * - Divider line
- * - Bottom Row: Circular avatar & Company Name + PIC Sender on left, Total Weight/Value on right
+ * Minimal 3-Column Item Card Layout for Supplier Portal:
+ * - Left Column: Square rounded product/brand thumbnail (48x48px, border-radius: 12px)
+ * - Middle Column (Flex-grow): Line 1 (Clean Title), Line 2 (#PO-XXXX • Customer/Supplier • ETA)
+ * - Right Column (Right-aligned stack):
+ *     - Top: Status badge pill (Incoming / Confirmed / In Delivery / Completed)
+ *     - Middle: Bold quantity delta in emerald green (+50, +90, +120)
+ *     - Bottom: State-specific compact pill button (Accept / Dispatch / In Transit / Done)
  */
 @Composable
 fun SupplierDashboardCard(
@@ -37,309 +34,288 @@ fun SupplierDashboardCard(
     onAccept: () -> Unit,
     onReject: () -> Unit = {},
     onSend: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
+    onEdit: () -> Unit = {},
+    onDelete: () -> Unit = {},
     onView: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
-    val cardBorder = if (isDarkTheme) NawanoDarkOutline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+    val cardBg = if (isDarkTheme) NawanoDarkCard else Color.White
+    val cardBorder = if (isDarkTheme) NawanoDarkOutline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
     val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
     val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
-    val dividerColor = if (isDarkTheme) NawanoDarkOutline.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
 
-    val (statusLabel, statusBg, statusFg) = if (isDarkTheme) {
-        when (order.status) {
-            PurchaseOrderStatus.PENDING -> Triple("Goods Inbound", NawanoPrimary200.copy(alpha = 0.18f), NawanoPrimary200)
-            PurchaseOrderStatus.CONFIRMED -> Triple("Confirmed", Color(0xFF6366F1).copy(alpha = 0.18f), Color(0xFFC084FC))
-            PurchaseOrderStatus.DELIVERED -> Triple("In Delivery", Color(0xFF38BDF8).copy(alpha = 0.18f), Color(0xFF38BDF8))
-            PurchaseOrderStatus.RECEIVED -> Triple("Completed", Color(0xFF10B981).copy(alpha = 0.18f), Color(0xFF34D399))
-            PurchaseOrderStatus.REJECTED -> Triple("Rejected", Color(0xFFEF4444).copy(alpha = 0.18f), Color(0xFFF87171))
-            PurchaseOrderStatus.CANCELLED -> Triple("Cancelled", Color(0xFF6B7280).copy(alpha = 0.18f), Color(0xFF9CA3AF))
-        }
-    } else {
-        when (order.status) {
-            PurchaseOrderStatus.PENDING -> Triple("Goods Inbound", Color(0xFFF3E8FF), Color(0xFF7E22CE))
-            PurchaseOrderStatus.CONFIRMED -> Triple("Confirmed", Color(0xFFEDE9FE), Color(0xFF6D28D9))
-            PurchaseOrderStatus.DELIVERED -> Triple("In Delivery", Color(0xFFE0F2FE), Color(0xFF0284C7))
-            PurchaseOrderStatus.RECEIVED -> Triple("Completed", Color(0xFFD1FAE5), Color(0xFF047857))
-            PurchaseOrderStatus.REJECTED -> Triple("Rejected", Color(0xFFFEE2E2), Color(0xFFDC2626))
-            PurchaseOrderStatus.CANCELLED -> Triple("Cancelled", Color(0xFFF3F4F6), Color(0xFF4B5563))
-        }
+    val cleanTitle = remember(order.title, order.supplierName) {
+        cleanItemTitle(order.title.ifBlank { "Items from ${order.supplierName}" })
     }
+
+    val shortPo = remember(order.orderNumber) { formatShortPoCode(order.orderNumber) }
+    val partnerName = remember(order.supplierName) {
+        cleanSupplierName(order.supplierName.ifBlank { "Nawano HQ" })
+    }
+    val eta = remember(order.estArrival) {
+        order.estArrival.ifBlank { "In 2 days" }
+    }
+    val metadataLine = "$shortPo • $partnerName • $eta"
+
+    // 1. Status badge pill styling (consistent across all cards)
+    val (statusLabel, statusBg, statusFg) = when (order.status) {
+        PurchaseOrderStatus.PENDING -> Triple(
+            "Incoming",
+            if (isDarkTheme) Color(0xFF78350F).copy(alpha = 0.45f) else Color(0xFFFEF3C7),
+            if (isDarkTheme) Color(0xFFFBBF24) else Color(0xFFD97706)
+        )
+        PurchaseOrderStatus.CONFIRMED -> Triple(
+            "Confirmed",
+            if (isDarkTheme) Color(0xFF312E81).copy(alpha = 0.45f) else Color(0xFFE0E7FF),
+            if (isDarkTheme) Color(0xFF818CF8) else Color(0xFF4338CA)
+        )
+        PurchaseOrderStatus.DELIVERED -> Triple(
+            "In Delivery",
+            if (isDarkTheme) Color(0xFF0369A1).copy(alpha = 0.35f) else Color(0xFFE0F2FE),
+            if (isDarkTheme) Color(0xFF38BDF8) else Color(0xFF0284C7)
+        )
+        PurchaseOrderStatus.RECEIVED -> Triple(
+            "Completed",
+            if (isDarkTheme) Color(0xFF064E3B).copy(alpha = 0.45f) else Color(0xFFD1FAE5),
+            if (isDarkTheme) Color(0xFF34D399) else Color(0xFF059669)
+        )
+        PurchaseOrderStatus.REJECTED -> Triple(
+            "Rejected",
+            if (isDarkTheme) Color(0xFF7F1D1D).copy(alpha = 0.45f) else Color(0xFFFEE2E2),
+            if (isDarkTheme) Color(0xFFF87171) else Color(0xFFDC2626)
+        )
+        PurchaseOrderStatus.CANCELLED -> Triple(
+            "Cancelled",
+            if (isDarkTheme) Color(0xFF374151).copy(alpha = 0.45f) else Color(0xFFF3F4F6),
+            if (isDarkTheme) Color(0xFF9CA3AF) else Color(0xFF4B5563)
+        )
+    }
+
+    val deltaQty = if (order.totalQuantity > 0) order.totalQuantity else 10
+    val quantityDeltaText = "+$deltaQty"
 
     Surface(
         onClick = onView,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         color = cardBg,
         border = BorderStroke(1.dp, cardBorder),
         shadowElevation = if (isDarkTheme) 0.dp else 1.5.dp,
         modifier = modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // 1. Top Row: Status Pill ("Goods Inbound") on Left, Actions ("Accept" & "Reject") on Right
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Left Column: Square rounded product/brand thumbnail (48x48px, border-radius: 12px)
+            ProductThumbnail(
+                sku = order.orderNumber,
+                name = cleanTitle,
+                category = null,
+                imageUri = null,
+                supplier = order.supplierName,
+                modifier = Modifier.size(48.dp),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Middle Column (Flex-grow): Clean title + single muted metadata subtext line
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
             ) {
-                // Status Pill
+                Text(
+                    text = cleanTitle,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = metadataLine,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 11.5.sp,
+                    color = textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            // Right Column (Right-aligned stack: Status Pill -> Quantity Delta -> Action Button)
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Top: Status badge pill
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = statusBg,
-                    modifier = Modifier.weight(1f, fill = false)
+                    shape = RoundedCornerShape(6.dp),
+                    color = statusBg
                 ) {
                     Text(
                         text = statusLabel,
-                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 10.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = statusFg,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                // Middle: Bold quantity delta in emerald green
+                Text(
+                    text = quantityDeltaText,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 14.5.sp,
+                    color = Color(0xFF10B981)
+                )
 
-                // Action Controls on Right
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    when (order.status) {
-                        PurchaseOrderStatus.PENDING -> {
-                            // "Accept" Primary Pill Button
-                            Surface(
-                                onClick = onAccept,
-                                shape = RoundedCornerShape(12.dp),
-                                color = Color.Transparent,
-                                border = BorderStroke(1.5.dp, NawanoPrimary200)
+                // Bottom: State-specific compact pill button
+                when (order.status) {
+                    PurchaseOrderStatus.PENDING -> {
+                        Surface(
+                            onClick = onAccept,
+                            shape = RoundedCornerShape(12.dp),
+                            color = NawanoPrimary200,
+                            modifier = Modifier.defaultMinSize(minWidth = 64.dp, minHeight = 24.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = "Accept",
-                                    fontSize = 12.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = NawanoPrimary200,
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp)
+                                    color = Color.White
                                 )
                             }
-
-                            // "Reject" Text Button right below Accept
-                            Text(
-                                text = "Reject",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = if (isDarkTheme) Color(0xFFF87171) else Color(0xFFDC2626),
-                                modifier = Modifier
-                                    .clickable { onReject() }
-                                    .padding(horizontal = 4.dp, vertical = 2.dp)
-                            )
                         }
-                        PurchaseOrderStatus.CONFIRMED -> {
-                            // "Dispatch" Action Button
-                            Surface(
-                                onClick = onSend,
-                                shape = RoundedCornerShape(12.dp),
-                                color = NawanoPrimary200
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.LocalShipping,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(
-                                        text = "Dispatch",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                }
-                            }
-                        }
-                        PurchaseOrderStatus.DELIVERED -> {
-                            Surface(
-                                onClick = onView,
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (isDarkTheme) Color(0xFF0F172A) else Color(0xFFF0FDF4),
-                                border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF334155) else Color(0xFFBAE6FD))
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.LocalShipping,
-                                        contentDescription = null,
-                                        tint = if (isDarkTheme) Color(0xFF38BDF8) else Color(0xFF0284C7),
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(
-                                        text = "In Transit",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isDarkTheme) Color(0xFF38BDF8) else Color(0xFF0284C7)
-                                    )
-                                }
-                            }
-                        }
-                        else -> {
-                            Surface(
-                                onClick = onView,
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFF8FAFC),
-                                border = BorderStroke(1.dp, if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0))
+                    }
+                    PurchaseOrderStatus.CONFIRMED -> {
+                        Surface(
+                            onClick = onSend,
+                            shape = RoundedCornerShape(12.dp),
+                            color = NawanoPrimary200,
+                            modifier = Modifier.defaultMinSize(minWidth = 64.dp, minHeight = 24.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "View Details",
+                                    text = "Dispatch",
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = textSecondary,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
                                 )
                             }
                         }
                     }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // 2. Middle Row: Product Thumbnail + Bold Title & Estimated Arrival Subtitle
-            val displayTitle = if (order.title.isNotBlank()) {
-                if (order.title.startsWith(order.orderNumber, ignoreCase = true)) {
-                    order.title
-                } else {
-                    "${order.orderNumber} - ${order.title}"
-                }
-            } else {
-                "${order.orderNumber} - Items inbound from supplier"
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                ProductThumbnail(
-                    sku = order.orderNumber,
-                    name = order.title,
-                    category = null,
-                    imageUri = null,
-                    supplier = order.supplierName,
-                    modifier = Modifier.size(52.dp),
-                    shape = RoundedCornerShape(14.dp)
-                )
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = displayTitle,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = textPrimary,
-                        maxLines = 2,
-                        lineHeight = 18.sp,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Spacer(modifier = Modifier.height(3.dp))
-
-                    Text(
-                        text = "Est. arrival time: ${order.estArrival.ifBlank { "09:30 - 11:30 AM" }}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = textSecondary
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider(color = dividerColor)
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // 3. Bottom Row: Supplier Avatar & PIC Sender on left, Total Weight/Value on right
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Left: Circular Logo Avatar + Supplier Name + PIC Sender
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f, fill = false)
-                ) {
-                    val companyName = order.supplierName.ifBlank { "Foodie Supplier" }
-                    val initials = companyName.split(" ")
-                        .mapNotNull { it.firstOrNull()?.toString() }
-                        .take(2)
-                        .joinToString("")
-                        .ifBlank { "FS" }
-
-                    Surface(
-                        shape = CircleShape,
-                        color = NawanoPrimary200.copy(alpha = 0.16f),
-                        border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.35f)),
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = initials,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = NawanoPrimary200
-                            )
+                    PurchaseOrderStatus.DELIVERED -> {
+                        Surface(
+                            onClick = onView,
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isDarkTheme) Color(0xFF0F172A) else Color(0xFFF0FDF4),
+                            border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF334155) else Color(0xFFBAE6FD)),
+                            modifier = Modifier.defaultMinSize(minWidth = 64.dp, minHeight = 24.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "In Transit",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isDarkTheme) Color(0xFF38BDF8) else Color(0xFF0284C7)
+                                )
+                            }
                         }
                     }
-
-                    Column(modifier = Modifier.weight(1f, fill = false)) {
-                        Text(
-                            text = companyName,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = textPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "PIC Sender: ${order.picSender.ifBlank { "Brandon Vaccaro" }}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = textSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                    PurchaseOrderStatus.RECEIVED -> {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFF1F5F9),
+                            modifier = Modifier.defaultMinSize(minWidth = 64.dp, minHeight = 24.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Done",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (isDarkTheme) Color(0xFF64748B) else Color(0xFF94A3B8)
+                                )
+                            }
+                        }
                     }
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Right: Total Weight / Items & Price
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "Total Weight",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = textSecondary
-                    )
-                    val displayWeight = when {
-                        order.totalWeight.isNotBlank() -> order.totalWeight
-                        order.totalQuantity > 0 -> "${order.totalQuantity} Box @ 5KG"
-                        else -> "3 Box @ 5KG"
+                    else -> {
+                        Surface(
+                            onClick = onView,
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFF1F5F9),
+                            modifier = Modifier.defaultMinSize(minWidth = 64.dp, minHeight = 24.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "View",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = textSecondary
+                                )
+                            }
+                        }
                     }
-                    Text(
-                        text = displayWeight,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = textPrimary
-                    )
                 }
             }
         }
     }
+}
+
+private fun cleanItemTitle(rawTitle: String): String {
+    var title = rawTitle.trim()
+    if (title.contains("•")) {
+        title = title.substringAfterLast("•").trim()
+    }
+    title = title.replace(Regex("^PO-\\d{4}-\\d+\\s*-\\s*", RegexOption.IGNORE_CASE), "")
+    title = title.replace(Regex("^PO-\\d+\\s*-\\s*", RegexOption.IGNORE_CASE), "")
+    title = title.replace(Regex("^(Inbound Request|Cold-Chain Restock|Gourmet Pantry Inbound)\\s*[-•:]?\\s*", RegexOption.IGNORE_CASE), "")
+    title = title.replace(Regex("^Stock (In|Out):\\s*", RegexOption.IGNORE_CASE), "")
+    title = title.replace(Regex("\\s+Restock$", RegexOption.IGNORE_CASE), "")
+    title = title.replace(Regex("\\s+Inbound$", RegexOption.IGNORE_CASE), "")
+    return title.trim().ifBlank { rawTitle.trim() }
+}
+
+private fun formatShortPoCode(orderNumber: String): String {
+    val clean = orderNumber.trim()
+    val match = Regex("PO-\\d{4}-(\\d+)").find(clean)
+    return if (match != null) {
+        "#PO-${match.groupValues[1]}"
+    } else if (clean.startsWith("#")) {
+        clean
+    } else if (clean.isNotBlank()) {
+        "#$clean"
+    } else {
+        "#PO-REF"
+    }
+}
+
+private fun cleanSupplierName(rawSupplier: String): String {
+    return rawSupplier
+        .replace(Regex("\\s+Supply$", RegexOption.IGNORE_CASE), "")
+        .trim()
+        .ifBlank { rawSupplier.trim() }
 }

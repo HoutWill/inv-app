@@ -32,6 +32,7 @@ import java.util.Locale
 /**
  * Detailed Order Breakdown, Manifest & Packing Slip Bottom Sheet.
  * Displays PO line items with interactive verification checklist, barcode tracking, and dispatch controls.
+ * Conforms to the Swipe-Up Modal BottomSheet rules with progressive disclosure.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,7 +44,9 @@ fun SupplierOrderDetailSheet(
     onDismiss: () -> Unit,
     onSend: () -> Unit,
     onAccept: () -> Unit,
-    onRequestScanToPack: () -> Unit = {}
+    onRequestScanToPack: () -> Unit = {},
+    onEditOrder: (() -> Unit)? = null,
+    onDeleteOrder: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val items = orderWithItems?.items ?: emptyList()
@@ -71,14 +74,22 @@ fun SupplierOrderDetailSheet(
         }
     }
 
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = cardBg,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         dragHandle = {
             BottomSheetDefaults.DragHandle(
                 color = if (isDarkTheme) NawanoDarkOutline else Color(0xFFCBD5E1)
             )
-        }
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .imePadding()
     ) {
         Column(
             modifier = Modifier
@@ -87,7 +98,7 @@ fun SupplierOrderDetailSheet(
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 36.dp)
         ) {
-            // Header: PO Number + Copy + Status
+            // Header: PO Number + Copy + Status + Actions + Close Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -115,19 +126,64 @@ fun SupplierOrderDetailSheet(
                                 Toast.makeText(context, "Copied ${order.orderNumber}", Toast.LENGTH_SHORT).show()
                             }
                     )
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isDarkTheme) NawanoPrimary200.copy(alpha = 0.2f) else Color(0xFFEDE9FE)
+                    ) {
+                        Text(
+                            text = order.status.name,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isDarkTheme) NawanoPrimary200 else Color(0xFF6D28D9),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
                 }
 
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (isDarkTheme) NawanoPrimary200.copy(alpha = 0.2f) else Color(0xFFEDE9FE)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Text(
-                        text = order.status.name,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isDarkTheme) NawanoPrimary200 else Color(0xFF6D28D9),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                    )
+                    if (onEditOrder != null && order.status != PurchaseOrderStatus.RECEIVED && order.status != PurchaseOrderStatus.CANCELLED) {
+                        IconButton(
+                            onClick = onEditOrder,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit Order",
+                                tint = textSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    if (onDeleteOrder != null) {
+                        IconButton(
+                            onClick = onDeleteOrder,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteOutline,
+                                contentDescription = "Delete Order",
+                                tint = Color(0xFFEF4444),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = textSecondary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
 
@@ -285,18 +341,48 @@ fun SupplierOrderDetailSheet(
                 }
             }
 
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(16.dp))
 
-            // Logistics Notes Box
+            // Logistics Metadata: Total Weight, ETA window
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("Total Weight / Freight", fontSize = 11.sp, color = textSecondary)
+                    Text(
+                        text = if (order.totalWeight.isNotBlank()) order.totalWeight else "${order.totalQuantity} Items (@ standard kg)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = textPrimary
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("Target Delivery Window", fontSize = 11.sp, color = textSecondary)
+                    Text(
+                        text = if (order.estArrival.isNotBlank()) order.estArrival else "Standard (1-2 days)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = textPrimary
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            HorizontalDivider(color = dividerColor)
+            Spacer(Modifier.height(14.dp))
+
+            // Supplier Notes Card
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = if (isDarkTheme) NawanoDark400 else Color(0xFFF1F5F9),
+                color = if (isDarkTheme) Color(0xFF1B1F33) else Color(0xFFF8FAFC),
+                border = BorderStroke(1.dp, if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0)),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Text(
-                        text = "FREIGHT & DISPATCH NOTE",
-                        style = MaterialTheme.typography.labelSmall,
+                        text = "DISPATCH INSTRUCTIONS & NOTES",
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = textSecondary,
                         letterSpacing = 1.sp
@@ -322,7 +408,7 @@ fun SupplierOrderDetailSheet(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200),
                         shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
                         Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
@@ -337,7 +423,7 @@ fun SupplierOrderDetailSheet(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4338CA)),
                         shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
                         Icon(imageVector = Icons.Default.LocalShipping, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
@@ -348,7 +434,7 @@ fun SupplierOrderDetailSheet(
                     OutlinedButton(
                         onClick = onDismiss,
                         shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
                         Text("Close Manifest")
                     }

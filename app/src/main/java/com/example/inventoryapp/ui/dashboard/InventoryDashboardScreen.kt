@@ -906,6 +906,44 @@ private fun DashboardOverviewTab(
                 onAcceptOrder = onReceiveOrder
             )
         }
+
+        // 4. Items Inventory List (Behance slide_2.png & reference Image 1)
+        if (uiState.products.isNotEmpty()) {
+            item {
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Items Inventory List (${uiState.products.size})",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    TextButton(onClick = onNavigateToItems) {
+                        Text(
+                            text = "View all >",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = NawanoPrimary200
+                        )
+                    }
+                }
+            }
+
+            items(items = uiState.products.take(6), key = { "home_item_${it.id}" }) { item ->
+                InventoryItemCard(
+                    item = item,
+                    isHighlighted = item.sku.equals(uiState.scannedSku, ignoreCase = true),
+                    onQuantityChange = { delta -> onQuantityChange(item, delta) },
+                    onCardClick = { onProductClick(item) },
+                    onDelete = null,
+                    onRequestSupply = { onRequestSupply(item) }
+                )
+            }
+        }
     }
 }
 

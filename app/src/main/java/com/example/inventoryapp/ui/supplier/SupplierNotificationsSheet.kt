@@ -39,14 +39,21 @@ fun SupplierNotificationsSheet(
     val deliveredOrders = orders.filter { it.status == PurchaseOrderStatus.DELIVERED }
     val receivedOrders = orders.filter { it.status == PurchaseOrderStatus.RECEIVED }
 
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = cardBg,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         dragHandle = {
             BottomSheetDefaults.DragHandle(
                 color = if (isDarkTheme) NawanoDarkOutline else Color(0xFFCBD5E1)
             )
-        }
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
     ) {
         Column(
             modifier = Modifier

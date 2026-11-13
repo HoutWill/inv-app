@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -19,15 +20,20 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.inventoryapp.R
 import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
@@ -79,7 +85,6 @@ fun SupplierOrdersScreen(
     // 0: Home (Orders), 1: Items (Wholesale Catalog), 2: Stats (Analytics), 3: Settings
     var activeViewTab by remember { mutableIntStateOf(0) }
     var selectedFilterIndex by remember { mutableIntStateOf(0) }
-    val filterTabs = listOf("All Activ.", "Incomin.", "Inboun.", "Out.")
 
     // Drawer, Modals & Dialogs State
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -87,6 +92,7 @@ fun SupplierOrdersScreen(
     var showCreateDialog by remember { mutableStateOf(false) }
     var orderToEdit by remember { mutableStateOf<PurchaseOrderEntity?>(null) }
     var orderToDelete by remember { mutableStateOf<PurchaseOrderEntity?>(null) }
+    var productToDelete by remember { mutableStateOf<ProductEntity?>(null) }
     var orderToDispatch by remember { mutableStateOf<PurchaseOrderEntity?>(null) }
     var orderToViewDetails by remember { mutableStateOf<PurchaseOrderEntity?>(null) }
     var detailedOrderWithItems by remember { mutableStateOf<OrderWithItems?>(null) }
@@ -114,12 +120,25 @@ fun SupplierOrdersScreen(
     val totalValue = remember(orders) { orders.sumOf { it.totalAmount } }
     val inTransitCount = remember(orders) { orders.count { it.status == PurchaseOrderStatus.DELIVERED } }
     val pendingCount = remember(orders) { orders.count { it.status == PurchaseOrderStatus.PENDING } }
+    val confirmedCount = remember(orders) { orders.count { it.status == PurchaseOrderStatus.CONFIRMED } }
+    val completedCount = remember(orders) { orders.count { it.status == PurchaseOrderStatus.RECEIVED } }
+
+    val filterTabsList = remember(orders.size, pendingCount, confirmedCount, inTransitCount, completedCount) {
+        listOf(
+            "All (${orders.size})",
+            "Incoming ($pendingCount)",
+            "Confirmed ($confirmedCount)",
+            "In Delivery ($inTransitCount)",
+            "Completed ($completedCount)"
+        )
+    }
 
     val filteredOrders = remember(orders, selectedFilterIndex, isSortAscending, searchQuery) {
         val list = when (selectedFilterIndex) {
             1 -> orders.filter { it.status == PurchaseOrderStatus.PENDING }
-            2 -> orders.filter { it.status == PurchaseOrderStatus.CONFIRMED || it.status == PurchaseOrderStatus.DELIVERED }
-            3 -> orders.filter { it.status == PurchaseOrderStatus.RECEIVED }
+            2 -> orders.filter { it.status == PurchaseOrderStatus.CONFIRMED }
+            3 -> orders.filter { it.status == PurchaseOrderStatus.DELIVERED }
+            4 -> orders.filter { it.status == PurchaseOrderStatus.RECEIVED }
             else -> orders
         }.filter {
             if (searchQuery.isBlank()) true
@@ -285,26 +304,88 @@ fun SupplierOrdersScreen(
                 // Main Content Switching by Tab
                 when (activeViewTab) {
                     0 -> {
-                        // TAB 0: Clean Minimal Wholesale Orders View
+                        // TAB 0: Clean Minimal Wholesale Orders & Catalog View (Home)
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(horizontal = 16.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp),
-                            contentPadding = PaddingValues(top = 8.dp, bottom = 96.dp)
+                            contentPadding = PaddingValues(top = 10.dp, bottom = 96.dp)
                         ) {
-                            // 1. "Home" Bold Title matching Behance Reference
+                            // 1. Modern Top Search Bar on Home
                             item {
-                                Text(
-                                    text = "Home",
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = textPrimary,
-                                    modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
-                                )
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (isDarkTheme) Color(0xFF1E2235) else Color(0xFFF1F5F9),
+                                    border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF2E334D) else Color(0xFFE2E8F0)),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(50.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(horizontal = 14.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Search,
+                                            contentDescription = "Search",
+                                            tint = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        BasicTextField(
+                                            value = searchQuery,
+                                            onValueChange = { searchQuery = it },
+                                            singleLine = true,
+                                            cursorBrush = SolidColor(NawanoPrimary200),
+                                            textStyle = TextStyle(
+                                                color = textPrimary,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Medium
+                                            ),
+                                            modifier = Modifier.weight(1f),
+                                            decorationBox = { innerTextField ->
+                                                if (searchQuery.isEmpty()) {
+                                                    Text(
+                                                        text = "Search orders, SKU, supplier...",
+                                                        color = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF94A3B8),
+                                                        fontSize = 14.sp
+                                                    )
+                                                }
+                                                innerTextField()
+                                            }
+                                        )
+                                        if (searchQuery.isNotEmpty()) {
+                                            IconButton(
+                                                onClick = { searchQuery = "" },
+                                                modifier = Modifier.size(28.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Close,
+                                                    contentDescription = "Clear search",
+                                                    tint = textSecondary,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                        IconButton(
+                                            onClick = { scannerTarget = SupplierScannerTarget.GENERAL_SCAN },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_pos_barcode),
+                                                contentDescription = "Scan Barcode",
+                                                tint = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
 
-                            // 2. Horizontal Metric Cards Row ("4 Items", "32 Items", etc.)
+                            // 2. Horizontal Metric Cards Row (Clean 1-Word Labels)
                             item {
                                 Row(
                                     modifier = Modifier
@@ -313,30 +394,29 @@ fun SupplierOrdersScreen(
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     SupplierMetricCard(
-                                        value = "$totalOrders Items",
-                                        label = "Incoming Reqs",
+                                        value = "$totalOrders",
+                                        label = "Orders",
                                         isDarkTheme = isDarkTheme
                                     )
                                     SupplierMetricCard(
-                                        value = "$totalSkus Items",
-                                        label = "Wholesale SKUs",
+                                        value = "${products.size}",
+                                        label = "Catalog",
                                         isDarkTheme = isDarkTheme
                                     )
                                     SupplierMetricCard(
-                                        value = "$inTransitCount Items",
-                                        label = "In Transit",
+                                        value = "$inTransitCount",
+                                        label = "Shipments",
                                         isDarkTheme = isDarkTheme
                                     )
                                     SupplierMetricCard(
                                         value = "$${String.format(Locale.US, "%,.0f", totalValue)}",
-                                        label = "Total Value",
+                                        label = "Value",
                                         isDarkTheme = isDarkTheme
                                     )
                                 }
                             }
 
-
-                            // 3. Activity Filter Chips Row matching Behance Reference ("All Activ.", "Incomin.", "Inboun.", "Out.")
+                            // 3. Activity Filter Chips Row (Clean 1-Word Filter Pills)
                             item {
                                 Row(
                                     modifier = Modifier
@@ -344,97 +424,61 @@ fun SupplierOrdersScreen(
                                         .horizontalScroll(rememberScrollState()),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    val filterTabsList = listOf("All Activ.", "Incomin.", "Inboun.", "Out.")
                                     filterTabsList.forEachIndexed { index, filterName ->
                                         val isSelected = selectedFilterIndex == index
                                         Surface(
                                             onClick = { selectedFilterIndex = index },
-                                            shape = RoundedCornerShape(20.dp),
-                                            color = if (isSelected) NawanoPrimary200 else cardBg,
-                                            border = if (isSelected) null else BorderStroke(1.dp, cardBorder),
-                                            shadowElevation = if (isSelected) 2.dp else 0.dp
+                                            shape = CircleShape,
+                                            color = if (isSelected) Color(0xFF6C63FF) else cardBg,
+                                            border = if (isSelected) null else BorderStroke(1.dp, if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0)),
+                                            shadowElevation = if (isSelected) 3.dp else 0.dp
                                         ) {
                                             Text(
                                                 text = filterName,
-                                                fontSize = 12.sp,
+                                                fontSize = 13.sp,
                                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                                 color = if (isSelected) Color.White else textSecondary,
-                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp)
+                                                modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
                                             )
                                         }
                                     }
                                 }
                             }
 
-                            // 4. Section Header: "Incoming Goods Req (X)" on Left, Actions on Right
+                            // 4. Section Header: Minimal 1-Word Title
                             item {
+                                val sectionTitle = when (selectedFilterIndex) {
+                                    1 -> "Incoming (${filteredOrders.size})"
+                                    2 -> "Confirmed (${filteredOrders.size})"
+                                    3 -> "Delivered (${filteredOrders.size})"
+                                    4 -> "Completed (${filteredOrders.size})"
+                                    else -> "Orders (${filteredOrders.size})"
+                                }
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "Incoming Goods Req (${filteredOrders.size})",
+                                        text = sectionTitle,
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = textPrimary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f, fill = false)
+                                        color = textPrimary
                                     )
-
-                                    Spacer(Modifier.width(8.dp))
 
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        // Minimal Sort Button
-                                        Surface(
-                                            onClick = { isSortAscending = !isSortAscending },
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = cardBg,
-                                            border = BorderStroke(1.dp, cardBorder)
+                                        TextButton(
+                                            onClick = { selectedFilterIndex = 1 },
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
                                         ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.SwapVert,
-                                                    contentDescription = "Sort",
-                                                    tint = NawanoPrimary200,
-                                                    modifier = Modifier.size(14.dp)
-                                                )
-                                                Spacer(Modifier.width(2.dp))
-                                                Text(
-                                                    text = if (isSortAscending) "Price" else "Recent",
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = textPrimary
-                                                )
-                                            }
-                                        }
-
-                                        // + Restock Order Button
-                                        Button(
-                                            onClick = { showCreateDialog = true },
-                                            shape = RoundedCornerShape(8.dp),
-                                            colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200),
-                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Add,
-                                                contentDescription = null,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Spacer(Modifier.width(3.dp))
                                             Text(
-                                                text = "Restock",
-                                                fontSize = 11.sp,
+                                                text = "View all >",
+                                                style = MaterialTheme.typography.labelMedium,
                                                 fontWeight = FontWeight.Bold,
-                                                color = Color.White
+                                                color = NawanoPrimary200
                                             )
                                         }
                                     }
@@ -480,6 +524,47 @@ fun SupplierOrdersScreen(
                                     )
                                 }
                             }
+
+                            // 6. Wholesale Products Catalog Section on Home (Includes the Home with the reference design!)
+                            if (products.isNotEmpty()) {
+                                item {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Products (${products.size})",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = textPrimary
+                                        )
+                                        TextButton(onClick = { activeViewTab = 1 }) {
+                                            Text(
+                                                text = "View all >",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = NawanoPrimary200
+                                            )
+                                        }
+                                    }
+                                }
+
+                                items(products.take(6), key = { "home_prod_${it.id}" }) { product ->
+                                    SupplierCatalogProductCard(
+                                        product = product,
+                                        isDarkTheme = isDarkTheme,
+                                        onEdit = { catalogItemToEdit = product },
+                                        onDelete = { productToDelete = product },
+                                        onRestock = { productToRestock = product },
+                                        onQuantityChange = { prod, delta ->
+                                            val newQty = (prod.quantity + delta).coerceAtLeast(0)
+                                            onUpdateProduct(prod.copy(quantity = newQty))
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                     1 -> {
@@ -489,15 +574,14 @@ fun SupplierOrdersScreen(
                             isDarkTheme = isDarkTheme,
                             isSortAscending = isSortAscending,
                             onToggleSort = { isSortAscending = !isSortAscending },
+                            searchQuery = searchQuery,
+                            onSearchQueryChange = { searchQuery = it },
                             onAddProduct = {
                                 scannedSkuForCatalog = ""
                                 showAddCatalogItemDialog = true
                             },
                             onEditProduct = { catalogItemToEdit = it },
-                            onDeleteProduct = {
-                                onDeleteProduct(it)
-                                Toast.makeText(context, "Removed ${it.name}", Toast.LENGTH_SHORT).show()
-                            },
+                            onDeleteProduct = { productToDelete = it },
                             onRestockProduct = { prod -> productToRestock = prod },
                             onQuantityChange = { prod, delta ->
                                 val newQty = (prod.quantity + delta).coerceAtLeast(0)
@@ -578,6 +662,16 @@ fun SupplierOrdersScreen(
             },
             onRequestScanToPack = {
                 scannerTarget = SupplierScannerTarget.PACKING_CHECKLIST_SCAN
+            },
+            onEditOrder = {
+                val target = orderToViewDetails
+                orderToViewDetails = null
+                orderToEdit = target
+            },
+            onDeleteOrder = {
+                val target = orderToViewDetails
+                orderToViewDetails = null
+                orderToDelete = target
             }
         )
     }
@@ -641,30 +735,30 @@ fun SupplierOrdersScreen(
         )
     }
 
-    // Modal 6: Delete Order Confirmation Dialog
+    // Modal 6: Delete Order Confirmation Bottom Sheet (No AlertDialog!)
     orderToDelete?.let { order ->
-        AlertDialog(
-            containerColor = cardBg,
-            onDismissRequest = { orderToDelete = null },
-            title = { Text("Delete ${order.orderNumber}?", fontWeight = FontWeight.Bold, color = textPrimary) },
-            text = { Text("Are you sure you want to remove this purchase order?", color = textSecondary) },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        onDeleteOrder(order.id)
-                        orderToDelete = null
-                        Toast.makeText(context, "Order deleted.", Toast.LENGTH_SHORT).show()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text("Delete", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { orderToDelete = null }) {
-                    Text("Cancel", color = textSecondary)
-                }
+        DeleteOrderBottomSheet(
+            order = order,
+            isDarkTheme = isDarkTheme,
+            onDismiss = { orderToDelete = null },
+            onConfirmDelete = {
+                onDeleteOrder(order.id)
+                orderToDelete = null
+                Toast.makeText(context, "Order deleted.", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    // Modal 6b: Delete Product Confirmation Bottom Sheet (No AlertDialog!)
+    productToDelete?.let { prod ->
+        DeleteProductBottomSheet(
+            product = prod,
+            isDarkTheme = isDarkTheme,
+            onDismiss = { productToDelete = null },
+            onConfirmDelete = {
+                onDeleteProduct(prod)
+                productToDelete = null
+                Toast.makeText(context, "Removed ${prod.name}", Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -991,6 +1085,230 @@ fun EmptyZeroState(
                         color = Color.White
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Swipe-Up Confirmation BottomSheet for deleting a purchase order.
+ * Strictly complies with the user rule: Always Use Swipe-Up Modal Bottom Sheets.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DeleteOrderBottomSheet(
+    order: PurchaseOrderEntity,
+    isDarkTheme: Boolean = false,
+    onDismiss: () -> Unit,
+    onConfirmDelete: () -> Unit
+) {
+    val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
+    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = cardBg,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                color = if (isDarkTheme) NawanoDarkOutline else Color(0xFFCBD5E1)
+            )
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .imePadding()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 36.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFEF4444).copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.DeleteOutline,
+                    contentDescription = null,
+                    tint = Color(0xFFEF4444),
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Delete ${order.orderNumber}?",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = textPrimary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Are you sure you want to remove this purchase order? This action cannot be undone.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = textSecondary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = onConfirmDelete,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                Text(
+                    text = "Delete Order",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            TextButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+            ) {
+                Text(
+                    text = "Cancel",
+                    color = textSecondary,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Swipe-Up Confirmation BottomSheet for deleting a catalog product.
+ * Strictly complies with the user rule: Always Use Swipe-Up Modal Bottom Sheets.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DeleteProductBottomSheet(
+    product: ProductEntity,
+    isDarkTheme: Boolean = false,
+    onDismiss: () -> Unit,
+    onConfirmDelete: () -> Unit
+) {
+    val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
+    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = cardBg,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                color = if (isDarkTheme) NawanoDarkOutline else Color(0xFFCBD5E1)
+            )
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .imePadding()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 36.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFEF4444).copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.DeleteOutline,
+                    contentDescription = null,
+                    tint = Color(0xFFEF4444),
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Remove ${product.name}?",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = textPrimary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Are you sure you want to remove this item from your wholesale catalog? This cannot be undone.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = textSecondary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = onConfirmDelete,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                Text(
+                    text = "Delete Item",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            TextButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+            ) {
+                Text(
+                    text = "Cancel",
+                    color = textSecondary,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp
+                )
             }
         }
     }

@@ -113,7 +113,7 @@ fun SupplierDrawerSheet(
                         color = textPrimary
                     )
                     Text(
-                        text = "Wholesale Supplier • Nawano Partner",
+                        text = "Supplier",
                         style = MaterialTheme.typography.bodySmall,
                         color = textSecondary
                     )
@@ -122,9 +122,9 @@ fun SupplierDrawerSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Main Views Section
+            // Main Views Section (One-Word Section & Item Names)
             Text(
-                text = "MAIN OVERVIEW",
+                text = "OVERVIEW",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = textSecondary.copy(alpha = 0.7f),
@@ -132,9 +132,9 @@ fun SupplierDrawerSheet(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
             )
 
-            // Item 0: Orders Dashboard
+            // Item 0: Orders
             SupplierDrawerItem(
-                label = "Orders Dashboard",
+                label = "Orders",
                 icon = Icons.Default.Dashboard,
                 badge = "$ordersCount",
                 isSelected = activeViewTab == 0,
@@ -144,7 +144,7 @@ fun SupplierDrawerSheet(
 
             // Item 1: Catalog
             SupplierDrawerItem(
-                label = "Wholesale Catalog",
+                label = "Catalog",
                 icon = Icons.Default.Inventory2,
                 badge = "$catalogCount",
                 isSelected = activeViewTab == 1,
@@ -152,11 +152,11 @@ fun SupplierDrawerSheet(
                 onClick = { onTabSelected(1) }
             )
 
-            // Item 2: Stats (Analytics & Performance)
+            // Item 2: Analytics
             SupplierDrawerItem(
-                label = "Vendor Statistics (KPIs)",
+                label = "Analytics",
                 icon = Icons.Default.BarChart,
-                badge = "KPIs",
+                badge = null,
                 isSelected = activeViewTab == 2,
                 isDarkTheme = isDarkTheme,
                 onClick = { onTabSelected(2) }
@@ -166,9 +166,9 @@ fun SupplierDrawerSheet(
             HorizontalDivider(color = if (isDarkTheme) NawanoDarkOutline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Logistics & Freight Section
+            // Logistics Section
             Text(
-                text = "LOGISTICS & FREIGHT",
+                text = "LOGISTICS",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = textSecondary.copy(alpha = 0.7f),
@@ -177,9 +177,9 @@ fun SupplierDrawerSheet(
             )
 
             SupplierDrawerItem(
-                label = "Freight Shipments",
+                label = "Shipments",
                 icon = Icons.Default.LocalShipping,
-                badge = if (shipmentsCount > 0) "$shipmentsCount In Transit" else null,
+                badge = if (shipmentsCount > 0) "$shipmentsCount" else null,
                 badgeColor = Color(0xFF6366F1),
                 isSelected = false,
                 isDarkTheme = isDarkTheme,
@@ -187,9 +187,9 @@ fun SupplierDrawerSheet(
             )
 
             SupplierDrawerItem(
-                label = "Notifications & Alerts",
+                label = "Alerts",
                 icon = Icons.Default.Notifications,
-                badge = "Alerts",
+                badge = null,
                 badgeColor = Color(0xFFF59E0B),
                 isSelected = false,
                 isDarkTheme = isDarkTheme,
@@ -200,9 +200,9 @@ fun SupplierDrawerSheet(
             HorizontalDivider(color = if (isDarkTheme) NawanoDarkOutline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Preferences & System
+            // System Section
             Text(
-                text = "PREFERENCES & SYSTEM",
+                text = "SYSTEM",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = textSecondary.copy(alpha = 0.7f),
@@ -212,14 +212,14 @@ fun SupplierDrawerSheet(
 
             // Item 3: Settings
             SupplierDrawerItem(
-                label = "Supplier Settings",
+                label = "Settings",
                 icon = Icons.Default.Settings,
                 isSelected = activeViewTab == 3,
                 isDarkTheme = isDarkTheme,
                 onClick = { onTabSelected(3) }
             )
 
-            // Dark / Light Mode Switcher
+            // Theme Switcher (One-Word Label: Theme)
             Surface(
                 onClick = onToggleTheme,
                 shape = RoundedCornerShape(12.dp),
@@ -238,12 +238,24 @@ fun SupplierDrawerSheet(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = if (isDarkTheme) "Switch to Light Mode" else "Switch to Dark Mode",
+                        text = "Theme",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = textPrimary,
                         modifier = Modifier.weight(1f)
                     )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isDarkTheme) Color(0xFFFBBF24).copy(alpha = 0.15f) else NawanoPrimary200.copy(alpha = 0.12f)
+                    ) {
+                        Text(
+                            text = if (isDarkTheme) "Dark" else "Light",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isDarkTheme) Color(0xFFFBBF24) else NawanoPrimary200,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
                 }
             }
 
@@ -252,7 +264,7 @@ fun SupplierDrawerSheet(
 
             if (onSwitchToMiddleman != null) {
                 SupplierDrawerItem(
-                    label = "Switch to Middleman HQ",
+                    label = "Middleman",
                     icon = Icons.Default.SwapHoriz,
                     badge = "HQ",
                     badgeColor = NawanoPrimary200,
@@ -263,7 +275,7 @@ fun SupplierDrawerSheet(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // Log Out Button
+            // Log Out Button (One-Word Label: Logout)
             Surface(
                 onClick = onLogout,
                 shape = RoundedCornerShape(14.dp),
@@ -283,7 +295,7 @@ fun SupplierDrawerSheet(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "Log Out of Supplier",
+                        text = "Logout",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFEF4444)

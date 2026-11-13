@@ -133,16 +133,25 @@ class AuthRepository(
                 user = userDao.findByEmail("owner@nawano.com")
             }
             if (user == null) {
-                user = UserEntity(
-                    fullName = fullName,
-                    email = email,
-                    passwordHash = PasswordHasher.hash(defaultPassword),
-                    role = role
-                )
-                userDao.insert(user)
+                try {
+                    val newUser = UserEntity(
+                        fullName = fullName,
+                        email = email,
+                        passwordHash = PasswordHasher.hash(defaultPassword),
+                        role = role
+                    )
+                    userDao.insert(newUser)
+                    user = newUser
+                } catch (e: Exception) {
+                    user = userDao.findByEmail(email) ?: if (role == UserRole.OWNER) userDao.findByEmail("owner@nawano.com") else null
+                }
             }
-            sessionStore.setLoggedInUserId(user.id)
-            Result.success(user)
+            if (user != null) {
+                sessionStore.setLoggedInUserId(user.id)
+                Result.success(user)
+            } else {
+                Result.failure(IllegalStateException("Could not resolve demo user"))
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }
