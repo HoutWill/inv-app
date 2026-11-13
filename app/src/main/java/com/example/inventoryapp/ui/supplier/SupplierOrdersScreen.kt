@@ -613,6 +613,31 @@ fun SupplierOrdersScreen(
                 }
             }
 
+            // Floating Action Button (+ Add) visible on Wholesale Catalog (matching reference design)
+            if (activeViewTab == 1) {
+                FloatingActionButton(
+                    onClick = {
+                        scannedSkuForCatalog = ""
+                        showAddCatalogItemDialog = true
+                    },
+                    shape = CircleShape,
+                    containerColor = Color(0xFF6C63FF),
+                    contentColor = Color.White,
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                        .padding(end = 20.dp, bottom = 86.dp)
+                        .size(56.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Add Product",
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+
             // Floating Bottom Navigation Dock with Central Elevated Scanner FAB
             SupplierBottomBar(
                 activeViewTab = activeViewTab,

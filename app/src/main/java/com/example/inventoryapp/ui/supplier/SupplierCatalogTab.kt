@@ -93,7 +93,7 @@ fun SupplierCatalogTab(
             .fillMaxSize()
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = PaddingValues(top = 10.dp, bottom = 96.dp)
+        contentPadding = PaddingValues(top = 10.dp, bottom = 140.dp)
     ) {
         // 1. Search Bar with Scanner Shortcut (Matches screenshot: Search 13 products, SKU... [|||||])
         item {
@@ -168,7 +168,7 @@ fun SupplierCatalogTab(
             }
         }
 
-        // 2. Category Filter Capsules (All, Seafood, Meat, Produce, Dairy, etc.)
+        // 2. Category Filter Capsules (All, Seafood, Meat, Produce, ● In Stock, etc.)
         item {
             Row(
                 modifier = Modifier
@@ -194,10 +194,40 @@ fun SupplierCatalogTab(
                         )
                     }
                 }
+
+                // "● In Stock" toggle filter capsule in category scroll (Matches reference design)
+                Surface(
+                    onClick = { isInStockOnly = !isInStockOnly },
+                    shape = CircleShape,
+                    color = if (isInStockOnly) Color(0xFF10B981).copy(alpha = 0.2f) else cardBg,
+                    border = BorderStroke(
+                        1.dp,
+                        if (isInStockOnly) Color(0xFF10B981).copy(alpha = 0.6f) else if (isDarkTheme) NawanoDarkOutline else Color(0xFFE2E8F0)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(if (isInStockOnly) Color(0xFF10B981) else textSecondary.copy(alpha = 0.6f))
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "In Stock",
+                            fontSize = 13.sp,
+                            fontWeight = if (isInStockOnly) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isInStockOnly) Color(0xFF10B981) else textSecondary
+                        )
+                    }
+                }
             }
         }
 
-        // 3. Sub-header Row: "Products" on left, "● In Stock" and "⇅ Recent ▾" on right
+        // 3. Sub-header Row: "Products (X)" on left, "⇅ Recent ▾" on right (Matches reference design)
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -205,78 +235,43 @@ fun SupplierCatalogTab(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Products",
+                    text = "Products (${filteredProducts.size})",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = textPrimary
                 )
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // "⇅ Recent ▾" Sort button
+                Surface(
+                    onClick = onToggleSort,
+                    shape = RoundedCornerShape(12.dp),
+                    color = cardBg,
+                    border = BorderStroke(1.dp, cardBorder)
                 ) {
-                    // "● In Stock" toggle filter with green dot
-                    Surface(
-                        onClick = { isInStockOnly = !isInStockOnly },
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isInStockOnly) Color(0xFF10B981).copy(alpha = 0.15f) else cardBg,
-                        border = BorderStroke(
-                            1.dp,
-                            if (isInStockOnly) Color(0xFF10B981).copy(alpha = 0.45f) else cardBorder
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SwapVert,
+                            contentDescription = "Sort",
+                            tint = textSecondary,
+                            modifier = Modifier.size(14.dp)
                         )
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isInStockOnly) Color(0xFF10B981) else textSecondary.copy(alpha = 0.5f))
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                text = "In Stock",
-                                fontSize = 12.sp,
-                                fontWeight = if (isInStockOnly) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isInStockOnly) Color(0xFF10B981) else textSecondary
-                            )
-                        }
-                    }
-
-                    // "⇅ Recent ▾" Sort button
-                    Surface(
-                        onClick = onToggleSort,
-                        shape = RoundedCornerShape(12.dp),
-                        color = cardBg,
-                        border = BorderStroke(1.dp, cardBorder)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SwapVert,
-                                contentDescription = "Sort",
-                                tint = textSecondary,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = if (isSortAscending) "Price" else "Recent",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = textPrimary
-                            )
-                            Spacer(Modifier.width(2.dp))
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = null,
-                                tint = textSecondary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = if (isSortAscending) "Price" else "Recent",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = textPrimary
+                        )
+                        Spacer(Modifier.width(2.dp))
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = null,
+                            tint = textSecondary,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
             }
@@ -403,10 +398,10 @@ fun SupplierCatalogProductCard(
                         ) {
                             Text(
                                 text = product.category.ifBlank { "General" },
-                                fontSize = 11.5.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (isDarkTheme) Color(0xFFA5B4FC) else NawanoPrimary200,
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
 
@@ -414,7 +409,8 @@ fun SupplierCatalogProductCard(
 
                         Text(
                             text = "• $skuLabel",
-                            fontSize = 11.5.sp,
+                            fontSize = 11.sp,
+                            letterSpacing = (-0.2).sp,
                             color = textSecondary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -422,7 +418,7 @@ fun SupplierCatalogProductCard(
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 // Edit pencil & Delete trash
                 Row(
@@ -431,25 +427,25 @@ fun SupplierCatalogProductCard(
                 ) {
                     IconButton(
                         onClick = onEdit,
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Edit Product",
                             tint = textSecondary,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(15.dp)
                         )
                     }
 
                     IconButton(
                         onClick = onDelete,
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = "Delete Product",
                             tint = Color(0xFFEF4444),
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(15.dp)
                         )
                     }
                 }
@@ -499,32 +495,12 @@ fun SupplierCatalogProductCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // ROW 3: [+ Restock] Button on Left, Tactile Stepper [ - ] Qty [ + ] on Right
+            // ROW 3: Tactile Stepper [ - ] Qty [ + ] on Right (Matches reference design)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // [+ Restock] pill button
-                Surface(
-                    onClick = onRestock,
-                    shape = RoundedCornerShape(14.dp),
-                    color = if (isDarkTheme) Color(0xFF22263C) else Color(0xFFF1F5F9),
-                    border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF333856) else Color(0xFFE2E8F0))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "+ Restock",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (isDarkTheme) Color(0xFFA5B4FC) else NawanoPrimary200
-                        )
-                    }
-                }
-
                 // Tactile Stepper: [ - ]  Quantity  [ + ]
                 Surface(
                     shape = RoundedCornerShape(24.dp),
