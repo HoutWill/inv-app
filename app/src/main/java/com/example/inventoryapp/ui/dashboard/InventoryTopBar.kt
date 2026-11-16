@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.ui.theme.NawanoGradientEnd
 import com.example.inventoryapp.ui.theme.NawanoGradientStart
 import com.example.inventoryapp.ui.theme.NawanoPrimary200
@@ -89,6 +90,7 @@ fun InventoryTopBar(
     onOpenDrawer: () -> Unit,
     onToggleTheme: () -> Unit,
     onOpenNotifications: () -> Unit,
+    onAddProduct: (() -> Unit)? = null,
     showTitleAndLogo: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -180,6 +182,21 @@ fun InventoryTopBar(
                     )
                 }
             }
+
+            // Quick "+ Add" Product Action
+            if (onAddProduct != null) {
+                TextButton(
+                    onClick = onAddProduct,
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "+ Add",
+                        color = NawanoPrimary200,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+            }
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = Color.Transparent,
@@ -200,6 +217,7 @@ fun NawanoTopBar(
     onOpenDrawer: () -> Unit,
     onToggleTheme: () -> Unit,
     onOpenNotifications: () -> Unit,
+    onAddProduct: (() -> Unit)? = null,
     showTitleAndLogo: Boolean = false,
     modifier: Modifier = Modifier
 ) = InventoryTopBar(
@@ -209,6 +227,7 @@ fun NawanoTopBar(
     onOpenDrawer = onOpenDrawer,
     onToggleTheme = onToggleTheme,
     onOpenNotifications = onOpenNotifications,
+    onAddProduct = onAddProduct,
     showTitleAndLogo = showTitleAndLogo,
     modifier = modifier
 )
