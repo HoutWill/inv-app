@@ -43,6 +43,25 @@ class FakeUserDao : UserDao {
         val user = users[id] ?: return
         users[id] = user.copy(passwordHash = passwordHash, updatedAt = updatedAt)
     }
+
+    override suspend fun findByUniqueCode(uniqueCode: String): UserEntity? {
+        return users.values.firstOrNull { it.uniqueCode.equals(uniqueCode, ignoreCase = true) }
+    }
+
+    override suspend fun findByPhoneNumber(phone: String, cleanPhone: String): UserEntity? {
+        return users.values.firstOrNull { it.phoneNumber == phone || it.phoneNumber == cleanPhone }
+    }
+
+    override suspend fun searchUsersByCodeOrPhone(query: String, expectedRole: UserRole): List<UserEntity> {
+        return users.values.filter {
+            (it.uniqueCode.contains(query, ignoreCase = true) || it.phoneNumber.contains(query)) && it.role == expectedRole
+        }
+    }
+
+    override suspend fun updateProfile(id: String, fullName: String, phoneNumber: String, uniqueCode: String, updatedAt: Long) {
+        val user = users[id] ?: return
+        users[id] = user.copy(fullName = fullName, phoneNumber = phoneNumber, uniqueCode = uniqueCode, updatedAt = updatedAt)
+    }
 }
 
 class FakeSessionStore : AppSessionStore {
