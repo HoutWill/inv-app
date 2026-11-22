@@ -44,6 +44,8 @@ fun SupplierDrawerSheet(
     onOpenShipments: () -> Unit = {},
     onOpenNotifications: () -> Unit = {},
     onAddProduct: () -> Unit = {},
+    pendingPartnerRequestsCount: Int = 0,
+    onOpenPartnerNetwork: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
@@ -199,6 +201,21 @@ fun SupplierDrawerSheet(
                 isDarkTheme = isDarkTheme,
                 onClick = onOpenShipments
             )
+
+            if (onOpenPartnerNetwork != null) {
+                SupplierDrawerItem(
+                    label = "Connections",
+                    icon = Icons.Default.GroupAdd,
+                    badge = if (pendingPartnerRequestsCount > 0) "$pendingPartnerRequestsCount" else null,
+                    badgeColor = NawanoRose,
+                    isSelected = false,
+                    isDarkTheme = isDarkTheme,
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenPartnerNetwork()
+                    }
+                )
+            }
 
             SupplierDrawerItem(
                 label = "Alerts",

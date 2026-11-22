@@ -65,11 +65,13 @@ class AuthViewModel(
         fullName: String,
         email: String,
         password: String,
+        role: UserRole = UserRole.OWNER,
+        phoneNumber: String = "",
         onSuccess: (UserEntity) -> Unit
     ) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            val result = authRepository.signUp(fullName, email, password)
+            val result = authRepository.signUp(fullName, email, password, role, phoneNumber)
             result.fold(
                 onSuccess = { user ->
                     _uiState.value = _uiState.value.copy(isLoading = false)

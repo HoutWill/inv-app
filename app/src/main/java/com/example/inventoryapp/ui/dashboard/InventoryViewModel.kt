@@ -7,16 +7,20 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.inventoryapp.data.local.AppDatabase
+import com.example.inventoryapp.data.local.entity.PartnerConnectionEntity
+import com.example.inventoryapp.data.local.entity.PartnerConnectionWithUser
 import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderItemEntity
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
 import com.example.inventoryapp.data.local.entity.SupplierEntity
+import com.example.inventoryapp.data.local.entity.UserEntity
 import com.example.inventoryapp.data.remote.BarcodeLookupService
 import com.example.inventoryapp.data.remote.OnlineProductData
 import com.example.inventoryapp.data.repository.InventoryRepository
 import com.example.inventoryapp.data.repository.OrderRepository
 import com.example.inventoryapp.data.repository.OrderWithItems
+import com.example.inventoryapp.data.repository.PartnerConnectionRepository
 import com.example.inventoryapp.data.repository.SupplierRepository
 import com.example.inventoryapp.util.StockNotificationHelper
 import android.content.Context
@@ -87,11 +91,128 @@ data class DashboardUiState(
     val isLoading: Boolean = false
 )
 
+data class PartnerConnectionUiState(
+    val searchResult: UserEntity? = null,
+    val isSearching: Boolean = false,
+    val searchError: String? = null,
+    val actionMessage: String? = null,
+    val isSubmitting: Boolean = false
+)
+
 class InventoryViewModel(application: Application) : AndroidViewModel(application) {
     private val database = AppDatabase.getDatabase(application)
     private val repository = InventoryRepository(database.productDao(), database.stockTransactionDao())
     val supplierRepository = SupplierRepository(database.supplierDao())
     val orderRepository = OrderRepository(database, database.purchaseOrderDao(), database.productDao(), database.stockTransactionDao())
+    val partnerConnectionRepository = PartnerConnectionRepository(database.partnerConnectionDao(), database.userDao(), database.supplierDao())
+
+    private val _partnerUiState = MutableStateFlow(PartnerConnectionUiState())
+    val partnerUiState: StateFlow<PartnerConnectionUiState> = _partnerUiState.asStateFlow()
+
+    fun searchPartner(query: String, currentUser: UserEntity) {
+        viewModelScope.launch {
+            _partnerUiState.value = _partnerUiState.value.copy(isSearching = true, searchError = null, actionMessage = null)
+            val result = partnerConnectionRepository.searchPartner(query, currentUser)
+            result.fold(
+                onSuccess = { candidate ->
+                    _partnerUiState.value = _partnerUiState.value.copy(
+                        isSearching = false,
+                        searchResult = candidate,
+                        searchError = null
+                    )
+                },
+                onFailure = { error ->
+                    _partnerUiState.value = _partnerUiState.value.copy(
+                        isSearching = false,
+                        searchResult = null,
+                        searchError = error.message ?: "Partner not found"
+                    )
+                }
+            )
+        }
+    }
+
+    fun clearPartnerSearch() {
+        _partnerUiState.value = _partnerUiState.value.copy(
+            searchResult = null,
+            isSearching = false,
+            searchError = null,
+            actionMessage = null
+        )
+    }
+
+    fun sendConnectionRequest(
+        sender: UserEntity,
+        target: UserEntity,
+        note: String,
+        onComplete: (Boolean) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            _partnerUiState.value = _partnerUiState.value.copy(isSubmitting = true, searchError = null)
+            val result = partnerConnectionRepository.sendConnectionRequest(sender, target, note)
+            result.fold(
+                onSuccess = {
+                    _partnerUiState.value = _partnerUiState.value.copy(
+                        isSubmitting = false,
+                        actionMessage = "Connection request sent to ${target.fullName}!",
+                        searchResult = null
+                    )
+                    onComplete(true)
+                },
+                onFailure = { error ->
+                    _partnerUiState.value = _partnerUiState.value.copy(
+                        isSubmitting = false,
+                        searchError = error.message ?: "Failed to send request"
+                    )
+                    onComplete(false)
+                }
+            )
+        }
+    }
+
+    fun acceptConnection(connectionId: String, onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            partnerConnectionRepository.acceptConnection(connectionId)
+            onComplete()
+        }
+    }
+
+    fun declineConnection(connectionId: String, onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            partnerConnectionRepository.declineConnection(connectionId)
+            onComplete()
+        }
+    }
+
+    fun cancelConnectionRequest(connectionId: String, onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            partnerConnectionRepository.cancelRequest(connectionId)
+            onComplete()
+        }
+    }
+
+    fun disconnectPartner(connectionId: String, onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            partnerConnectionRepository.disconnectPartner(connectionId)
+            onComplete()
+        }
+    }
+
+    fun observeIncomingRequests(userId: String): Flow<List<PartnerConnectionWithUser>> {
+        return partnerConnectionRepository.observeIncomingRequests(userId)
+    }
+
+    fun observeSentRequests(userId: String): Flow<List<PartnerConnectionWithUser>> {
+        return partnerConnectionRepository.observeSentRequests(userId)
+    }
+
+    fun observeActiveConnections(userId: String): Flow<List<PartnerConnectionWithUser>> {
+        return partnerConnectionRepository.observeActiveConnections(userId)
+    }
+
+    fun observePendingIncomingCount(userId: String): Flow<Int> {
+        return partnerConnectionRepository.observePendingIncomingCount(userId)
+    }
 
     private val prefs = application.getSharedPreferences("nawano_settings", Context.MODE_PRIVATE)
     private val _isDarkMode = MutableStateFlow(prefs.getBoolean("is_dark_mode", false))

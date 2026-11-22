@@ -40,6 +40,10 @@ import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
 import com.example.inventoryapp.data.local.entity.UserEntity
 import com.example.inventoryapp.data.repository.OrderWithItems
+import com.example.inventoryapp.ui.dashboard.InventoryViewModel
+import com.example.inventoryapp.ui.dashboard.InventoryViewModelFactory
+import com.example.inventoryapp.ui.partner.ConnectPartnerBottomSheet
+import com.example.inventoryapp.ui.partner.PartnerRequestsBottomSheet
 import com.example.inventoryapp.ui.scanner.BarcodeScannerScreen
 import com.example.inventoryapp.ui.theme.*
 import kotlinx.coroutines.launch
@@ -77,10 +81,24 @@ fun SupplierOrdersScreen(
     onDeleteProduct: (ProductEntity) -> Unit = {},
     onLoadOrderDetails: suspend (String) -> OrderWithItems? = { null },
     onLogout: () -> Unit = {},
-    onSwitchToMiddleman: (() -> Unit)? = null
+    onSwitchToMiddleman: (() -> Unit)? = null,
+    viewModel: InventoryViewModel? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    val effectiveViewModel = viewModel ?: androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = InventoryViewModelFactory(context.applicationContext as android.app.Application)
+    )
+
+    val partnerUiState by effectiveViewModel.partnerUiState.collectAsState()
+    val incomingPartnerRequests by effectiveViewModel.observeIncomingRequests(user.id).collectAsState(initial = emptyList())
+    val sentPartnerRequests by effectiveViewModel.observeSentRequests(user.id).collectAsState(initial = emptyList())
+    val activePartnerConnections by effectiveViewModel.observeActiveConnections(user.id).collectAsState(initial = emptyList())
+    val pendingPartnerCount by effectiveViewModel.observePendingIncomingCount(user.id).collectAsState(initial = 0)
+
+    var isConnectPartnerOpen by remember { mutableStateOf(false) }
+    var isPartnerRequestsOpen by remember { mutableStateOf(false) }
 
     // Active View Tab:
     // 0: Home (Orders), 1: Items (Wholesale Catalog), 2: Stats (Analytics), 3: Settings
@@ -299,6 +317,11 @@ fun SupplierOrdersScreen(
                 onOpenNotifications = {
                     scope.launch { drawerState.close() }
                     showNotificationSheet = true
+                },
+                pendingPartnerRequestsCount = pendingPartnerCount,
+                onOpenPartnerNetwork = {
+                    scope.launch { drawerState.close() }
+                    isPartnerRequestsOpen = true
                 }
             )
         }
@@ -333,7 +356,9 @@ fun SupplierOrdersScreen(
                             showQuickAddChoiceSheet = true
                         }
                     },
-                    showTitleAndLogo = false
+                    showTitleAndLogo = false,
+                    pendingPartnerRequestsCount = pendingPartnerCount,
+                    onOpenPartnerNetwork = { isPartnerRequestsOpen = true }
                 )
 
                 // Main Content Switching by Tab
@@ -787,6 +812,66 @@ fun SupplierOrdersScreen(
             orders = orders,
             isDarkTheme = isDarkTheme,
             onDismiss = { showNotificationSheet = false }
+        )
+    }
+
+    // Modal: Connect Partner (Middleman) Bottom Sheet
+    if (isConnectPartnerOpen) {
+        ConnectPartnerBottomSheet(
+            currentUser = user,
+            partnerUiState = partnerUiState,
+            onSearch = { query -> effectiveViewModel.searchPartner(query, user) },
+            onClearSearch = { effectiveViewModel.clearPartnerSearch() },
+            onSendRequest = { target, note ->
+                effectiveViewModel.sendConnectionRequest(user, target, note) { success ->
+                    if (success) {
+                        Toast.makeText(context, "Connection request sent to ${target.fullName}!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
+            onOpenRequests = {
+                isConnectPartnerOpen = false
+                isPartnerRequestsOpen = true
+            },
+            onDismiss = { isConnectPartnerOpen = false },
+            isDarkTheme = isDarkTheme,
+            pendingRequestsCount = pendingPartnerCount
+        )
+    }
+
+    // Modal: Partner Requests & Manage Connections Bottom Sheet
+    if (isPartnerRequestsOpen) {
+        PartnerRequestsBottomSheet(
+            currentUser = user,
+            incomingRequests = incomingPartnerRequests,
+            sentRequests = sentPartnerRequests,
+            activeConnections = activePartnerConnections,
+            onAccept = { connectionId ->
+                effectiveViewModel.acceptConnection(connectionId) {
+                    Toast.makeText(context, "Connected with Middle Man!", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onDecline = { connectionId ->
+                effectiveViewModel.declineConnection(connectionId) {
+                    Toast.makeText(context, "Request declined", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onCancelSent = { connectionId ->
+                effectiveViewModel.cancelConnectionRequest(connectionId) {
+                    Toast.makeText(context, "Request cancelled", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onDisconnect = { connectionId ->
+                effectiveViewModel.disconnectPartner(connectionId) {
+                    Toast.makeText(context, "Partner disconnected", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onOpenAddPartner = {
+                isPartnerRequestsOpen = false
+                isConnectPartnerOpen = true
+            },
+            onDismiss = { isPartnerRequestsOpen = false },
+            isDarkTheme = isDarkTheme
         )
     }
 

@@ -38,6 +38,8 @@ fun SuppliersManagementScreen(
     onToggleSupplierActive: (String, Boolean) -> Unit,
     onNewPurchaseOrder: (SupplierEntity) -> Unit,
     isDarkTheme: Boolean = isSystemInDarkTheme(),
+    onOpenConnectPartner: (() -> Unit)? = null,
+    pendingPartnerRequestsCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val bgMain = if (isDarkTheme) NawanoDark400 else NawanoNeutral50
@@ -78,6 +80,30 @@ fun SuppliersManagementScreen(
                             contentDescription = "Back",
                             tint = textPrimary
                         )
+                    }
+                },
+                actions = {
+                    if (onOpenConnectPartner != null) {
+                        IconButton(onClick = onOpenConnectPartner) {
+                            BadgedBox(
+                                badge = {
+                                    if (pendingPartnerRequestsCount > 0) {
+                                        Badge(
+                                            containerColor = NawanoRose,
+                                            contentColor = Color.White
+                                        ) {
+                                            Text(text = "$pendingPartnerRequestsCount")
+                                        }
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PersonAdd,
+                                    contentDescription = "Connect Supplier",
+                                    tint = NawanoPrimary200
+                                )
+                            }
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -132,6 +158,80 @@ fun SuppliersManagementScreen(
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
+
+            // Add / Connect Supplier by ID/Phone banner
+            if (onOpenConnectPartner != null) {
+                Surface(
+                    onClick = onOpenConnectPartner,
+                    shape = RoundedCornerShape(14.dp),
+                    color = cardBg,
+                    border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.35f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = NawanoPrimary50,
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.PersonAdd,
+                                        contentDescription = null,
+                                        tint = NawanoPrimary200,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Connect Supplier by ID or Phone",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = textPrimary
+                                )
+                                Text(
+                                    text = "Search Unique ID (SUP-XXXX) or Phone to connect",
+                                    fontSize = 11.sp,
+                                    color = textSecondary
+                                )
+                            }
+                        }
+
+                        if (pendingPartnerRequestsCount > 0) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = NawanoRose,
+                                modifier = Modifier.padding(end = 6.dp)
+                            ) {
+                                Text(
+                                    text = "$pendingPartnerRequestsCount pending",
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = NawanoPrimary200,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
 
             if (filteredSuppliers.isEmpty()) {
                 Box(

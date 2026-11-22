@@ -13,7 +13,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -51,6 +51,8 @@ fun SupplierTopBar(
     onOpenScanner: () -> Unit = {},
     onQuickAdd: () -> Unit = {},
     showTitleAndLogo: Boolean = false,
+    pendingPartnerRequestsCount: Int = 0,
+    onOpenPartnerNetwork: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
@@ -153,6 +155,38 @@ fun SupplierTopBar(
                             tint = if (pendingNotificationCount > 0) NawanoPrimary200 else textSecondary,
                             modifier = Modifier.size(20.dp)
                         )
+                    }
+                }
+
+                // Partner Connections Button with Request Badge
+                if (onOpenPartnerNetwork != null) {
+                    IconButton(
+                        onClick = onOpenPartnerNetwork,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        BadgedBox(
+                            badge = {
+                                if (pendingPartnerRequestsCount > 0) {
+                                    Badge(
+                                        containerColor = Color(0xFFEF4444)
+                                    ) {
+                                        Text(
+                                            text = if (pendingPartnerRequestsCount > 99) "99+" else "$pendingPartnerRequestsCount",
+                                            color = Color.White,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = if (pendingPartnerRequestsCount > 0) Icons.Default.PersonAdd else Icons.Outlined.PersonAdd,
+                                contentDescription = "Partner Connections",
+                                tint = if (pendingPartnerRequestsCount > 0) NawanoPrimary200 else textSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
 

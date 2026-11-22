@@ -17,7 +17,11 @@ enum class UserRole { OWNER, SUPPLIER }
  */
 @Entity(
     tableName = "users",
-    indices = [Index(value = ["email"], unique = true)]
+    indices = [
+        Index(value = ["email"], unique = true),
+        Index(value = ["unique_code"]),
+        Index(value = ["phone_number"])
+    ]
 )
 data class UserEntity(
     @PrimaryKey
@@ -27,6 +31,8 @@ data class UserEntity(
     val email: String,
     @ColumnInfo(name = "password_hash") val passwordHash: String,
     val role: UserRole = UserRole.OWNER,
+    @ColumnInfo(name = "phone_number") val phoneNumber: String = "",
+    @ColumnInfo(name = "unique_code") val uniqueCode: String = "",
     /** Only for SUPPLIER accounts; becomes a foreign key once the suppliers table exists. */
     @ColumnInfo(name = "supplier_id") val supplierId: String? = null,
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),

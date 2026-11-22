@@ -59,8 +59,12 @@ import com.example.inventoryapp.data.local.entity.PurchaseOrderItemEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
 import com.example.inventoryapp.data.local.entity.SupplierEntity
+import com.example.inventoryapp.data.local.entity.UserEntity
+import com.example.inventoryapp.data.local.entity.UserRole
 import com.example.inventoryapp.data.remote.OnlineProductData
 import com.example.inventoryapp.data.repository.OrderWithItems
+import com.example.inventoryapp.ui.partner.ConnectPartnerBottomSheet
+import com.example.inventoryapp.ui.partner.PartnerRequestsBottomSheet
 import com.example.inventoryapp.ui.scanner.BarcodeScannerScreen
 import com.example.inventoryapp.ui.supplier.NewPurchaseOrderDialog
 import com.example.inventoryapp.util.ProductImageHelper
@@ -87,6 +91,7 @@ fun InventoryDashboardScreen(
     viewModel: InventoryViewModel = viewModel(
         factory = InventoryViewModelFactory(LocalContext.current.applicationContext as Application)
     ),
+    currentUser: UserEntity? = null,
     isDarkTheme: Boolean = isSystemInDarkTheme(),
     onToggleTheme: () -> Unit = {},
     userName: String = "Anthony",
@@ -96,6 +101,24 @@ fun InventoryDashboardScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    val effectiveUser = remember(currentUser, userName, userRole) {
+        currentUser ?: UserEntity(
+            id = "user_middleman",
+            fullName = userName.ifBlank { "Anthony (Middle Man)" },
+            email = "middleman@nawano.com",
+            passwordHash = "",
+            role = UserRole.OWNER,
+            uniqueCode = "MID-1001",
+            phoneNumber = "+1 (555) 019-2831"
+        )
+    }
+
+    val partnerUiState by viewModel.partnerUiState.collectAsState()
+    val incomingPartnerRequests by viewModel.observeIncomingRequests(effectiveUser.id).collectAsState(initial = emptyList())
+    val sentPartnerRequests by viewModel.observeSentRequests(effectiveUser.id).collectAsState(initial = emptyList())
+    val activePartnerConnections by viewModel.observeActiveConnections(effectiveUser.id).collectAsState(initial = emptyList())
+    val pendingPartnerCount by viewModel.observePendingIncomingCount(effectiveUser.id).collectAsState(initial = 0)
+
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -103,6 +126,8 @@ fun InventoryDashboardScreen(
     var scannerTarget by remember { mutableStateOf(ScannerTarget.NONE) }
     var isAddProductOpen by remember { mutableStateOf(false) }
     var isNotificationsOpen by remember { mutableStateOf(false) }
+    var isConnectPartnerOpen by remember { mutableStateOf(false) }
+    var isPartnerRequestsOpen by remember { mutableStateOf(false) }
     var viewingProductDetails by remember { mutableStateOf<ProductEntity?>(null) }
     var addProductDraft by remember { mutableStateOf(AddProductDraft()) }
     var scannedNotFoundSku by remember { mutableStateOf<String?>(null) }
@@ -193,7 +218,9 @@ fun InventoryDashboardScreen(
                             addProductDraft = AddProductDraft(sku = uiState.searchQuery)
                             isAddProductOpen = true
                         },
-                        showTitleAndLogo = false
+                        showTitleAndLogo = false,
+                        pendingPartnerRequestsCount = pendingPartnerCount,
+                        onOpenPartnerNetwork = { isPartnerRequestsOpen = true }
                     )
                 }
             }
@@ -240,7 +267,9 @@ fun InventoryDashboardScreen(
                                     selectedSupplierForPo = supplier
                                     showNewPoDialog = true
                                 },
-                                isDarkTheme = isDarkTheme
+                                isDarkTheme = isDarkTheme,
+                                onOpenConnectPartner = { isConnectPartnerOpen = true },
+                                pendingPartnerRequestsCount = pendingPartnerCount
                             )
                         }
                         DrawerDestination.AUDIT_LOGS -> {
@@ -842,6 +871,75 @@ fun InventoryDashboardScreen(
                             snackbarHostState.showSnackbar("Supplier '${newSupplier.name}' added successfully!")
                         }
                     }
+                )
+            }
+            // Connect Partner Modal Bottom Sheet
+            if (isConnectPartnerOpen) {
+                ConnectPartnerBottomSheet(
+                    currentUser = effectiveUser,
+                    partnerUiState = partnerUiState,
+                    onSearch = { query -> viewModel.searchPartner(query, effectiveUser) },
+                    onClearSearch = { viewModel.clearPartnerSearch() },
+                    onSendRequest = { target, note ->
+                        viewModel.sendConnectionRequest(effectiveUser, target, note) { success ->
+                            if (success) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Connection request sent to ${target.fullName}!")
+                                }
+                            }
+                        }
+                    },
+                    onOpenRequests = {
+                        isConnectPartnerOpen = false
+                        isPartnerRequestsOpen = true
+                    },
+                    onDismiss = { isConnectPartnerOpen = false },
+                    isDarkTheme = isDarkTheme,
+                    pendingRequestsCount = pendingPartnerCount
+                )
+            }
+
+            // Partner Requests & Manage Connections Modal Bottom Sheet
+            if (isPartnerRequestsOpen) {
+                PartnerRequestsBottomSheet(
+                    currentUser = effectiveUser,
+                    incomingRequests = incomingPartnerRequests,
+                    sentRequests = sentPartnerRequests,
+                    activeConnections = activePartnerConnections,
+                    onAccept = { connectionId ->
+                        viewModel.acceptConnection(connectionId) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Connected! Supplier added to your ordering directory.")
+                            }
+                        }
+                    },
+                    onDecline = { connectionId ->
+                        viewModel.declineConnection(connectionId) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Connection request declined")
+                            }
+                        }
+                    },
+                    onCancelSent = { connectionId ->
+                        viewModel.cancelConnectionRequest(connectionId) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Request cancelled")
+                            }
+                        }
+                    },
+                    onDisconnect = { connectionId ->
+                        viewModel.disconnectPartner(connectionId) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Partner disconnected (order records kept)")
+                            }
+                        }
+                    },
+                    onOpenAddPartner = {
+                        isPartnerRequestsOpen = false
+                        isConnectPartnerOpen = true
+                    },
+                    onDismiss = { isPartnerRequestsOpen = false },
+                    isDarkTheme = isDarkTheme
                 )
             }
         }

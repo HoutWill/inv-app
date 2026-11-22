@@ -10,6 +10,8 @@ import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -92,6 +94,8 @@ fun InventoryTopBar(
     onOpenNotifications: () -> Unit,
     onAddProduct: (() -> Unit)? = null,
     showTitleAndLogo: Boolean = false,
+    pendingPartnerRequestsCount: Int = 0,
+    onOpenPartnerNetwork: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     TopAppBar(
@@ -180,6 +184,38 @@ fun InventoryTopBar(
                         tint = if (lowStockCount > 0) NawanoPrimary200 else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(21.dp)
                     )
+                }
+            }
+
+            // Partner Connections Button with Request Badge
+            if (onOpenPartnerNetwork != null) {
+                IconButton(
+                    onClick = onOpenPartnerNetwork,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    BadgedBox(
+                        badge = {
+                            if (pendingPartnerRequestsCount > 0) {
+                                Badge(
+                                    containerColor = Color(0xFFEF4444),
+                                    contentColor = Color.White
+                                ) {
+                                    Text(
+                                        text = if (pendingPartnerRequestsCount > 99) "99+" else "$pendingPartnerRequestsCount",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = if (pendingPartnerRequestsCount > 0) Icons.Default.PersonAdd else Icons.Outlined.PersonAdd,
+                            contentDescription = "Partner Connections",
+                            tint = if (pendingPartnerRequestsCount > 0) NawanoPrimary200 else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
 

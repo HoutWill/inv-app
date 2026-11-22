@@ -7,11 +7,13 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.inventoryapp.data.local.dao.PartnerConnectionDao
 import com.example.inventoryapp.data.local.dao.ProductDao
 import com.example.inventoryapp.data.local.dao.PurchaseOrderDao
 import com.example.inventoryapp.data.local.dao.StockTransactionDao
 import com.example.inventoryapp.data.local.dao.SupplierDao
 import com.example.inventoryapp.data.local.dao.UserDao
+import com.example.inventoryapp.data.local.entity.PartnerConnectionEntity
 import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderItemEntity
@@ -32,9 +34,10 @@ import kotlinx.coroutines.launch
         UserEntity::class,
         SupplierEntity::class,
         PurchaseOrderEntity::class,
-        PurchaseOrderItemEntity::class
+        PurchaseOrderItemEntity::class,
+        PartnerConnectionEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -43,6 +46,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
     abstract fun supplierDao(): SupplierDao
     abstract fun purchaseOrderDao(): PurchaseOrderDao
+    abstract fun partnerConnectionDao(): PartnerConnectionDao
 
     companion object {
         @Volatile
@@ -145,6 +149,35 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `users` ADD COLUMN `phone_number` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `users` ADD COLUMN `unique_code` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_users_phone_number` ON `users` (`phone_number`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_users_unique_code` ON `users` (`unique_code`)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `partner_connections` (
+                        `id` TEXT NOT NULL,
+                        `requester_id` TEXT NOT NULL,
+                        `receiver_id` TEXT NOT NULL,
+                        `requester_role` TEXT NOT NULL,
+                        `receiver_role` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `request_note` TEXT NOT NULL,
+                        `created_at` INTEGER NOT NULL,
+                        `updated_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_partner_connections_requester_id` ON `partner_connections` (`requester_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_partner_connections_receiver_id` ON `partner_connections` (`receiver_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_partner_connections_status` ON `partner_connections` (`status`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_partner_connections_requester_id_receiver_id` ON `partner_connections` (`requester_id`, `receiver_id`)")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = try {
@@ -153,7 +186,7 @@ abstract class AppDatabase : RoomDatabase() {
                         AppDatabase::class.java,
                         "inventory_database"
                     )
-                        .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_6_8)
+                        .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_6_8, MIGRATION_8_9)
                         .fallbackToDestructiveMigration(true)
                         .addCallback(DatabaseSeederCallback())
                         .build()
@@ -201,49 +234,79 @@ abstract class AppDatabase : RoomDatabase() {
 
                 // Seed default users safely without aborting seeding on conflict
                 try {
-                    if (userDao.findByEmail("middleman@nawano.com") == null) {
+                    val existingMm = userDao.findByEmail("middleman@nawano.com")
+                    if (existingMm == null) {
                         userDao.insert(
                             UserEntity(
                                 id = "user_middleman",
                                 fullName = "Anthony (Middle Man)",
                                 email = "middleman@nawano.com",
                                 passwordHash = PasswordHasher.hash("password123"),
-                                role = UserRole.OWNER
+                                role = UserRole.OWNER,
+                                uniqueCode = "MID-1001",
+                                phoneNumber = "+1 (555) 019-2831"
                             )
                         )
+                    } else if (existingMm.uniqueCode.isBlank() || existingMm.phoneNumber.isBlank()) {
+                        userDao.updateProfile(existingMm.id, existingMm.fullName, "+1 (555) 019-2831", "MID-1001")
                     }
                 } catch (e: Exception) {
                     Log.w("AppDatabase", "Middleman user exists: ${e.message}")
                 }
                 try {
-                    if (userDao.findByEmail("supplier@nawano.com") == null) {
+                    val existingSup = userDao.findByEmail("supplier@nawano.com")
+                    if (existingSup == null) {
                         userDao.insert(
                             UserEntity(
                                 id = "user_supplier_pacific",
                                 fullName = "Pacific Seafood Supply (Supplier)",
                                 email = "supplier@nawano.com",
                                 passwordHash = PasswordHasher.hash("password123"),
-                                role = UserRole.SUPPLIER
+                                role = UserRole.SUPPLIER,
+                                uniqueCode = "SUP-2001",
+                                phoneNumber = "+1 (555) 014-9922"
                             )
                         )
+                    } else if (existingSup.uniqueCode.isBlank() || existingSup.phoneNumber.isBlank()) {
+                        userDao.updateProfile(existingSup.id, existingSup.fullName, "+1 (555) 014-9922", "SUP-2001")
                     }
                 } catch (e: Exception) {
                     Log.w("AppDatabase", "Supplier user exists: ${e.message}")
                 }
                 try {
-                    if (userDao.findByEmail("foodie@nawano.com") == null) {
+                    val existingFoodie = userDao.findByEmail("foodie@nawano.com")
+                    if (existingFoodie == null) {
                         userDao.insert(
                             UserEntity(
                                 id = "user_supplier_foodie",
                                 fullName = "Foodie Supplier (Supplier)",
                                 email = "foodie@nawano.com",
                                 passwordHash = PasswordHasher.hash("password123"),
-                                role = UserRole.SUPPLIER
+                                role = UserRole.SUPPLIER,
+                                uniqueCode = "SUP-2002",
+                                phoneNumber = "+1 (555) 018-3341"
                             )
                         )
+                    } else if (existingFoodie.uniqueCode.isBlank() || existingFoodie.phoneNumber.isBlank()) {
+                        userDao.updateProfile(existingFoodie.id, existingFoodie.fullName, "+1 (555) 018-3341", "SUP-2002")
                     }
                 } catch (e: Exception) {
                     Log.w("AppDatabase", "Foodie user exists: ${e.message}")
+                }
+
+                // Migrate any legacy owner connections to canonical user_middleman
+                try {
+                    val legacyOwner = userDao.findByEmail("owner@nawano.com")
+                    if (legacyOwner != null) {
+                        database.openHelper.writableDatabase.execSQL(
+                            "UPDATE partner_connections SET requester_id = 'user_middleman' WHERE requester_id = '${legacyOwner.id}'"
+                        )
+                        database.openHelper.writableDatabase.execSQL(
+                            "UPDATE partner_connections SET receiver_id = 'user_middleman' WHERE receiver_id = '${legacyOwner.id}'"
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.w("AppDatabase", "Legacy connection migration: ${e.message}")
                 }
 
                 // Purge legacy mock supplier records if any

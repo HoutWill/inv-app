@@ -34,11 +34,14 @@ class AuthRepository(
     suspend fun signUp(
         fullName: String,
         email: String,
-        password: String
+        password: String,
+        role: UserRole = UserRole.OWNER,
+        phoneNumber: String = ""
     ): Result<UserEntity> = withContext(Dispatchers.IO) {
         try {
             val cleanName = fullName.trim()
             val cleanEmail = email.trim().lowercase()
+            val cleanPhone = phoneNumber.trim()
 
             if (cleanName.isBlank()) {
                 return@withContext Result.failure(IllegalArgumentException("Please enter your full name"))
@@ -55,12 +58,18 @@ class AuthRepository(
                 return@withContext Result.failure(IllegalArgumentException("An account with this email already exists"))
             }
 
+            val prefix = if (role == UserRole.SUPPLIER) "SUP" else "MID"
+            val randomSuffix = (1000..9999).random().toString()
+            val generatedCode = "$prefix-$randomSuffix"
+
             val passwordHash = PasswordHasher.hash(password)
             val newUser = UserEntity(
                 fullName = cleanName,
                 email = cleanEmail,
                 passwordHash = passwordHash,
-                role = UserRole.OWNER
+                role = role,
+                phoneNumber = cleanPhone,
+                uniqueCode = generatedCode
             )
             userDao.insert(newUser)
             sessionStore.setLoggedInUserId(newUser.id)
@@ -128,6 +137,9 @@ class AuthRepository(
             val fullName = if (role == UserRole.OWNER) "Anthony (Middle Man)" else "Pacific Seafood Supply (Supplier)"
             val defaultPassword = "password123"
 
+            val defaultCode = if (role == UserRole.OWNER) "MID-1001" else "SUP-2001"
+            val defaultPhone = if (role == UserRole.OWNER) "+1 (555) 019-2831" else "+1 (555) 014-9922"
+
             var user = userDao.findByEmail(email)
             if (user == null && role == UserRole.OWNER) {
                 user = userDao.findByEmail("owner@nawano.com")
@@ -138,13 +150,18 @@ class AuthRepository(
                         fullName = fullName,
                         email = email,
                         passwordHash = PasswordHasher.hash(defaultPassword),
-                        role = role
+                        role = role,
+                        uniqueCode = defaultCode,
+                        phoneNumber = defaultPhone
                     )
                     userDao.insert(newUser)
                     user = newUser
                 } catch (e: Exception) {
                     user = userDao.findByEmail(email) ?: if (role == UserRole.OWNER) userDao.findByEmail("owner@nawano.com") else null
                 }
+            } else if (user.uniqueCode.isBlank() || user.phoneNumber.isBlank()) {
+                userDao.updateProfile(user.id, user.fullName, defaultPhone, defaultCode)
+                user = user.copy(uniqueCode = defaultCode, phoneNumber = defaultPhone)
             }
             if (user != null) {
                 sessionStore.setLoggedInUserId(user.id)

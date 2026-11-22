@@ -80,8 +80,9 @@ fun AppNavHost(
         composable(Routes.SIGN_UP) {
             SignUpScreen(
                 viewModel = authViewModel,
-                onSignUpSuccess = {
-                    navController.navigate(Routes.HOME) {
+                onSignUpSuccess = { user ->
+                    val target = if (user.role == UserRole.SUPPLIER) Routes.SUPPLIER_ORDERS else Routes.HOME
+                    navController.navigate(target) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 },
@@ -117,6 +118,7 @@ fun AppNavHost(
 
             InventoryDashboardScreen(
                 viewModel = inventoryViewModel,
+                currentUser = user,
                 isDarkTheme = isDarkTheme,
                 onToggleTheme = onToggleTheme,
                 userName = userName,
@@ -152,6 +154,7 @@ fun AppNavHost(
                 orders = dashState.orders,
                 products = dashState.products,
                 isDarkTheme = isDarkTheme,
+                viewModel = inventoryViewModel,
                 onToggleTheme = onToggleTheme,
                 onConfirmOrder = { orderId, note ->
                     inventoryViewModel.confirmOrder(orderId, note)
