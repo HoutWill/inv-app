@@ -214,10 +214,7 @@ fun InventoryDashboardScreen(
                         onOpenDrawer = { scope.launch { drawerState.open() } },
                         onToggleTheme = onToggleTheme,
                         onOpenNotifications = { isNotificationsOpen = true },
-                        onAddProduct = {
-                            addProductDraft = AddProductDraft(sku = uiState.searchQuery)
-                            isAddProductOpen = true
-                        },
+                        onAddProduct = null,
                         showTitleAndLogo = false,
                         pendingPartnerRequestsCount = pendingPartnerCount,
                         onOpenPartnerNetwork = { isPartnerRequestsOpen = true }
@@ -538,6 +535,30 @@ fun InventoryDashboardScreen(
                                 modifier = Modifier.padding(bottom = 88.dp)
                             )
                         }
+                    }
+                }
+
+                // Floating Action Button (+ Add) positioned at bottom-right above the bottom navigation bar
+                if (drawerDestination == null && (activeTab == 0 || activeTab == 1)) {
+                    FloatingActionButton(
+                        onClick = {
+                            addProductDraft = AddProductDraft(sku = uiState.searchQuery)
+                            isAddProductOpen = true
+                        },
+                        containerColor = NawanoPrimary200,
+                        contentColor = Color.White,
+                        shape = CircleShape,
+                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .navigationBarsPadding()
+                            .padding(end = 20.dp, bottom = 96.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Add Product",
+                            modifier = Modifier.size(26.dp)
+                        )
                     }
                 }
 
@@ -1045,6 +1066,13 @@ private fun DashboardOverviewTab(
     }
 }
 
+private enum class StockStatusFilter {
+    ALL,
+    IN_STOCK,
+    LOW_STOCK,
+    OUT_OF_STOCK
+}
+
 /**
  * TAB 1: Dedicated Full Items Catalog Screen
  * Focuses on search, category filtering, multi-criteria sorting, and item management.
@@ -1069,11 +1097,26 @@ private fun InventoryItemsCatalogTab(
     onRequestSupply: (ProductEntity) -> Unit = {}
 ) {
     var sortMenuExpanded by remember { mutableStateOf(false) }
-    var isInStockOnly by remember { mutableStateOf(false) }
+    var stockStatusFilter by remember { mutableStateOf(StockStatusFilter.ALL) }
 
-    val displayedProducts = remember(uiState.filteredProducts, isInStockOnly) {
-        if (isInStockOnly) uiState.filteredProducts.filter { it.quantity > 0 }
-        else uiState.filteredProducts
+    val inStockCount = remember(uiState.filteredProducts) {
+        uiState.filteredProducts.count { it.quantity > 0 }
+    }
+    val lowStockCount = remember(uiState.filteredProducts) {
+        uiState.filteredProducts.count { it.quantity in 1..it.reorderLevel }
+    }
+    val outOfStockCount = remember(uiState.filteredProducts) {
+        uiState.filteredProducts.count { it.quantity <= 0 }
+    }
+    val allCount = uiState.filteredProducts.size
+
+    val displayedProducts = remember(uiState.filteredProducts, stockStatusFilter) {
+        when (stockStatusFilter) {
+            StockStatusFilter.ALL -> uiState.filteredProducts
+            StockStatusFilter.IN_STOCK -> uiState.filteredProducts.filter { it.quantity > 0 }
+            StockStatusFilter.LOW_STOCK -> uiState.filteredProducts.filter { it.quantity in 1..it.reorderLevel }
+            StockStatusFilter.OUT_OF_STOCK -> uiState.filteredProducts.filter { it.quantity <= 0 }
+        }
     }
 
     val cardBg = if (isDarkTheme) Color(0xFF191D2D) else Color.White
@@ -1176,9 +1219,130 @@ private fun InventoryItemsCatalogTab(
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // 2. Category Filter Capsules (All, Seafood, Meat, Produce, Dairy, etc.)
+        // 2. Stock Level Filter Row (Separates "Our Own Stock" from Out of Stock & Low Stock)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // "All" Pill
+            val isAllSelected = stockStatusFilter == StockStatusFilter.ALL
+            Surface(
+                onClick = { stockStatusFilter = StockStatusFilter.ALL },
+                shape = CircleShape,
+                color = if (isAllSelected) NawanoPrimary200 else cardBg,
+                border = if (isAllSelected) null else BorderStroke(1.dp, cardBorder)
+            ) {
+                Text(
+                    text = "All ($allCount)",
+                    fontSize = 12.sp,
+                    fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isAllSelected) Color.White else textSecondary,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                )
+            }
+
+            // "In Stock (Our Stock)" Pill with Emerald Green Dot
+            val isInStockSelected = stockStatusFilter == StockStatusFilter.IN_STOCK
+            Surface(
+                onClick = { stockStatusFilter = StockStatusFilter.IN_STOCK },
+                shape = CircleShape,
+                color = if (isInStockSelected) Color(0xFF10B981) else cardBg,
+                border = BorderStroke(
+                    1.dp,
+                    if (isInStockSelected) Color(0xFF10B981) else cardBorder
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(if (isInStockSelected) Color.White else Color(0xFF10B981))
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "In Stock ($inStockCount)",
+                        fontSize = 12.sp,
+                        fontWeight = if (isInStockSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isInStockSelected) Color.White else if (isDarkTheme) Color(0xFF34D399) else Color(0xFF059669)
+                    )
+                }
+            }
+
+            // "Low Stock" Pill with Amber Dot
+            val isLowStockSelected = stockStatusFilter == StockStatusFilter.LOW_STOCK
+            Surface(
+                onClick = { stockStatusFilter = StockStatusFilter.LOW_STOCK },
+                shape = CircleShape,
+                color = if (isLowStockSelected) Color(0xFFF59E0B) else cardBg,
+                border = BorderStroke(
+                    1.dp,
+                    if (isLowStockSelected) Color(0xFFF59E0B) else cardBorder
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(if (isLowStockSelected) Color.White else Color(0xFFF59E0B))
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "Low Stock ($lowStockCount)",
+                        fontSize = 12.sp,
+                        fontWeight = if (isLowStockSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isLowStockSelected) Color.White else if (isDarkTheme) Color(0xFFFBBF24) else Color(0xFFD97706)
+                    )
+                }
+            }
+
+            // "Out of Stock" Pill with Rose Dot
+            val isOutSelected = stockStatusFilter == StockStatusFilter.OUT_OF_STOCK
+            Surface(
+                onClick = { stockStatusFilter = StockStatusFilter.OUT_OF_STOCK },
+                shape = CircleShape,
+                color = if (isOutSelected) Color(0xFFEF4444) else cardBg,
+                border = BorderStroke(
+                    1.dp,
+                    if (isOutSelected) Color(0xFFEF4444) else cardBorder
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(if (isOutSelected) Color.White else Color(0xFFEF4444))
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "Out of Stock ($outOfStockCount)",
+                        fontSize = 12.sp,
+                        fontWeight = if (isOutSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isOutSelected) Color.White else if (isDarkTheme) Color(0xFFF87171) else Color(0xFFDC2626)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // 3. Category Filter Capsules (All, Seafood, Meat, Produce, Dairy, etc.)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1196,10 +1360,10 @@ private fun InventoryItemsCatalogTab(
                 ) {
                     Text(
                         text = cat,
-                        fontSize = 13.sp,
+                        fontSize = 12.5.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = if (isSelected) Color.White else textSecondary,
-                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp)
                     )
                 }
             }
@@ -1260,7 +1424,7 @@ private fun InventoryItemsCatalogTab(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // 3. Sub-header Row: "Products" on left, "+ Add", "● In Stock" and "⇅ Recent ▾" on right
+        // 4. Sub-header Row: "Products" on left, "⇅ Sort: ... ▾" on right
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1268,13 +1432,16 @@ private fun InventoryItemsCatalogTab(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.weight(1f, fill = false)
             ) {
                 Text(
-                    text = "Products",
+                    text = if (stockStatusFilter == StockStatusFilter.IN_STOCK) "In-Stock Products" else "Products",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = textPrimary
+                    color = textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 if (displayedProducts.isNotEmpty()) {
                     Text(
@@ -1285,124 +1452,64 @@ private fun InventoryItemsCatalogTab(
                 }
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                // Primary "+ Add" Button
-                Button(
-                    onClick = onAddProductClicked,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = NawanoPrimary200,
-                        contentColor = Color.White
-                    ),
-                    modifier = Modifier.height(32.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Add Product",
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text(
-                        text = "Add",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                }
-
-                // "● In Stock" toggle filter with green dot
+            // "⇅ Sort ▾" Sort button
+            Box {
                 Surface(
-                    onClick = { isInStockOnly = !isInStockOnly },
+                    onClick = { sortMenuExpanded = true },
                     shape = RoundedCornerShape(12.dp),
-                    color = if (isInStockOnly) Color(0xFF10B981).copy(alpha = 0.15f) else cardBg,
-                    border = BorderStroke(
-                        1.dp,
-                        if (isInStockOnly) Color(0xFF10B981).copy(alpha = 0.45f) else cardBorder
-                    )
+                    color = cardBg,
+                    border = BorderStroke(1.dp, cardBorder)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(if (isInStockOnly) Color(0xFF10B981) else textSecondary.copy(alpha = 0.5f))
+                        Icon(
+                            imageVector = Icons.Default.SwapVert,
+                            contentDescription = "Sort",
+                            tint = textSecondary,
+                            modifier = Modifier.size(15.dp)
                         )
-                        Spacer(Modifier.width(5.dp))
+                        Spacer(Modifier.width(4.dp))
                         Text(
-                            text = "In Stock",
+                            text = when (uiState.sortOption) {
+                                ProductSortOption.NAME_ASC -> "Sort: Name"
+                                ProductSortOption.STOCK_LOW_TO_HIGH -> "Sort: Stock ↑"
+                                ProductSortOption.STOCK_HIGH_TO_LOW -> "Sort: Stock ↓"
+                                ProductSortOption.PRICE_HIGH_TO_LOW -> "Sort: Price ↓"
+                            },
                             fontSize = 11.5.sp,
-                            fontWeight = if (isInStockOnly) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isInStockOnly) Color(0xFF10B981) else textSecondary
+                            fontWeight = FontWeight.SemiBold,
+                            color = textPrimary
+                        )
+                        Spacer(Modifier.width(2.dp))
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = null,
+                            tint = textSecondary,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
 
-                // "⇅ Recent ▾" Sort button
-                Box {
-                    Surface(
-                        onClick = { sortMenuExpanded = true },
-                        shape = RoundedCornerShape(12.dp),
-                        color = cardBg,
-                        border = BorderStroke(1.dp, cardBorder)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SwapVert,
-                                contentDescription = "Sort",
-                                tint = textSecondary,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(Modifier.width(3.dp))
-                            Text(
-                                text = when (uiState.sortOption) {
-                                    ProductSortOption.NAME_ASC -> "Recent"
-                                    ProductSortOption.STOCK_LOW_TO_HIGH -> "Stock ↑"
-                                    ProductSortOption.STOCK_HIGH_TO_LOW -> "Stock ↓"
-                                    ProductSortOption.PRICE_HIGH_TO_LOW -> "Price"
-                                },
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = textPrimary
-                            )
-                            Spacer(Modifier.width(2.dp))
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = null,
-                                tint = textSecondary,
-                                modifier = Modifier.size(15.dp)
-                            )
-                        }
-                    }
-
-                    DropdownMenu(
-                        expanded = sortMenuExpanded,
-                        onDismissRequest = { sortMenuExpanded = false }
-                    ) {
-                        ProductSortOption.values().forEach { option ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = option.displayName,
-                                        fontWeight = if (uiState.sortOption == option) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (uiState.sortOption == option) NawanoPrimary200 else MaterialTheme.colorScheme.onSurface
-                                    )
-                                },
-                                onClick = {
-                                    onSortChanged(option)
-                                    sortMenuExpanded = false
-                                }
-                            )
-                        }
+                DropdownMenu(
+                    expanded = sortMenuExpanded,
+                    onDismissRequest = { sortMenuExpanded = false }
+                ) {
+                    ProductSortOption.values().forEach { option ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = option.displayName,
+                                    fontWeight = if (uiState.sortOption == option) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (uiState.sortOption == option) NawanoPrimary200 else MaterialTheme.colorScheme.onSurface
+                                )
+                            },
+                            onClick = {
+                                onSortChanged(option)
+                                sortMenuExpanded = false
+                            }
+                        )
                     }
                 }
             }
@@ -1455,7 +1562,7 @@ private fun InventoryItemsCatalogTab(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = if (uiState.searchQuery.isNotBlank() || uiState.selectedCategory != "All" || isInStockOnly)
+                            text = if (uiState.searchQuery.isNotBlank() || uiState.selectedCategory != "All" || stockStatusFilter != StockStatusFilter.ALL)
                                 "No items match your filters or search query."
                             else "Your inventory is currently empty. Tap below to register your first product.",
                             style = MaterialTheme.typography.bodySmall,
@@ -1483,7 +1590,7 @@ private fun InventoryItemsCatalogTab(
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
-                contentPadding = PaddingValues(top = 4.dp, bottom = 120.dp)
+                contentPadding = PaddingValues(top = 4.dp, bottom = 170.dp)
             ) {
                 items(items = displayedProducts, key = { item -> item.id }) { item ->
                     val isHighlighted = item.sku.equals(uiState.scannedSku, ignoreCase = true)
