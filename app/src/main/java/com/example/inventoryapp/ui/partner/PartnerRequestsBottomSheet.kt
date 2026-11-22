@@ -70,17 +70,21 @@ fun PartnerRequestsBottomSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f, fill = false)) {
                     Text(
                         text = "Partner Network",
-                        fontSize = 20.sp,
+                        fontSize = 19.sp,
                         fontWeight = FontWeight.Bold,
-                        color = textPrimary
+                        color = textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "Manage your connections & requests",
-                        fontSize = 13.sp,
-                        color = textSecondary
+                        text = "Manage connections & requests",
+                        fontSize = 12.sp,
+                        color = textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -94,15 +98,15 @@ fun PartnerRequestsBottomSheet(
                         contentColor = Color.White
                     ),
                     shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(15.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text(text = "Connect", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "Connect", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
 
             // Tab Selector
             Surface(
@@ -111,7 +115,7 @@ fun PartnerRequestsBottomSheet(
                 border = BorderStroke(1.dp, borderCol),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(modifier = Modifier.padding(4.dp)) {
+                Row(modifier = Modifier.padding(3.dp)) {
                     val tabs = listOf(
                         "Incoming (${incomingRequests.size})",
                         "Sent (${sentRequests.size})",
@@ -126,12 +130,12 @@ fun PartnerRequestsBottomSheet(
                             modifier = Modifier.weight(1f)
                         ) {
                             Box(
-                                modifier = Modifier.padding(vertical = 8.dp),
+                                modifier = Modifier.padding(vertical = 7.dp, horizontal = 2.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = title,
-                                    fontSize = 11.sp,
+                                    fontSize = 10.5.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                     color = if (isSelected) Color.White else textSecondary,
                                     maxLines = 1,
@@ -299,7 +303,9 @@ private fun IncomingRequestCard(
                         text = item.partnerUser.fullName,
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
-                        color = textPrimary
+                        color = textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -307,14 +313,17 @@ private fun IncomingRequestCard(
                             text = item.partnerUser.uniqueCode,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = NawanoPrimary200
+                            color = NawanoPrimary200,
+                            maxLines = 1
                         )
                         if (item.partnerUser.phoneNumber.isNotBlank()) {
                             Text(text = " • ", color = textSecondary)
                             Text(
                                 text = item.partnerUser.phoneNumber,
                                 fontSize = 11.sp,
-                                color = textSecondary
+                                color = textSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -413,7 +422,9 @@ private fun SentRequestCard(
                     text = item.partnerUser.fullName,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
-                    color = textPrimary
+                    color = textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -421,9 +432,10 @@ private fun SentRequestCard(
                         text = item.partnerUser.uniqueCode,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = NawanoPrimary200
+                        color = NawanoPrimary200,
+                        maxLines = 1
                     )
-                    Text(text = " • Pending approval", fontSize = 11.sp, color = NawanoAmber)
+                    Text(text = " • Pending", fontSize = 11.sp, color = NawanoAmber, maxLines = 1)
                 }
             }
 
@@ -481,7 +493,10 @@ private fun ConnectedPartnerCard(
                         text = item.partnerUser.fullName,
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
-                        color = textPrimary
+                        color = textPrimary,
+                        modifier = Modifier.weight(1f, fill = false),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(Modifier.width(6.dp))
                     Surface(
@@ -490,10 +505,11 @@ private fun ConnectedPartnerCard(
                     ) {
                         Text(
                             text = "Connected",
-                            fontSize = 10.sp,
+                            fontSize = 9.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = NawanoEmerald,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                            maxLines = 1
                         )
                     }
                 }
@@ -503,14 +519,17 @@ private fun ConnectedPartnerCard(
                         text = item.partnerUser.uniqueCode,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = NawanoPrimary200
+                        color = NawanoPrimary200,
+                        maxLines = 1
                     )
                     if (item.partnerUser.phoneNumber.isNotBlank()) {
                         Text(text = " • ", color = textSecondary)
                         Text(
                             text = item.partnerUser.phoneNumber,
                             fontSize = 11.sp,
-                            color = textSecondary
+                            color = textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -541,31 +560,34 @@ private fun EmptyStateView(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 40.dp, horizontal = 16.dp),
+            .padding(vertical = 24.dp, horizontal = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Surface(
             shape = CircleShape,
             color = NawanoPrimary50,
-            modifier = Modifier.size(64.dp)
+            modifier = Modifier.size(56.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
                     tint = NawanoPrimary200,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(28.dp)
                 )
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
 
         Text(
             text = title,
-            fontSize = 16.sp,
+            fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
-            color = textPrimary
+            color = textPrimary,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
 
         Spacer(Modifier.height(6.dp))
@@ -575,14 +597,15 @@ private fun EmptyStateView(
             fontSize = 12.sp,
             color = textSecondary,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 24.dp)
+            modifier = Modifier.padding(horizontal = 16.dp)
         )
 
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(16.dp))
 
         FilledTonalButton(
             onClick = onButtonClick,
             shape = RoundedCornerShape(12.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             colors = ButtonDefaults.filledTonalButtonColors(
                 containerColor = NawanoPrimary200,
                 contentColor = Color.White

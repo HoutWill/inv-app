@@ -44,6 +44,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.R
@@ -141,19 +142,23 @@ fun SignUpScreen(
                     modifier = Modifier.weight(1f)
                 ) {
                     Column(
-                        modifier = Modifier.padding(vertical = 12.dp, horizontal = 10.dp),
+                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
                             text = "Middle Man",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
-                            color = if (isMiddleman) Color.White else NawanoTextPrimaryLight
+                            color = if (isMiddleman) Color.White else NawanoTextPrimaryLight,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "Buyer / Retailer",
                             fontSize = 11.sp,
-                            color = if (isMiddleman) Color.White.copy(alpha = 0.85f) else NawanoTextSecondaryLight
+                            color = if (isMiddleman) Color.White.copy(alpha = 0.85f) else NawanoTextSecondaryLight,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -170,19 +175,23 @@ fun SignUpScreen(
                     modifier = Modifier.weight(1f)
                 ) {
                     Column(
-                        modifier = Modifier.padding(vertical = 12.dp, horizontal = 10.dp),
+                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
                             text = "Supplier",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
-                            color = if (isSupplier) Color.White else NawanoTextPrimaryLight
+                            color = if (isSupplier) Color.White else NawanoTextPrimaryLight,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "Vendor / Distributor",
                             fontSize = 11.sp,
-                            color = if (isSupplier) Color.White.copy(alpha = 0.85f) else NawanoTextSecondaryLight
+                            color = if (isSupplier) Color.White.copy(alpha = 0.85f) else NawanoTextSecondaryLight,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }

@@ -192,32 +192,38 @@ fun SuppliersManagementScreen(
                                 }
                             }
                             Spacer(Modifier.width(12.dp))
-                            Column {
+                            Column(modifier = Modifier.weight(1f, fill = false)) {
                                 Text(
                                     text = "Connect Supplier by ID or Phone",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp,
-                                    color = textPrimary
+                                    color = textPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = "Search Unique ID (SUP-XXXX) or Phone to connect",
                                     fontSize = 11.sp,
-                                    color = textSecondary
+                                    color = textSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
 
                         if (pendingPartnerRequestsCount > 0) {
+                            Spacer(Modifier.width(6.dp))
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = NawanoRose,
-                                modifier = Modifier.padding(end = 6.dp)
+                                modifier = Modifier.padding(end = 4.dp)
                             ) {
                                 Text(
                                     text = "$pendingPartnerRequestsCount pending",
                                     color = Color.White,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }

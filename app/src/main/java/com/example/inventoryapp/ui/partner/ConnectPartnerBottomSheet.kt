@@ -84,30 +84,35 @@ fun ConnectPartnerBottomSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp)
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp)
         ) {
-            // Header Row
+            // Header Row - Responsive for small screens
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f, fill = false)) {
                     Text(
                         text = "Add $targetRoleName",
-                        fontSize = 20.sp,
+                        fontSize = 19.sp,
                         fontWeight = FontWeight.Bold,
-                        color = textPrimary
+                        color = textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "Connect by Unique ID or Phone Number",
-                        fontSize = 13.sp,
-                        color = textSecondary
+                        text = "Connect by Unique ID or Phone",
+                        fontSize = 12.sp,
+                        color = textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
                 if (pendingRequestsCount > 0) {
+                    Spacer(Modifier.width(8.dp))
                     FilledTonalButton(
                         onClick = {
                             onDismiss()
@@ -117,20 +122,21 @@ fun ConnectPartnerBottomSheet(
                             containerColor = NawanoPrimary50,
                             contentColor = NawanoPrimary200
                         ),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Mail,
                             contentDescription = "Requests",
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(15.dp),
                             tint = NawanoPrimary200
                         )
-                        Spacer(Modifier.width(6.dp))
+                        Spacer(Modifier.width(4.dp))
                         Text(
                             text = "$pendingRequestsCount Requests",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
                         )
                     }
                 }
@@ -174,6 +180,7 @@ fun ConnectPartnerBottomSheet(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp,
                                     color = textPrimary,
+                                    modifier = Modifier.weight(1f, fill = false),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -187,6 +194,7 @@ fun ConnectPartnerBottomSheet(
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = NawanoPrimary200,
+                                        maxLines = 1,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
                                 }
@@ -207,7 +215,7 @@ fun ConnectPartnerBottomSheet(
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // Copy ID button
                         Surface(
@@ -222,28 +230,32 @@ fun ConnectPartnerBottomSheet(
                             modifier = Modifier.weight(1f)
                         ) {
                             Row(
-                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp),
+                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Share,
                                     contentDescription = "Copy ID",
-                                    modifier = Modifier.size(16.dp),
+                                    modifier = Modifier.size(14.dp),
                                     tint = NawanoPrimary200
                                 )
-                                Spacer(Modifier.width(6.dp))
-                                Column {
+                                Spacer(Modifier.width(4.dp))
+                                Column(modifier = Modifier.weight(1f, fill = false)) {
                                     Text(
                                         text = "Unique ID",
-                                        fontSize = 10.sp,
-                                        color = textSecondary
+                                        fontSize = 9.5.sp,
+                                        color = textSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
                                         text = currentUser.uniqueCode.ifBlank { "MID-1001" },
-                                        fontSize = 13.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.ExtraBold,
-                                        color = NawanoPrimary200
+                                        color = NawanoPrimary200,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
@@ -262,26 +274,28 @@ fun ConnectPartnerBottomSheet(
                             modifier = Modifier.weight(1f)
                         ) {
                             Row(
-                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp),
+                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Phone,
                                     contentDescription = "Copy Phone",
-                                    modifier = Modifier.size(16.dp),
+                                    modifier = Modifier.size(14.dp),
                                     tint = NawanoPrimary200
                                 )
-                                Spacer(Modifier.width(6.dp))
-                                Column {
+                                Spacer(Modifier.width(4.dp))
+                                Column(modifier = Modifier.weight(1f, fill = false)) {
                                     Text(
                                         text = "Phone Number",
-                                        fontSize = 10.sp,
-                                        color = textSecondary
+                                        fontSize = 9.5.sp,
+                                        color = textSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
                                         text = phoneDisplay,
-                                        fontSize = 12.sp,
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = textPrimary,
                                         maxLines = 1,
@@ -465,7 +479,9 @@ fun ConnectPartnerBottomSheet(
                                     text = partner.fullName,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp,
-                                    color = textPrimary
+                                    color = textPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Spacer(Modifier.height(2.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -473,14 +489,17 @@ fun ConnectPartnerBottomSheet(
                                         text = partner.uniqueCode,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.ExtraBold,
-                                        color = NawanoPrimary200
+                                        color = NawanoPrimary200,
+                                        maxLines = 1
                                     )
                                     if (partner.phoneNumber.isNotBlank()) {
                                         Text(text = " • ", color = textSecondary)
                                         Text(
                                             text = partner.phoneNumber,
                                             fontSize = 11.sp,
-                                            color = textSecondary
+                                            color = textSecondary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                 }
@@ -554,9 +573,11 @@ fun ConnectPartnerBottomSheet(
                 Icon(imageVector = Icons.Outlined.People, contentDescription = null, modifier = Modifier.size(18.dp), tint = NawanoPrimary200)
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = if (pendingRequestsCount > 0) "Manage Connections & Requests ($pendingRequestsCount Pending)" else "Manage Connections & Requests",
+                    text = if (pendingRequestsCount > 0) "Manage Connections ($pendingRequestsCount Pending)" else "Manage Connections & Requests",
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp
+                    fontSize = 12.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

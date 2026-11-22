@@ -76,7 +76,8 @@ fun SupplierTopBar(
             // Left Group: Hamburger + Title ("Nawano") & Subtitle ("Wholesale • X SKUs")
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.weight(1f, fill = false)
             ) {
                 IconButton(
                     onClick = onOpenDrawer,
@@ -89,7 +90,7 @@ fun SupplierTopBar(
                     )
                 }
 
-                Column {
+                Column(modifier = Modifier.weight(1f, fill = false)) {
                     Text(
                         text = "Nawano",
                         style = MaterialTheme.typography.titleMedium,
