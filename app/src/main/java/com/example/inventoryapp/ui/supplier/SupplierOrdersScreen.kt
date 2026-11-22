@@ -348,14 +348,7 @@ fun SupplierOrdersScreen(
                     onToggleTheme = onToggleTheme,
                     onOpenNotifications = { showNotificationSheet = true },
                     onOpenScanner = { scannerTarget = SupplierScannerTarget.GENERAL_SCAN },
-                    onQuickAdd = {
-                        if (activeViewTab == 1) {
-                            scannedSkuForCatalog = ""
-                            showAddCatalogItemDialog = true
-                        } else {
-                            showQuickAddChoiceSheet = true
-                        }
-                    },
+                    onQuickAdd = null,
                     showTitleAndLogo = false,
                     pendingPartnerRequestsCount = pendingPartnerCount,
                     onOpenPartnerNetwork = { isPartnerRequestsOpen = true }
@@ -370,7 +363,7 @@ fun SupplierOrdersScreen(
                                 .fillMaxSize()
                                 .padding(horizontal = 16.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp),
-                            contentPadding = PaddingValues(top = 10.dp, bottom = 96.dp)
+                            contentPadding = PaddingValues(top = 10.dp, bottom = 170.dp)
                         ) {
                             // 1. Modern Top Search Bar on Home
                             item {
@@ -689,53 +682,12 @@ fun SupplierOrdersScreen(
                                     )
                                 }
                             }
-
-                            // 6. Wholesale Products Catalog Section on Home (Includes the Home with the reference design!)
-                            if (products.isNotEmpty()) {
-                                item {
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "Products (${products.size})",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = textPrimary
-                                        )
-                                        TextButton(onClick = { activeViewTab = 1 }) {
-                                            Text(
-                                                text = "View all >",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = NawanoPrimary200
-                                            )
-                                        }
-                                    }
-                                }
-
-                                items(products.take(6), key = { "home_prod_${it.id}" }) { product ->
-                                    SupplierCatalogProductCard(
-                                        product = product,
-                                        isDarkTheme = isDarkTheme,
-                                        onEdit = { catalogItemToEdit = product },
-                                        onDelete = { productToDelete = product },
-                                        onRestock = { productToRestock = product },
-                                        onQuantityChange = { prod, delta ->
-                                            val newQty = (prod.quantity + delta).coerceAtLeast(0)
-                                            onUpdateProduct(prod.copy(quantity = newQty))
-                                        }
-                                    )
-                                }
-                            }
                         }
                     }
                     1 -> {
                         // TAB 1: Dedicated Wholesale Catalog Tab
                         SupplierCatalogTab(
-                            products = filteredCatalogProducts,
+                            products = products,
                             isDarkTheme = isDarkTheme,
                             isSortAscending = isSortAscending,
                             onToggleSort = { isSortAscending = !isSortAscending },
@@ -777,6 +729,34 @@ fun SupplierOrdersScreen(
                 }
             }
 
+
+            // Floating Action Button (+ Add) positioned at bottom-right above the bottom navigation bar
+            if (activeViewTab == 0 || activeViewTab == 1) {
+                FloatingActionButton(
+                    onClick = {
+                        if (activeViewTab == 1) {
+                            scannedSkuForCatalog = ""
+                            showAddCatalogItemDialog = true
+                        } else {
+                            showQuickAddChoiceSheet = true
+                        }
+                    },
+                    containerColor = NawanoPrimary200,
+                    contentColor = Color.White,
+                    shape = CircleShape,
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                        .padding(end = 20.dp, bottom = 96.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = if (activeViewTab == 1) "Add Catalog Item" else "Quick Action",
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
 
             // Floating Bottom Navigation Dock with Central Elevated Scanner FAB
             SupplierBottomBar(

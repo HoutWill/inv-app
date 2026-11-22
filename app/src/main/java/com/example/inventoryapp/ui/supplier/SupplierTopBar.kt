@@ -49,7 +49,7 @@ fun SupplierTopBar(
     onToggleTheme: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenScanner: () -> Unit = {},
-    onQuickAdd: () -> Unit = {},
+    onQuickAdd: (() -> Unit)? = null,
     showTitleAndLogo: Boolean = false,
     pendingPartnerRequestsCount: Int = 0,
     onOpenPartnerNetwork: (() -> Unit)? = null,
@@ -191,17 +191,19 @@ fun SupplierTopBar(
                     }
                 }
 
-                // "+ Add" Button
-                TextButton(
-                    onClick = onQuickAdd,
-                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = "+ Add",
-                        color = NawanoPrimary200,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
+                // Optional "+ Add" Button
+                if (onQuickAdd != null) {
+                    TextButton(
+                        onClick = onQuickAdd,
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "+ Add",
+                            color = NawanoPrimary200,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
                 }
             }
         }

@@ -39,16 +39,32 @@ import java.util.Locale
 /**
  * Wholesale Catalog View for the Supplier Portal, matching the reference design:
  * - Search bar with barcode scanner shortcut
+ * - Dedicated stock status filter capsules: All, In Stock ("Our Own Stock"), Low Stock, Out of Stock
  * - Category filter capsules (All, Seafood, Meat, Produce, Dairy, Beverages, etc.)
- * - Subheader with "Products", "● In Stock" toggle, and "⇅ Recent ▾" sort dropdown
+ * - Subheader with "Products (X)" and multi-option sort dropdown (Name, Stock High-Low, Stock Low-High, Price, Recent)
  * - Product cards with thumbnail, tags, edit/delete actions, price, stock pill, + Restock, and stepper.
  */
+enum class SupplierStockStatusFilter {
+    ALL,
+    IN_STOCK,
+    LOW_STOCK,
+    OUT_OF_STOCK
+}
+
+enum class SupplierCatalogSortOption(val displayName: String) {
+    NAME_ASC("Name (A to Z)"),
+    STOCK_HIGH_TO_LOW("Stock (Highest First)"),
+    STOCK_LOW_TO_HIGH("Stock (Lowest First)"),
+    PRICE_HIGH_TO_LOW("Price (Highest First)"),
+    RECENT("Recently Added")
+}
+
 @Composable
 fun SupplierCatalogTab(
     products: List<ProductEntity>,
     isDarkTheme: Boolean = false,
-    isSortAscending: Boolean,
-    onToggleSort: () -> Unit,
+    isSortAscending: Boolean = false,
+    onToggleSort: (() -> Unit)? = null,
     searchQuery: String = "",
     onSearchQueryChange: (String) -> Unit = {},
     onAddProduct: () -> Unit = {},
@@ -65,17 +81,20 @@ fun SupplierCatalogTab(
     val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
 
     var selectedCategory by remember { mutableStateOf("All") }
-    var isInStockOnly by remember { mutableStateOf(false) }
+    var stockStatusFilter by remember { mutableStateOf(SupplierStockStatusFilter.ALL) }
+    var sortOption by remember { mutableStateOf(SupplierCatalogSortOption.NAME_ASC) }
+    var sortMenuExpanded by remember { mutableStateOf(false) }
 
-    val categories = listOf("All", "Seafood", "Meat", "Produce", "Dairy", "Beverages", "Pantry", "Snacks")
+    val categories = remember(products) {
+        val standard = listOf("All", "Seafood", "Meat", "Produce", "Dairy", "Beverages", "Pantry", "Snacks")
+        val custom = products.map { it.category }.filter { it.isNotBlank() }.distinct()
+        standard + custom.filter { c -> standard.none { it.equals(c, ignoreCase = true) } }
+    }
 
-    val filteredProducts = remember(products, selectedCategory, isInStockOnly, searchQuery, isSortAscending) {
+    val baseProducts = remember(products, selectedCategory, searchQuery) {
         var list = when (selectedCategory) {
             "All" -> products
             else -> products.filter { it.category.equals(selectedCategory, ignoreCase = true) }
-        }
-        if (isInStockOnly) {
-            list = list.filter { it.quantity > 0 }
         }
         if (searchQuery.isNotBlank()) {
             val q = searchQuery.trim().lowercase(Locale.ROOT)
@@ -85,7 +104,28 @@ fun SupplierCatalogTab(
                 it.category.lowercase(Locale.ROOT).contains(q)
             }
         }
-        if (isSortAscending) list.sortedBy { it.costPrice } else list.sortedByDescending { it.updatedAt }
+        list
+    }
+
+    val inStockCount = remember(baseProducts) { baseProducts.count { it.quantity > 0 } }
+    val lowStockCount = remember(baseProducts) { baseProducts.count { it.quantity in 1..it.reorderLevel } }
+    val outOfStockCount = remember(baseProducts) { baseProducts.count { it.quantity <= 0 } }
+    val allCount = baseProducts.size
+
+    val displayedProducts = remember(baseProducts, stockStatusFilter, sortOption) {
+        val filtered = when (stockStatusFilter) {
+            SupplierStockStatusFilter.ALL -> baseProducts
+            SupplierStockStatusFilter.IN_STOCK -> baseProducts.filter { it.quantity > 0 }
+            SupplierStockStatusFilter.LOW_STOCK -> baseProducts.filter { it.quantity in 1..it.reorderLevel }
+            SupplierStockStatusFilter.OUT_OF_STOCK -> baseProducts.filter { it.quantity <= 0 }
+        }
+        when (sortOption) {
+            SupplierCatalogSortOption.NAME_ASC -> filtered.sortedBy { it.name.lowercase(Locale.ROOT) }
+            SupplierCatalogSortOption.STOCK_HIGH_TO_LOW -> filtered.sortedByDescending { it.quantity }
+            SupplierCatalogSortOption.STOCK_LOW_TO_HIGH -> filtered.sortedBy { it.quantity }
+            SupplierCatalogSortOption.PRICE_HIGH_TO_LOW -> filtered.sortedByDescending { it.costPrice }
+            SupplierCatalogSortOption.RECENT -> filtered.sortedByDescending { it.updatedAt }
+        }
     }
 
     LazyColumn(
@@ -93,7 +133,7 @@ fun SupplierCatalogTab(
             .fillMaxSize()
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = PaddingValues(top = 10.dp, bottom = 140.dp)
+        contentPadding = PaddingValues(top = 10.dp, bottom = 170.dp)
     ) {
         // 1. Search Bar with Scanner Shortcut (Matches screenshot: Search 13 products, SKU... [|||||])
         item {
@@ -168,7 +208,128 @@ fun SupplierCatalogTab(
             }
         }
 
-        // 2. Category Filter Capsules (All, Seafood, Meat, Produce, Dairy, etc.)
+        // 2. Stock Level Filter Row (Separates "Our Own Stock" from Out of Stock & Low Stock)
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // "All" Pill
+                val isAllSelected = stockStatusFilter == SupplierStockStatusFilter.ALL
+                Surface(
+                    onClick = { stockStatusFilter = SupplierStockStatusFilter.ALL },
+                    shape = CircleShape,
+                    color = if (isAllSelected) NawanoPrimary200 else cardBg,
+                    border = if (isAllSelected) null else BorderStroke(1.dp, cardBorder)
+                ) {
+                    Text(
+                        text = "All ($allCount)",
+                        fontSize = 12.sp,
+                        fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isAllSelected) Color.White else textSecondary,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                    )
+                }
+
+                // "In Stock (Our Own Stock)" Pill with Emerald Green Dot
+                val isInStockSelected = stockStatusFilter == SupplierStockStatusFilter.IN_STOCK
+                Surface(
+                    onClick = { stockStatusFilter = SupplierStockStatusFilter.IN_STOCK },
+                    shape = CircleShape,
+                    color = if (isInStockSelected) Color(0xFF10B981) else cardBg,
+                    border = BorderStroke(
+                        1.dp,
+                        if (isInStockSelected) Color(0xFF10B981) else cardBorder
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(if (isInStockSelected) Color.White else Color(0xFF10B981))
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "In Stock ($inStockCount)",
+                            fontSize = 12.sp,
+                            fontWeight = if (isInStockSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isInStockSelected) Color.White else if (isDarkTheme) Color(0xFF34D399) else Color(0xFF059669)
+                        )
+                    }
+                }
+
+                // "Low Stock" Pill with Amber Dot
+                val isLowStockSelected = stockStatusFilter == SupplierStockStatusFilter.LOW_STOCK
+                Surface(
+                    onClick = { stockStatusFilter = SupplierStockStatusFilter.LOW_STOCK },
+                    shape = CircleShape,
+                    color = if (isLowStockSelected) Color(0xFFF59E0B) else cardBg,
+                    border = BorderStroke(
+                        1.dp,
+                        if (isLowStockSelected) Color(0xFFF59E0B) else cardBorder
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(if (isLowStockSelected) Color.White else Color(0xFFF59E0B))
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Low Stock ($lowStockCount)",
+                            fontSize = 12.sp,
+                            fontWeight = if (isLowStockSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isLowStockSelected) Color.White else if (isDarkTheme) Color(0xFFFBBF24) else Color(0xFFD97706)
+                        )
+                    }
+                }
+
+                // "Out of Stock" Pill with Rose Dot
+                val isOutSelected = stockStatusFilter == SupplierStockStatusFilter.OUT_OF_STOCK
+                Surface(
+                    onClick = { stockStatusFilter = SupplierStockStatusFilter.OUT_OF_STOCK },
+                    shape = CircleShape,
+                    color = if (isOutSelected) Color(0xFFEF4444) else cardBg,
+                    border = BorderStroke(
+                        1.dp,
+                        if (isOutSelected) Color(0xFFEF4444) else cardBorder
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(if (isOutSelected) Color.White else Color(0xFFEF4444))
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Out of Stock ($outOfStockCount)",
+                            fontSize = 12.sp,
+                            fontWeight = if (isOutSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isOutSelected) Color.White else if (isDarkTheme) Color(0xFFF87171) else Color(0xFFDC2626)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 3. Category Filter Capsules (All, Seafood, Meat, Produce, Dairy, etc.)
         item {
             Row(
                 modifier = Modifier
@@ -187,67 +348,49 @@ fun SupplierCatalogTab(
                     ) {
                         Text(
                             text = cat,
-                            fontSize = 13.sp,
+                            fontSize = 12.5.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) Color.White else textSecondary,
-                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp)
                         )
                     }
                 }
             }
         }
 
-        // 3. Sub-header Row: "Products" on left, "● In Stock" and "⇅ Recent ▾" on right (Exact match with Image 4)
+        // 4. Sub-header Row: "Products (X)" on left, "⇅ Sort: ... ▾" on right
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Products",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = textPrimary
-                )
-
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
-                    // "● In Stock" toggle filter with green dot
-                    Surface(
-                        onClick = { isInStockOnly = !isInStockOnly },
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isInStockOnly) Color(0xFF10B981).copy(alpha = 0.15f) else cardBg,
-                        border = BorderStroke(
-                            1.dp,
-                            if (isInStockOnly) Color(0xFF10B981).copy(alpha = 0.45f) else cardBorder
+                    Text(
+                        text = if (stockStatusFilter == SupplierStockStatusFilter.IN_STOCK) "In-Stock Products" else "Products",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (displayedProducts.isNotEmpty()) {
+                        Text(
+                            text = "(${displayedProducts.size})",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = textSecondary
                         )
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isInStockOnly) Color(0xFF10B981) else textSecondary.copy(alpha = 0.5f))
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                text = "In Stock",
-                                fontSize = 12.sp,
-                                fontWeight = if (isInStockOnly) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isInStockOnly) Color(0xFF10B981) else textSecondary
-                            )
-                        }
                     }
+                }
 
-                    // "⇅ Recent ▾" Sort button
+                // "⇅ Sort ▾" Sort button
+                Box {
                     Surface(
-                        onClick = onToggleSort,
+                        onClick = { sortMenuExpanded = true },
                         shape = RoundedCornerShape(12.dp),
                         color = cardBg,
                         border = BorderStroke(1.dp, cardBorder)
@@ -260,12 +403,18 @@ fun SupplierCatalogTab(
                                 imageVector = Icons.Default.SwapVert,
                                 contentDescription = "Sort",
                                 tint = textSecondary,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(15.dp)
                             )
                             Spacer(Modifier.width(4.dp))
                             Text(
-                                text = if (isSortAscending) "Price" else "Recent",
-                                fontSize = 12.sp,
+                                text = when (sortOption) {
+                                    SupplierCatalogSortOption.NAME_ASC -> "Sort: Name"
+                                    SupplierCatalogSortOption.STOCK_HIGH_TO_LOW -> "Sort: Stock ↓"
+                                    SupplierCatalogSortOption.STOCK_LOW_TO_HIGH -> "Sort: Stock ↑"
+                                    SupplierCatalogSortOption.PRICE_HIGH_TO_LOW -> "Sort: Price ↓"
+                                    SupplierCatalogSortOption.RECENT -> "Sort: Recent"
+                                },
+                                fontSize = 11.5.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = textPrimary
                             )
@@ -278,15 +427,38 @@ fun SupplierCatalogTab(
                             )
                         }
                     }
+
+                    DropdownMenu(
+                        expanded = sortMenuExpanded,
+                        onDismissRequest = { sortMenuExpanded = false }
+                    ) {
+                        SupplierCatalogSortOption.values().forEach { option ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = option.displayName,
+                                        fontWeight = if (sortOption == option) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (sortOption == option) NawanoPrimary200 else MaterialTheme.colorScheme.onSurface
+                                    )
+                                },
+                                onClick = {
+                                    sortOption = option
+                                    sortMenuExpanded = false
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        // 4. Product Cards List
-        if (filteredProducts.isEmpty()) {
+        // 5. Product Cards List
+        if (displayedProducts.isEmpty()) {
             item {
                 EmptyZeroState(
-                    title = if (searchQuery.isNotBlank()) "No match for '$searchQuery'" else "No Products in $selectedCategory",
+                    title = if (searchQuery.isNotBlank()) "No match for '$searchQuery'"
+                            else if (stockStatusFilter != SupplierStockStatusFilter.ALL) "No ${stockStatusFilter.name.lowercase().replace('_', ' ')} products"
+                            else "No Products in $selectedCategory",
                     subtitle = "Tap '+ Add Product' to register wholesale inventory items.",
                     icon = Icons.Default.Category,
                     isDarkTheme = isDarkTheme,
@@ -295,7 +467,7 @@ fun SupplierCatalogTab(
                 )
             }
         } else {
-            items(filteredProducts, key = { it.id }) { product ->
+            items(displayedProducts, key = { it.id }) { product ->
                 SupplierCatalogProductCard(
                     product = product,
                     isDarkTheme = isDarkTheme,
