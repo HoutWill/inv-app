@@ -834,19 +834,19 @@ def build_pdf(filename):
             Paragraph("Active GitHub remote correctly configured for fetch and push operations.", cell_style)
         ],
         [
-            Paragraph("<b>Remote Branch</b>", cell_style),
-            Paragraph("<code>origin/main</code><br/>Commit <code>65a26f0</code>", cell_code),
-            Paragraph("Latest remote commit on GitHub is <code>feat(middleman): add + Add button to items subheader and top bar</code>.", cell_style)
+            Paragraph("<b>Upstream Tracking</b>", cell_style),
+            Paragraph("<code>origin/feature/partner-connection</code>", cell_code),
+            Paragraph("<font color='#059669'><b>PUSH COMPLETE & SYNCHRONIZED</b></font><br/>Branch successfully published to GitHub with upstream tracking.", cell_style)
         ],
         [
-            Paragraph("<b>Local Active Branch</b>", cell_style),
-            Paragraph("<code>feature/partner-connection</code><br/>Head: <code>624c7ff</code>", cell_code),
-            Paragraph("<font color='#059669'><b>11 Commits Ahead</b></font> of <code>origin/main</code> containing partner networking, topbar cleanups, and POS foundations.", cell_style)
+            Paragraph("<b>Pushed Commits</b>", cell_style),
+            Paragraph("<b>16 Commits Ahead of Main</b><br/>Head: <code>6805663</code>", cell_code),
+            Paragraph("All currency conversion, POS ABA PayWay KHQR, profile editing, and clean Home UI features successfully pushed to GitHub.", cell_style)
         ],
         [
             Paragraph("<b>Working Tree Status</b>", cell_style),
-            Paragraph("<b>16 Modified Files</b><br/>+2,749 lines / -392 lines", cell_code),
-            Paragraph("<font color='#D97706'><b>Uncommitted Changes</b></font> covering POS checkout bottom sheet, profile editing, currency engine, and clean Home UI.", cell_style)
+            Paragraph("<b>Working Tree Clean</b><br/>Zero uncommitted changes", cell_code),
+            Paragraph("<font color='#059669'><b>100% HEALTHY & COMMITTED</b></font><br/>All 26 unit tests passing cleanly with full reproducible artifacts.", cell_style)
         ]
     ]
 
@@ -911,13 +911,14 @@ def build_pdf(filename):
     story.append(t_staged_modules)
     story.append(Spacer(1, 10))
 
-    # Recommended Action Plan Box
+    # GitHub Publication & Pull Request Box
     git_action_data = [
         [
-            Paragraph("<b>Recommended Git Synchronization Workflow:</b><br/>"
-                      "1. <b>Stage & Commit Logical Units:</b> Group uncommitted changes into clean semantic commits (POS Checkout, Profile Editing, Currency Engine, Home UI).<br/>"
-                      "2. <b>Push to GitHub:</b> Push <code>feature/partner-connection</code> to <code>origin</code> via <code>git push -u origin feature/partner-connection</code>.<br/>"
-                      "3. <b>Create Pull Request:</b> Open PR from <code>feature/partner-connection</code> into <code>main</code> on GitHub for review and merge.", cell_style)
+            Paragraph("<b>GitHub Publication & Pull Request Details:</b><br/>"
+                      "&bull; <b>Published Branch:</b> <code>feature/partner-connection</code> pushed to remote repository <code>origin</code>.<br/>"
+                      "&bull; <b>Upstream Status:</b> Tracking configured with <code>branch 'feature/partner-connection' set up to track 'origin/feature/partner-connection'</code>.<br/>"
+                      "&bull; <b>Pull Request Link:</b> <font color='#4F46E5'><b>https://github.com/HoutWill/inv-app/pull/new/feature/partner-connection</b></font><br/>"
+                      "&bull; <b>Merge Readiness:</b> Zero regressions, 100% unit tests passing (26/26 tests), all code complies with project architecture standards.", cell_style)
         ]
     ]
     git_action_table = Table(git_action_data, colWidths=[540])
@@ -935,13 +936,13 @@ def build_pdf(filename):
     # Final Sign-off box
     signoff_data = [
         [
-            Paragraph("<b>Repository Audit Sign-off:</b> Local working copy is 100% healthy with all unit tests passing (26/26 tests, 100% pass). All newly implemented features are verified on the active emulator. Ready for user confirmation to stage, commit, and push to GitHub.", cell_style)
+            Paragraph("<b>Repository Synchronization Complete:</b> All updates (POS Checkout redesign, ABA PayWay KHQR, interactive drawer profile editing, dual USD/KHR currency engine, and clean Home UI) have been successfully committed and published to GitHub. Working copy is 100% clean and up to date.", cell_style)
         ]
     ]
     signoff_table = Table(signoff_data, colWidths=[540])
     signoff_table.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#FEF3C7')),
-        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#F59E0B')),
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#ECFDF5')),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#10B981')),
         ('TOPPADDING', (0,0), (-1,-1), 6),
         ('BOTTOMPADDING', (0,0), (-1,-1), 6),
         ('LEFTPADDING', (0,0), (-1,-1), 10),
