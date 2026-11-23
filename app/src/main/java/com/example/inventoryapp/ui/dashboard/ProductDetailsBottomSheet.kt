@@ -47,6 +47,8 @@ import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.data.local.entity.canRequestSupply
 import com.example.inventoryapp.data.local.entity.isDirectSlot
 import com.example.inventoryapp.ui.theme.*
+import com.example.inventoryapp.util.AppCurrency
+import com.example.inventoryapp.util.CurrencyFormatter
 import com.example.inventoryapp.util.ProductThumbnail
 import kotlinx.coroutines.launch
 import java.io.File
@@ -67,7 +69,9 @@ fun ProductDetailsBottomSheet(
     onQuantityAdjust: (delta: Int, note: String) -> Unit,
     onProductUpdated: (ProductEntity) -> Unit,
     onDeleteProduct: () -> Unit,
-    onRequestSupply: ((ProductEntity) -> Unit)? = null
+    onRequestSupply: ((ProductEntity) -> Unit)? = null,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val coroutineScope = rememberCoroutineScope()
@@ -75,9 +79,9 @@ fun ProductDetailsBottomSheet(
 
     fun animateDismiss() {
         coroutineScope.launch {
-            sheetState.hide()
-        }.invokeOnCompletion {
-            if (!sheetState.isVisible) {
+            try {
+                sheetState.hide()
+            } finally {
                 onDismiss()
             }
         }
@@ -771,10 +775,20 @@ fun ProductDetailsBottomSheet(
                             Text("Selling Price", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "$${String.format(Locale.US, "%.2f", product.sellingPrice)}",
+                                text = CurrencyFormatter.format(product.sellingPrice, currency, exchangeRate),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = NawanoPrimary200
+                            )
+                            val secondarySelling = if (currency == AppCurrency.USD) {
+                                "≈ ${CurrencyFormatter.formatKhr(CurrencyFormatter.toKhr(product.sellingPrice, exchangeRate))}"
+                            } else {
+                                "≈ ${CurrencyFormatter.formatUsd(product.sellingPrice)}"
+                            }
+                            Text(
+                                text = secondarySelling,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -789,10 +803,20 @@ fun ProductDetailsBottomSheet(
                             Text("Unit Cost", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "$${String.format(Locale.US, "%.2f", product.costPrice)}",
+                                text = CurrencyFormatter.format(product.costPrice, currency, exchangeRate),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
+                            )
+                            val secondaryCost = if (currency == AppCurrency.USD) {
+                                "≈ ${CurrencyFormatter.formatKhr(CurrencyFormatter.toKhr(product.costPrice, exchangeRate))}"
+                            } else {
+                                "≈ ${CurrencyFormatter.formatUsd(product.costPrice)}"
+                            }
+                            Text(
+                                text = secondaryCost,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -853,7 +877,7 @@ fun ProductDetailsBottomSheet(
                             Text("Asset Value:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "$${String.format(Locale.US, "%.2f", totalHoldingValue)}",
+                                text = CurrencyFormatter.format(totalHoldingValue, currency, exchangeRate),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = NawanoPrimary200

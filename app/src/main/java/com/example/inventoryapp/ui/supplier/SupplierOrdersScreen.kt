@@ -775,8 +775,9 @@ fun SupplierOrdersScreen(
 
 
             // Floating Action Button (+ Add) positioned at bottom-right above the bottom navigation bar
+            // Only visible on Catalog tab (activeViewTab == 1); removed from primary landing/orders tab
             AnimatedVisibility(
-                visible = isBarsVisible && (activeViewTab == 0 || activeViewTab == 1),
+                visible = isBarsVisible && activeViewTab == 1,
                 enter = scaleIn(animationSpec = tween(180)) + fadeIn(animationSpec = tween(150)),
                 exit = scaleOut(animationSpec = tween(180)) + fadeOut(animationSpec = tween(150)),
                 modifier = Modifier

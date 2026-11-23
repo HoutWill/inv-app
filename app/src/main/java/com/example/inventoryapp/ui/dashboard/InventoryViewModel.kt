@@ -18,6 +18,7 @@ import com.example.inventoryapp.data.local.entity.SalesOrderEntity
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
 import com.example.inventoryapp.data.local.entity.SupplierEntity
 import com.example.inventoryapp.data.local.entity.UserEntity
+import com.example.inventoryapp.data.local.entity.UserRole
 import com.example.inventoryapp.data.remote.BarcodeLookupService
 import com.example.inventoryapp.data.remote.OnlineProductData
 import com.example.inventoryapp.data.repository.InventoryRepository
@@ -25,6 +26,9 @@ import com.example.inventoryapp.data.repository.OrderRepository
 import com.example.inventoryapp.data.repository.OrderWithItems
 import com.example.inventoryapp.data.repository.PartnerConnectionRepository
 import com.example.inventoryapp.data.repository.SupplierRepository
+import com.example.inventoryapp.data.prefs.SessionStore
+import com.example.inventoryapp.util.AppCurrency
+import com.example.inventoryapp.util.CurrencyFormatter
 import com.example.inventoryapp.util.StockNotificationHelper
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
@@ -95,6 +99,11 @@ data class DashboardUiState(
     val totalItemsCount: Int = 0,
     val totalInventoryValue: Double = 0.0,
     val lowStockCount: Int = 0,
+    val selectedCurrency: AppCurrency = AppCurrency.USD,
+    val exchangeRateUsdToKhr: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
+    val paywayMerchantId: String = "ec000002",
+    val paywayApiKey: String = "",
+    val paywayIsSandbox: Boolean = true,
     val isLoading: Boolean = false
 )
 
@@ -367,6 +376,50 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         return partnerConnectionRepository.observePendingIncomingCount(userId)
     }
 
+    fun updateUserProfile(
+        userId: String,
+        fullName: String,
+        phoneNumber: String,
+        uniqueCode: String,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val userDao = database.userDao()
+                val existing = userDao.findById(userId)
+                if (existing != null) {
+                    userDao.updateProfile(
+                        id = userId,
+                        fullName = fullName,
+                        phoneNumber = phoneNumber,
+                        uniqueCode = uniqueCode
+                    )
+                } else {
+                    userDao.insert(
+                        UserEntity(
+                            id = userId,
+                            fullName = fullName,
+                            email = "middleman@nawano.com",
+                            passwordHash = "",
+                            role = UserRole.OWNER,
+                            uniqueCode = uniqueCode,
+                            phoneNumber = phoneNumber
+                        )
+                    )
+                }
+                withContext(Dispatchers.Main) {
+                    onComplete?.invoke(true, null)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    onComplete?.invoke(false, e.message ?: "Failed to update profile")
+                }
+            }
+        }
+    }
+
+    val sessionStore = SessionStore(application)
+
     private val prefs = application.getSharedPreferences("nawano_settings", Context.MODE_PRIVATE)
     private val _isDarkMode = MutableStateFlow(prefs.getBoolean("is_dark_mode", false))
     val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
@@ -375,6 +428,71 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         val next = !_isDarkMode.value
         _isDarkMode.value = next
         prefs.edit().putBoolean("is_dark_mode", next).apply()
+    }
+
+    private val _selectedCurrency = MutableStateFlow(
+        AppCurrency.fromCode(prefs.getString("selected_currency", AppCurrency.USD.name))
+    )
+    val selectedCurrency: StateFlow<AppCurrency> = _selectedCurrency.asStateFlow()
+
+    private val _exchangeRateUsdToKhr = MutableStateFlow(
+        prefs.getFloat("exchange_rate_usd_to_khr", CurrencyFormatter.DEFAULT_EXCHANGE_RATE.toFloat()).toDouble()
+    )
+    val exchangeRateUsdToKhr: StateFlow<Double> = _exchangeRateUsdToKhr.asStateFlow()
+
+    fun setSelectedCurrency(currency: AppCurrency) {
+        _selectedCurrency.value = currency
+        prefs.edit().putString("selected_currency", currency.name).apply()
+        viewModelScope.launch(Dispatchers.IO) {
+            sessionStore.setSelectedCurrency(currency.name)
+        }
+    }
+
+    fun toggleCurrency() {
+        val next = if (_selectedCurrency.value == AppCurrency.USD) AppCurrency.KHR else AppCurrency.USD
+        setSelectedCurrency(next)
+    }
+
+    fun setExchangeRate(rate: Double) {
+        if (rate <= 0) return
+        _exchangeRateUsdToKhr.value = rate
+        prefs.edit().putFloat("exchange_rate_usd_to_khr", rate.toFloat()).apply()
+        viewModelScope.launch(Dispatchers.IO) {
+            sessionStore.setExchangeRateUsdToKhr(rate)
+        }
+    }
+
+    private val _paywayMerchantId = MutableStateFlow(
+        prefs.getString("payway_merchant_id", "ec000002") ?: "ec000002"
+    )
+    val paywayMerchantId: StateFlow<String> = _paywayMerchantId.asStateFlow()
+
+    private val _paywayApiKey = MutableStateFlow(
+        prefs.getString("payway_api_key", "") ?: ""
+    )
+    val paywayApiKey: StateFlow<String> = _paywayApiKey.asStateFlow()
+
+    private val _paywayIsSandbox = MutableStateFlow(
+        prefs.getBoolean("payway_is_sandbox", true)
+    )
+    val paywayIsSandbox: StateFlow<Boolean> = _paywayIsSandbox.asStateFlow()
+
+    fun setPaywayConfig(merchantId: String, apiKey: String, isSandbox: Boolean) {
+        val cleanMerchant = merchantId.trim().ifBlank { "ec000002" }
+        val cleanKey = apiKey.trim()
+        _paywayMerchantId.value = cleanMerchant
+        _paywayApiKey.value = cleanKey
+        _paywayIsSandbox.value = isSandbox
+
+        prefs.edit()
+            .putString("payway_merchant_id", cleanMerchant)
+            .putString("payway_api_key", cleanKey)
+            .putBoolean("payway_is_sandbox", isSandbox)
+            .apply()
+
+        viewModelScope.launch(Dispatchers.IO) {
+            sessionStore.setPaywayConfig(cleanMerchant, cleanKey, isSandbox)
+        }
     }
 
     private val _searchQuery = MutableStateFlow("")
@@ -432,7 +550,7 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         OnlineLookupState(onlineProd, isFetching)
     }
 
-    val uiState: StateFlow<DashboardUiState> = combine(
+    private val baseDashboardFlow: Flow<DashboardUiState> = combine(
         repository.allProducts,
         repository.allTransactions,
         supplierOrderFlow,
@@ -518,6 +636,27 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             totalItemsCount = products.sumOf { it.quantity },
             totalInventoryValue = products.sumOf { it.quantity * it.sellingPrice },
             lowStockCount = products.count { it.quantity <= it.reorderLevel }
+        )
+    }
+
+    private val paywayConfigFlow = combine(
+        _paywayMerchantId,
+        _paywayApiKey,
+        _paywayIsSandbox
+    ) { mId, key, sandbox -> Triple(mId, key, sandbox) }
+
+    val uiState: StateFlow<DashboardUiState> = combine(
+        baseDashboardFlow,
+        _selectedCurrency,
+        _exchangeRateUsdToKhr,
+        paywayConfigFlow
+    ) { base, currency, rate, (mId, key, sandbox) ->
+        base.copy(
+            selectedCurrency = currency,
+            exchangeRateUsdToKhr = rate,
+            paywayMerchantId = mId,
+            paywayApiKey = key,
+            paywayIsSandbox = sandbox
         )
     }.catch { e ->
         Log.e("InventoryViewModel", "Error in uiState combine flow", e)

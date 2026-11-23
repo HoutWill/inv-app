@@ -17,3 +17,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Verification screenshots & dumps
+*.png
+dump_screen.xml
+

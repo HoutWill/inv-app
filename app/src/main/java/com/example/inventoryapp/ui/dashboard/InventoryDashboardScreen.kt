@@ -71,8 +71,11 @@ import com.example.inventoryapp.ui.partner.ConnectPartnerBottomSheet
 import com.example.inventoryapp.ui.partner.PartnerRequestsBottomSheet
 import com.example.inventoryapp.ui.scanner.BarcodeScannerScreen
 import com.example.inventoryapp.ui.supplier.NewPurchaseOrderDialog
+import com.example.inventoryapp.util.AppCurrency
+import com.example.inventoryapp.util.CurrencyFormatter
 import com.example.inventoryapp.util.ProductImageHelper
 import com.example.inventoryapp.util.ProductThumbnail
+import java.text.NumberFormat
 import com.example.inventoryapp.ui.supplier.SupplierAddEditDialog
 import com.example.inventoryapp.ui.supplier.SuppliersManagementScreen
 import com.example.inventoryapp.ui.theme.*
@@ -272,8 +275,12 @@ fun InventoryDashboardScreen(
                         onOpenNotifications = { isNotificationsOpen = true },
                         onAddProduct = null,
                         showTitleAndLogo = false,
+                        showCurrencyPill = activeTab != 3,
                         pendingPartnerRequestsCount = pendingPartnerCount,
-                        onOpenPartnerNetwork = { isPartnerRequestsOpen = true }
+                        onOpenPartnerNetwork = { isPartnerRequestsOpen = true },
+                        currentCurrency = uiState.selectedCurrency,
+                        onCurrencySelected = { viewModel.setSelectedCurrency(it) },
+                        onToggleCurrency = { viewModel.toggleCurrency() }
                     )
                 }
             }
@@ -301,7 +308,9 @@ fun InventoryDashboardScreen(
                                 totalItems = uiState.totalItemsCount,
                                 totalValue = uiState.totalInventoryValue,
                                 onBack = { drawerDestination = null },
-                                onProductClick = { product -> viewingProductDetails = product }
+                                onProductClick = { product -> viewingProductDetails = product },
+                                currency = uiState.selectedCurrency,
+                                exchangeRate = uiState.exchangeRateUsdToKhr
                             )
                         }
                         DrawerDestination.MOVEMENT_LIST -> {
@@ -373,6 +382,17 @@ fun InventoryDashboardScreen(
                                 InventorySettingsScreen(
                                     totalSkus = uiState.totalSkus,
                                     totalItems = uiState.totalItemsCount,
+                                    selectedCurrency = uiState.selectedCurrency,
+                                    exchangeRate = uiState.exchangeRateUsdToKhr,
+                                    onSelectCurrency = { viewModel.setSelectedCurrency(it) },
+                                    onSaveExchangeRate = { viewModel.setExchangeRate(it) },
+                                    paywayMerchantId = uiState.paywayMerchantId,
+                                    paywayApiKey = uiState.paywayApiKey,
+                                    paywayIsSandbox = uiState.paywayIsSandbox,
+                                    onSavePaywayConfig = { mId, key, sandbox ->
+                                        viewModel.setPaywayConfig(mId, key, sandbox)
+                                    },
+                                    isDarkTheme = isDarkTheme,
                                     onClearAllData = { viewModel.clearAllData() }
                                 )
                             }
@@ -615,6 +635,9 @@ fun InventoryDashboardScreen(
                                 isDarkTheme = isDarkTheme,
                                 isCartMinimized = isPosCartMinimized,
                                 onToggleCartMinimized = { isPosCartMinimized = !isPosCartMinimized },
+                                currency = uiState.selectedCurrency,
+                                exchangeRate = uiState.exchangeRateUsdToKhr,
+                                showSubHeader = true,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -622,8 +645,9 @@ fun InventoryDashboardScreen(
                 }
 
                 // Floating Action Button (+ Add) positioned at bottom-right above the bottom navigation bar
+                // Only visible on Items / Catalog tab (activeTab == 1); removed from Home page (activeTab == 0)
                 AnimatedVisibility(
-                    visible = isBarsVisible && drawerDestination == null && (activeTab == 0 || activeTab == 1),
+                    visible = isBarsVisible && drawerDestination == null && activeTab == 1,
                     enter = scaleIn(animationSpec = tween(180)) + fadeIn(animationSpec = tween(150)),
                     exit = scaleOut(animationSpec = tween(180)) + fadeOut(animationSpec = tween(150)),
                     modifier = Modifier
@@ -859,6 +883,11 @@ fun InventoryDashboardScreen(
                         }
                     },
                     itemsSummary = itemsSummary,
+                    currency = uiState.selectedCurrency,
+                    exchangeRate = uiState.exchangeRateUsdToKhr,
+                    paywayMerchantId = uiState.paywayMerchantId,
+                    paywayApiKey = uiState.paywayApiKey,
+                    paywayIsSandbox = uiState.paywayIsSandbox,
                     onDismiss = { isPosCheckoutOpen = false },
                     onConfirmSale = { paymentMethod, customerName, customerPhone, dueDate, note ->
                         val itemsToSell = posCart.mapNotNull { (prodId, qty) ->
@@ -893,6 +922,8 @@ fun InventoryDashboardScreen(
             if (isPosUnpaidTabsOpen) {
                 PosUnpaidTabsBottomSheet(
                     unpaidOrders = unpaidOrders,
+                    exchangeRate = uiState.exchangeRateUsdToKhr,
+                    currency = uiState.selectedCurrency,
                     onDismiss = { isPosUnpaidTabsOpen = false },
                     onSettleOrder = { orderId, method ->
                         viewModel.settleSalesOrder(orderId, method) {
@@ -1017,7 +1048,9 @@ fun InventoryDashboardScreen(
                             snackbarHostState.showSnackbar("Deleted '${liveProduct.name}'")
                         }
                     },
-                    onRequestSupply = handleRequestSupply
+                    onRequestSupply = handleRequestSupply,
+                    currency = uiState.selectedCurrency,
+                    exchangeRate = uiState.exchangeRateUsdToKhr
                 )
             }
 
@@ -1243,7 +1276,9 @@ private fun DashboardOverviewTab(
                     onStockIn = { item -> onQuantityChange(item, 1) },
                     onStockOut = { item -> onQuantityChange(item, -1) },
                     onImportOnline = onImportOnlineProduct,
-                    onAddNewProduct = onRegisterNewProduct
+                    onAddNewProduct = onRegisterNewProduct,
+                    currency = uiState.selectedCurrency,
+                    exchangeRate = uiState.exchangeRateUsdToKhr
                 )
             }
         }
@@ -1376,7 +1411,9 @@ private fun InventoryItemsCatalogTab(
                 onStockIn = { item -> onQuantityChange(item, 1) },
                 onStockOut = { item -> onQuantityChange(item, -1) },
                 onImportOnline = onImportOnlineProduct,
-                onAddNewProduct = onRegisterNewProduct
+                onAddNewProduct = onRegisterNewProduct,
+                currency = uiState.selectedCurrency,
+                exchangeRate = uiState.exchangeRateUsdToKhr
             )
             Spacer(modifier = Modifier.height(10.dp))
         }
@@ -1898,6 +1935,8 @@ private fun InventoryItemsCatalogTab(
                                 item = item,
                                 isHighlighted = isHighlighted,
                                 isDarkTheme = isDarkTheme,
+                                currency = uiState.selectedCurrency,
+                                exchangeRate = uiState.exchangeRateUsdToKhr,
                                 onQuantityChange = { delta -> onQuantityChange(item, delta) },
                                 onCardClick = { onProductClick(item) },
                                 onDelete = { onDeleteProduct(item) },
@@ -1912,6 +1951,8 @@ private fun InventoryItemsCatalogTab(
                                 item = item,
                                 isHighlighted = isHighlighted,
                                 isDarkTheme = isDarkTheme,
+                                currency = uiState.selectedCurrency,
+                                exchangeRate = uiState.exchangeRateUsdToKhr,
                                 onQuantityChange = { delta -> onQuantityChange(item, delta) },
                                 onCardClick = { onProductClick(item) },
                                 onDelete = { onDeleteProduct(item) }
@@ -1935,6 +1976,8 @@ private fun InventoryItemsCatalogTab(
                                             item = item,
                                             isHighlighted = isHighlighted,
                                             isDarkTheme = isDarkTheme,
+                                            currency = uiState.selectedCurrency,
+                                            exchangeRate = uiState.exchangeRateUsdToKhr,
                                             onQuantityChange = { delta -> onQuantityChange(item, delta) },
                                             onCardClick = { onProductClick(item) }
                                         )
@@ -2133,11 +2176,27 @@ private fun NawanoHeroInventorySummaryCard(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "$${String.format(Locale.US, "%.2f", uiState.totalInventoryValue)}",
+                            text = CurrencyFormatter.format(
+                                uiState.totalInventoryValue,
+                                uiState.selectedCurrency,
+                                uiState.exchangeRateUsdToKhr
+                            ),
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color.White
                         )
+                        val equivalentVal = CurrencyFormatter.formatEquivalentOnly(
+                            uiState.totalInventoryValue,
+                            uiState.selectedCurrency,
+                            uiState.exchangeRateUsdToKhr
+                        )
+                        if (equivalentVal.isNotBlank()) {
+                            Text(
+                                text = "≈ $equivalentVal",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White.copy(alpha = 0.82f)
+                            )
+                        }
                     }
                 }
             }
@@ -2320,7 +2379,8 @@ private fun NawanoOperationalCard(
                     fontWeight = FontWeight.Bold,
                     color = textPrimary,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
 
                 Icon(
@@ -3316,7 +3376,9 @@ private fun ScannedSkuBanner(
     onStockOut: (ProductEntity) -> Unit = {},
     onViewProduct: (() -> Unit)? = null,
     onImportOnline: (OnlineProductData) -> Unit,
-    onAddNewProduct: (String, OnlineProductData?) -> Unit
+    onAddNewProduct: (String, OnlineProductData?) -> Unit,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE
 ) {
     // Auto-dismiss alert after 6 seconds (lasts comfortably longer)
     LaunchedEffect(scannedSku, matchedItem) {
@@ -3474,7 +3536,7 @@ private fun ScannedSkuBanner(
 
                     // Price placed at the bottom right!
                     Text(
-                        text = "$${String.format(Locale.US, "%.2f", matchedItem.sellingPrice)}",
+                        text = CurrencyFormatter.format(matchedItem.sellingPrice, currency, exchangeRate),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold,
                         color = NawanoPrimary200
@@ -3661,6 +3723,8 @@ private fun InventoryItemCard(
     item: ProductEntity,
     isHighlighted: Boolean,
     isDarkTheme: Boolean = false,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
     onQuantityChange: (Int) -> Unit,
     onCardClick: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
@@ -3847,7 +3911,7 @@ private fun InventoryItemCard(
             ) {
                 // Bright emerald green price
                 Text(
-                    text = "$${String.format(Locale.US, "%.2f", item.sellingPrice)} / ${item.unit}",
+                    text = "${CurrencyFormatter.format(item.sellingPrice, currency, exchangeRate)} / ${item.unit}",
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 17.sp,
                     color = Color(0xFF10B981)
@@ -3977,6 +4041,8 @@ private fun InventoryItemCompactRow(
     item: ProductEntity,
     isHighlighted: Boolean,
     isDarkTheme: Boolean = false,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
     onQuantityChange: (Int) -> Unit,
     onCardClick: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null
@@ -4069,7 +4135,7 @@ private fun InventoryItemCompactRow(
                 horizontalAlignment = Alignment.End
             ) {
                 Text(
-                    text = "$${String.format(Locale.US, "%.2f", item.sellingPrice)} / ${item.unit}",
+                    text = "${CurrencyFormatter.format(item.sellingPrice, currency, exchangeRate)} / ${item.unit}",
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 13.sp,
                     color = Color(0xFF10B981)
@@ -4112,6 +4178,8 @@ private fun InventoryItemGridCard(
     item: ProductEntity,
     isHighlighted: Boolean,
     isDarkTheme: Boolean = false,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
     onQuantityChange: (Int) -> Unit,
     onCardClick: (() -> Unit)? = null
 ) {
@@ -4209,7 +4277,7 @@ private fun InventoryItemGridCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "$${String.format(Locale.US, "%.2f", item.sellingPrice)}",
+                    text = CurrencyFormatter.format(item.sellingPrice, currency, exchangeRate),
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 13.sp,
                     color = Color(0xFF10B981)
@@ -4236,9 +4304,20 @@ private fun InventoryItemGridCard(
 private fun InventorySettingsScreen(
     totalSkus: Int,
     totalItems: Int,
+    selectedCurrency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
+    onSelectCurrency: (AppCurrency) -> Unit = {},
+    onSaveExchangeRate: (Double) -> Unit = {},
+    paywayMerchantId: String = "ec000002",
+    paywayApiKey: String = "",
+    paywayIsSandbox: Boolean = true,
+    onSavePaywayConfig: (merchantId: String, apiKey: String, isSandbox: Boolean) -> Unit = { _, _, _ -> },
+    isDarkTheme: Boolean = false,
     onClearAllData: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var showEditRateSheet by remember { mutableStateOf(false) }
+    var showPayWayConfigSheet by remember { mutableStateOf(false) }
     var showConfirmDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -4258,6 +4337,254 @@ private fun InventorySettingsScreen(
         )
 
         Spacer(modifier = Modifier.height(20.dp))
+
+        // Currency & Exchange Rate Setting Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDarkTheme) Color(0xFF1E2235) else Color.White
+            ),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(
+                1.dp,
+                if (isDarkTheme) Color(0xFF2E334D) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        color = NawanoPrimary200.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.CurrencyExchange,
+                                contentDescription = null,
+                                tint = NawanoPrimary200,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Currency & Exchange Rate",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isDarkTheme) Color.White else Color(0xFF1E293B)
+                        )
+                        Text(
+                            text = "Choose display currency & configure conversion rate",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(
+                    color = if (isDarkTheme) Color(0xFF2E334D) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Active Currency Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Active Currency",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isDarkTheme) Color.White else Color(0xFF1E293B)
+                        )
+                        Text(
+                            text = "Prices show in ${selectedCurrency.displayName}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B)
+                        )
+                    }
+                    CurrencySelectorPill(
+                        currentCurrency = selectedCurrency,
+                        onCurrencySelected = onSelectCurrency,
+                        isDarkTheme = isDarkTheme
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Exchange Rate Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "USD to KHR Rate",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isDarkTheme) Color.White else Color(0xFF1E293B)
+                        )
+                        val formattedRate = NumberFormat.getNumberInstance(Locale.US).format(exchangeRate.toLong())
+                        Text(
+                            text = "1 USD = $formattedRate KHR (៛)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = NawanoPrimary200
+                        )
+                        Text(
+                            text = "Default: 1 USD = 4,000 KHR",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B)
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = { showEditRateSheet = true },
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.6f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = NawanoPrimary200),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Change", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // ABA PayWay Gateway Setting Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDarkTheme) Color(0xFF1E2235) else Color.White
+            ),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(
+                1.dp,
+                if (isDarkTheme) Color(0xFF004F71).copy(alpha = 0.5f) else Color(0xFF004F71).copy(alpha = 0.25f)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        color = Color(0xFF004F71).copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.QrCode2,
+                                contentDescription = null,
+                                tint = Color(0xFF004F71),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "ABA PayWay Gateway",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isDarkTheme) Color.White else Color(0xFF1E293B)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (paywayIsSandbox) Color(0xFFF59E0B).copy(alpha = 0.2f) else Color(0xFF10B981).copy(alpha = 0.2f)
+                            ) {
+                                Text(
+                                    text = if (paywayIsSandbox) "SANDBOX" else "LIVE",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (paywayIsSandbox) Color(0xFFF59E0B) else Color(0xFF10B981),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Dynamic KHQR generation & instant push payment",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(
+                    color = if (isDarkTheme) Color(0xFF2E334D) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Merchant Details Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Merchant ID",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isDarkTheme) Color.White else Color(0xFF1E293B)
+                        )
+                        Text(
+                            text = paywayMerchantId.ifBlank { "Not configured" },
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF004F71)
+                        )
+                        Text(
+                            text = if (paywayApiKey.isNotBlank()) "API Key: ••••••••••••" else "API Key: Demo simulation mode",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B)
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = { showPayWayConfigSheet = true },
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, Color(0xFF004F71).copy(alpha = 0.6f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF004F71)),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Configure", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -4331,6 +4658,32 @@ private fun InventorySettingsScreen(
                 }
             }
         }
+    }
+
+    if (showEditRateSheet) {
+        EditExchangeRateBottomSheet(
+            currentRate = exchangeRate,
+            isDarkTheme = isDarkTheme,
+            onSaveRate = { newRate ->
+                onSaveExchangeRate(newRate)
+                showEditRateSheet = false
+            },
+            onDismiss = { showEditRateSheet = false }
+        )
+    }
+
+    if (showPayWayConfigSheet) {
+        EditPayWaySettingsBottomSheet(
+            currentMerchantId = paywayMerchantId,
+            currentApiKey = paywayApiKey,
+            currentIsSandbox = paywayIsSandbox,
+            isDarkTheme = isDarkTheme,
+            onSaveConfig = { mId, key, sandbox ->
+                onSavePaywayConfig(mId, key, sandbox)
+                showPayWayConfigSheet = false
+            },
+            onDismiss = { showPayWayConfigSheet = false }
+        )
     }
 
     if (showConfirmDialog) {
