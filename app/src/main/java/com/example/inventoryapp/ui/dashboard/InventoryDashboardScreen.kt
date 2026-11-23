@@ -55,6 +55,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.inventoryapp.R
 import com.example.inventoryapp.data.local.entity.ProductEntity
+import com.example.inventoryapp.data.local.entity.PosPaymentMethod
 import com.example.inventoryapp.data.local.entity.canRequestSupply
 import com.example.inventoryapp.data.local.entity.isDirectSlot
 import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
@@ -144,6 +145,13 @@ fun InventoryDashboardScreen(
     var selectedSupplierForPo by remember { mutableStateOf<SupplierEntity?>(null) }
     var selectedProductForPo by remember { mutableStateOf<ProductEntity?>(null) }
 
+    // POS State & Cart
+    val posCart = remember { mutableStateMapOf<String, Int>() }
+    var isPosCheckoutOpen by remember { mutableStateOf(false) }
+    var isPosUnpaidTabsOpen by remember { mutableStateOf(false) }
+    val unpaidOrders by viewModel.unpaidSalesOrders.collectAsState()
+    val unpaidOrdersCount by viewModel.unpaidSalesOrdersCount.collectAsState()
+
     val handleRequestSupply: (ProductEntity) -> Unit = { item ->
         val sup = uiState.suppliers.find { it.id == item.supplierId }
         selectedSupplierForPo = sup
@@ -209,7 +217,7 @@ fun InventoryDashboardScreen(
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
-                if (drawerDestination == null) {
+                if (drawerDestination == null && activeTab != 3) {
                     InventoryTopBar(
                         totalSkus = uiState.totalSkus,
                         lowStockCount = uiState.lowStockCount,
@@ -548,12 +556,33 @@ fun InventoryDashboardScreen(
                             )
                         }
                         3 -> {
-                            // TAB 3: Settings & Database Management
-                            InventorySettingsScreen(
-                                totalSkus = uiState.totalSkus,
-                                totalItems = uiState.totalItemsCount,
-                                onClearAllData = { viewModel.clearAllData() },
-                                modifier = Modifier.padding(bottom = 88.dp)
+                            // TAB 3: POS Register Screen (with My Stock, Cart, Pay Later)
+                            PosRegisterScreen(
+                                products = uiState.products,
+                                unpaidTabsCount = unpaidOrdersCount,
+                                cart = posCart,
+                                onUpdateCartQuantity = { product, newQty ->
+                                    if (newQty <= 0) {
+                                        posCart.remove(product.id)
+                                    } else {
+                                        posCart[product.id] = newQty
+                                    }
+                                },
+                                onOpenDrawer = { scope.launch { drawerState.open() } },
+                                onOpenUnpaidTabs = { isPosUnpaidTabsOpen = true },
+                                onOpenScanner = { scannerTarget = ScannerTarget.DASHBOARD_SCAN },
+                                onOpenCheckout = {
+                                    isUpcomingSheetOpen = false
+                                    isLowStockSheetOpen = false
+                                    isStockTransfersSheetOpen = false
+                                    isStockHistorySheetOpen = false
+                                    isNotificationsOpen = false
+                                    isPosUnpaidTabsOpen = false
+                                    viewingProductDetails = null
+                                    isPosCheckoutOpen = true
+                                },
+                                isDarkTheme = isDarkTheme,
+                                modifier = Modifier.fillMaxSize()
                             )
                         }
                     }
@@ -607,6 +636,14 @@ fun InventoryDashboardScreen(
                         selectedTab = activeTab,
                         onTabSelected = { tab ->
                             drawerDestination = null
+                            isUpcomingSheetOpen = false
+                            isLowStockSheetOpen = false
+                            isStockTransfersSheetOpen = false
+                            isStockHistorySheetOpen = false
+                            isNotificationsOpen = false
+                            isPosCheckoutOpen = false
+                            isPosUnpaidTabsOpen = false
+                            viewingProductDetails = null
                             activeTab = tab
                             isBottomBarVisible = true
                         },
@@ -746,6 +783,66 @@ fun InventoryDashboardScreen(
                         activeTab = 0 // Stay on Home tab
                         scope.launch {
                             snackbarHostState.showSnackbar("Auto-imported '${online.name}' with +10 stock!")
+                        }
+                    }
+                )
+            }
+
+            // POS Checkout Bottom Sheet (ABA PayWay 2.11 + Pay Later)
+            if (isPosCheckoutOpen) {
+                val totalAmountUsd = posCart.entries.sumOf { (prodId, qty) ->
+                    val prod = uiState.products.find { it.id == prodId }
+                    (prod?.sellingPrice ?: 0.0) * qty
+                }
+                val totalItemCount = posCart.values.sum()
+                val itemsSummary = posCart.entries.joinToString(", ") { (prodId, qty) ->
+                    val prod = uiState.products.find { it.id == prodId }
+                    "${qty}x ${prod?.name ?: "Item"}"
+                }
+
+                PosCheckoutBottomSheet(
+                    totalAmountUsd = totalAmountUsd,
+                    itemCount = totalItemCount,
+                    itemsSummary = itemsSummary,
+                    onDismiss = { isPosCheckoutOpen = false },
+                    onConfirmSale = { paymentMethod, customerName, customerPhone, dueDate, note ->
+                        val itemsToSell = posCart.mapNotNull { (prodId, qty) ->
+                            uiState.products.find { it.id == prodId }?.let { it to qty }
+                        }
+                        viewModel.processPosSale(
+                            items = itemsToSell,
+                            paymentMethod = paymentMethod,
+                            customerName = customerName,
+                            customerPhone = customerPhone,
+                            dueDate = dueDate,
+                            note = note,
+                            onSuccess = { order ->
+                                posCart.clear()
+                                isPosCheckoutOpen = false
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        if (paymentMethod == PosPaymentMethod.COD)
+                                            "Recorded COD Tab for ${order.customerName} (Invoice #${order.invoiceNumber})"
+                                        else
+                                            "Sale completed: Invoice #${order.invoiceNumber}"
+                                    )
+                                }
+                            }
+                        )
+                    }
+                )
+            }
+
+            // POS Unpaid Tabs Bottom Sheet
+            if (isPosUnpaidTabsOpen) {
+                PosUnpaidTabsBottomSheet(
+                    unpaidOrders = unpaidOrders,
+                    onDismiss = { isPosUnpaidTabsOpen = false },
+                    onSettleOrder = { orderId, method ->
+                        viewModel.settleSalesOrder(orderId, method) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Customer tab settled and marked PAID!")
+                            }
                         }
                     }
                 )
@@ -1478,16 +1575,14 @@ private fun InventoryItemsCatalogTab(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.weight(1f, fill = false)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = if (stockStatusFilter == StockStatusFilter.IN_STOCK) "In-Stock Products" else "Products",
+                    text = "Products",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 1
                 )
                 if (displayedProducts.isNotEmpty()) {
                     Text(
@@ -1512,48 +1607,51 @@ private fun InventoryItemsCatalogTab(
                         modifier = Modifier.padding(2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(
-                            onClick = { catalogViewMode = CatalogViewMode.DETAILED },
+                        Box(
                             modifier = Modifier
-                                .size(28.dp)
+                                .size(30.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (catalogViewMode == CatalogViewMode.DETAILED) NawanoPrimary200.copy(alpha = 0.25f) else Color.Transparent)
+                                .clickable { catalogViewMode = CatalogViewMode.DETAILED },
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.ViewAgenda,
                                 contentDescription = "Detailed View",
                                 tint = if (catalogViewMode == CatalogViewMode.DETAILED) NawanoPrimary200 else textSecondary,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(17.dp)
                             )
                         }
 
-                        IconButton(
-                            onClick = { catalogViewMode = CatalogViewMode.COMPACT },
+                        Box(
                             modifier = Modifier
-                                .size(28.dp)
+                                .size(30.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (catalogViewMode == CatalogViewMode.COMPACT) NawanoPrimary200.copy(alpha = 0.25f) else Color.Transparent)
+                                .clickable { catalogViewMode = CatalogViewMode.COMPACT },
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.FormatListBulleted,
                                 contentDescription = "Compact List View",
                                 tint = if (catalogViewMode == CatalogViewMode.COMPACT) NawanoPrimary200 else textSecondary,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(17.dp)
                             )
                         }
 
-                        IconButton(
-                            onClick = { catalogViewMode = CatalogViewMode.GRID },
+                        Box(
                             modifier = Modifier
-                                .size(28.dp)
+                                .size(30.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (catalogViewMode == CatalogViewMode.GRID) NawanoPrimary200.copy(alpha = 0.25f) else Color.Transparent)
+                                .clickable { catalogViewMode = CatalogViewMode.GRID },
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.GridView,
                                 contentDescription = "Grid View",
                                 tint = if (catalogViewMode == CatalogViewMode.GRID) NawanoPrimary200 else textSecondary,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(17.dp)
                             )
                         }
                     }
@@ -3774,6 +3872,270 @@ private fun InventoryItemCard(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Compact high-density list item row (~58dp height).
+ * Maximizes screen real estate so users can view 8-10 items at once without scrolling.
+ */
+@Composable
+private fun InventoryItemCompactRow(
+    item: ProductEntity,
+    isHighlighted: Boolean,
+    isDarkTheme: Boolean = false,
+    onQuantityChange: (Int) -> Unit,
+    onCardClick: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null
+) {
+    val cardBg = if (isDarkTheme) Color(0xFF191D2D) else Color.White
+    val cardBorder = if (isDarkTheme) Color(0xFF2E334D) else Color(0xFFE2E8F0)
+    val textPrimary = if (isDarkTheme) Color.White else Color(0xFF1E293B)
+    val textSecondary = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B)
+
+    val isLowStock = item.quantity <= item.reorderLevel
+    val stockPillBg = when {
+        item.quantity <= 0 -> if (isDarkTheme) Color(0xFF3B1818) else Color(0xFFFEE2E2)
+        isLowStock -> if (isDarkTheme) Color(0xFF382710) else Color(0xFFFEF3C7)
+        else -> if (isDarkTheme) Color(0xFF102E29) else Color(0xFFD1FAE5)
+    }
+    val stockPillTextColor = when {
+        item.quantity <= 0 -> Color(0xFFEF4444)
+        isLowStock -> Color(0xFFF59E0B)
+        else -> Color(0xFF10B981)
+    }
+    val stockPillLabel = when {
+        item.quantity <= 0 -> "0 stock"
+        isLowStock -> "Low: ${item.quantity} ${item.unit}"
+        else -> "${item.quantity} in stock"
+    }
+
+    val skuLabel = if (item.sku.startsWith("#")) item.sku else "#${item.sku}"
+
+    Surface(
+        onClick = { onCardClick?.invoke() },
+        shape = RoundedCornerShape(14.dp),
+        color = cardBg,
+        border = BorderStroke(
+            width = if (isHighlighted) 2.dp else 1.dp,
+            color = if (isHighlighted) NawanoPrimary200 else cardBorder
+        ),
+        shadowElevation = if (isDarkTheme) 0.dp else 1.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 42dp Thumbnail
+            ProductThumbnail(
+                product = item,
+                modifier = Modifier.size(42.dp),
+                shape = RoundedCornerShape(10.dp)
+            )
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            // Title & Category/SKU
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.5.sp,
+                    color = textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = item.category.ifBlank { "General" },
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isDarkTheme) Color(0xFFA5B4FC) else NawanoPrimary200
+                    )
+                    Text(
+                        text = " • $skuLabel",
+                        fontSize = 11.sp,
+                        color = textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Price & Stock status badge
+            Column(
+                horizontalAlignment = Alignment.End
+            ) {
+                Text(
+                    text = "$${String.format(Locale.US, "%.2f", item.sellingPrice)} / ${item.unit}",
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 13.sp,
+                    color = Color(0xFF10B981)
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = stockPillBg
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(5.dp)
+                                .clip(CircleShape)
+                                .background(stockPillTextColor)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = stockPillLabel,
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = stockPillTextColor
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 2-Column Grid Card (~180dp height).
+ * Provides an e-commerce catalog style view displaying 4-6 products per screen.
+ */
+@Composable
+private fun InventoryItemGridCard(
+    item: ProductEntity,
+    isHighlighted: Boolean,
+    isDarkTheme: Boolean = false,
+    onQuantityChange: (Int) -> Unit,
+    onCardClick: (() -> Unit)? = null
+) {
+    val cardBg = if (isDarkTheme) Color(0xFF191D2D) else Color.White
+    val cardBorder = if (isDarkTheme) Color(0xFF2E334D) else Color(0xFFE2E8F0)
+    val textPrimary = if (isDarkTheme) Color.White else Color(0xFF1E293B)
+    val textSecondary = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B)
+
+    val isLowStock = item.quantity <= item.reorderLevel
+    val stockPillBg = when {
+        item.quantity <= 0 -> if (isDarkTheme) Color(0xFF3B1818) else Color(0xFFFEE2E2)
+        isLowStock -> if (isDarkTheme) Color(0xFF382710) else Color(0xFFFEF3C7)
+        else -> if (isDarkTheme) Color(0xFF102E29) else Color(0xFFD1FAE5)
+    }
+    val stockPillTextColor = when {
+        item.quantity <= 0 -> Color(0xFFEF4444)
+        isLowStock -> Color(0xFFF59E0B)
+        else -> Color(0xFF10B981)
+    }
+    val stockPillLabel = when {
+        item.quantity <= 0 -> "0 stock"
+        isLowStock -> "Low: ${item.quantity}"
+        else -> "${item.quantity} in stock"
+    }
+
+    Surface(
+        onClick = { onCardClick?.invoke() },
+        shape = RoundedCornerShape(16.dp),
+        color = cardBg,
+        border = BorderStroke(
+            width = if (isHighlighted) 2.dp else 1.dp,
+            color = if (isHighlighted) NawanoPrimary200 else cardBorder
+        ),
+        shadowElevation = if (isDarkTheme) 0.dp else 1.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp)
+        ) {
+            // Centered Image with subtle background
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(86.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (isDarkTheme) Color(0xFF22263C) else Color(0xFFF8FAFC)),
+                contentAlignment = Alignment.Center
+            ) {
+                ProductThumbnail(
+                    product = item,
+                    modifier = Modifier.size(74.dp),
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Category tag
+            Surface(
+                shape = RoundedCornerShape(5.dp),
+                color = if (isDarkTheme) Color(0xFF282B44) else Color(0xFFEEF2FF)
+            ) {
+                Text(
+                    text = item.category.ifBlank { "General" },
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isDarkTheme) Color(0xFFA5B4FC) else NawanoPrimary200,
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Title
+            Text(
+                text = item.name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Price & Stock
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "$${String.format(Locale.US, "%.2f", item.sellingPrice)}",
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 13.sp,
+                    color = Color(0xFF10B981)
+                )
+
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = stockPillBg
+                ) {
+                    Text(
+                        text = stockPillLabel,
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = stockPillTextColor,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
                 }
             }
         }

@@ -152,29 +152,6 @@ fun PosRegisterScreen(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Quick Cart Button in Top Bar
-                    IconButton(onClick = onOpenCheckout) {
-                        BadgedBox(
-                            badge = {
-                                if (totalCartItems > 0) {
-                                    Badge(
-                                        containerColor = NawanoPrimary200,
-                                        contentColor = Color.White
-                                    ) {
-                                        Text("$totalCartItems", fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        ) {
-                            Icon(
-                                imageVector = if (totalCartItems > 0) Icons.Default.ShoppingCart else Icons.Outlined.ShoppingCart,
-                                contentDescription = "Active Cart",
-                                tint = if (totalCartItems > 0) NawanoPrimary200 else MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
-
                     // Unpaid Tabs / Pay Later Badge Button
                     IconButton(onClick = onOpenUnpaidTabs) {
                         BadgedBox(
@@ -330,91 +307,6 @@ fun PosRegisterScreen(
                 }
             }
 
-            // 4.5. Prominent Sticky Top Cart Summary Banner (Separated completely from bottom navigation bar)
-            AnimatedVisibility(
-                visible = totalCartItems > 0,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                Surface(
-                    onClick = onOpenCheckout,
-                    shape = RoundedCornerShape(18.dp),
-                    color = NawanoPrimary200,
-                    shadowElevation = 4.dp,
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .background(Color.White.copy(alpha = 0.22f), CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ShoppingCart,
-                                    contentDescription = "Cart",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Column {
-                                Text(
-                                    text = "$totalCartItems Items • $${String.format(Locale.US, "%.2f", totalAmountUsd)}",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = "≈ $khrFormatted ៛",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = Color.White.copy(alpha = 0.85f)
-                                )
-                            }
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = Color.White
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text(
-                                    text = "Checkout",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = NawanoPrimary200
-                                )
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                    contentDescription = null,
-                                    tint = NawanoPrimary200,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
             // 5. Product 2-Column Grid
             if (filteredProducts.isEmpty()) {
                 Box(
@@ -446,7 +338,7 @@ fun PosRegisterScreen(
                         .padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(bottom = 110.dp) // Clean padding above bottom navigation bar
+                    contentPadding = PaddingValues(bottom = 170.dp) // Scroll above floating cart banner and bottom bar
                 ) {
                     items(filteredProducts, key = { it.id }) { product ->
                         val currentQtyInCart = cart[product.id] ?: 0
@@ -466,6 +358,91 @@ fun PosRegisterScreen(
                                 onUpdateCartQuantity(product, (currentQtyInCart - 1).coerceAtLeast(0))
                             }
                         )
+                    }
+                }
+            }
+        }
+
+        // Floating Cart Summary Banner (Anchored at BottomCenter above bottom navigation bar, matching Image 1)
+        AnimatedVisibility(
+            visible = totalCartItems > 0,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 106.dp)
+        ) {
+            Surface(
+                onClick = onOpenCheckout,
+                shape = RoundedCornerShape(20.dp),
+                color = NawanoPrimary200,
+                shadowElevation = 6.dp,
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(Color.White.copy(alpha = 0.22f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ShoppingCart,
+                                contentDescription = "Cart",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "$totalCartItems Items • $${String.format(Locale.US, "%.2f", totalAmountUsd)}",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "≈ $khrFormatted ៛",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.White.copy(alpha = 0.85f)
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.White
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "Checkout",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = NawanoPrimary200
+                            )
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                tint = NawanoPrimary200,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
                     }
                 }
             }
