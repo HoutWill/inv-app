@@ -35,9 +35,158 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.ui.theme.*
+import com.example.inventoryapp.util.AppCurrency
+import com.example.inventoryapp.util.CurrencyFormatter
 import com.example.inventoryapp.util.ProductImageHelper
 import java.text.NumberFormat
 import java.util.Locale
+
+/**
+ * POS Register Top App Bar matching the authentic POS header layout.
+ * Directly replaces the generic Dashboard top bar on the POS Register tab.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PosRegisterTopBar(
+    unpaidTabsCount: Int,
+    totalCartItems: Int,
+    onOpenUnpaidTabs: () -> Unit,
+    onOpenScanner: () -> Unit,
+    onOpenCheckout: () -> Unit,
+    isCartMinimized: Boolean = false,
+    onToggleCartMinimized: (() -> Unit)? = null,
+    onOpenDrawer: (() -> Unit)? = null,
+    currentCurrency: AppCurrency = AppCurrency.USD,
+    onCurrencySelected: ((AppCurrency) -> Unit)? = null,
+    onToggleCurrency: (() -> Unit)? = null,
+    isDarkTheme: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    TopAppBar(
+        modifier = modifier,
+        title = {
+            Text(
+                text = "POS Register",
+                fontSize = 19.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        navigationIcon = {
+            if (onOpenDrawer != null) {
+                IconButton(
+                    onClick = onOpenDrawer,
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Menu,
+                        contentDescription = "Open Navigation Menu",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        },
+        actions = {
+            // Currency Switcher (USD / Riel)
+            CurrencySelectorPill(
+                currentCurrency = currentCurrency,
+                onCurrencySelected = { currency ->
+                    onCurrencySelected?.invoke(currency) ?: onToggleCurrency?.invoke()
+                },
+                isDarkTheme = isDarkTheme
+            )
+
+            Spacer(modifier = Modifier.width(2.dp))
+
+            // Unpaid Tabs / Pay Later Badge Button (matching Image 1 order)
+            IconButton(
+                onClick = onOpenUnpaidTabs,
+                modifier = Modifier.size(36.dp)
+            ) {
+                BadgedBox(
+                    badge = {
+                        if (unpaidTabsCount > 0) {
+                            Badge(
+                                containerColor = Color(0xFFF59E0B),
+                                contentColor = Color.White
+                            ) {
+                                Text(
+                                    text = "$unpaidTabsCount",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 9.sp
+                                )
+                            }
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ReceiptLong,
+                        contentDescription = "Unpaid Tabs",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            // Barcode Scanner Shortcut
+            IconButton(
+                onClick = onOpenScanner,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.QrCodeScanner,
+                    contentDescription = "Scan Barcode",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            // Cart Action Button with Badge
+            IconButton(
+                onClick = {
+                    if (totalCartItems > 0) {
+                        if (isCartMinimized && onToggleCartMinimized != null) {
+                            onToggleCartMinimized()
+                        } else {
+                            onOpenCheckout()
+                        }
+                    }
+                },
+                modifier = Modifier.size(36.dp)
+            ) {
+                BadgedBox(
+                    badge = {
+                        if (totalCartItems > 0) {
+                            Badge(
+                                containerColor = Color(0xFFEF4444),
+                                contentColor = Color.White
+                            ) {
+                                Text(
+                                    text = if (totalCartItems > 99) "99+" else "$totalCartItems",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 9.sp
+                                )
+                            }
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = if (totalCartItems > 0) Icons.Filled.ShoppingCart else Icons.Outlined.ShoppingCart,
+                        contentDescription = "Shopping Cart",
+                        tint = if (totalCartItems > 0) NawanoPrimary200 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = Color.Transparent,
+            scrolledContainerColor = MaterialTheme.colorScheme.surface
+        )
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,6 +202,9 @@ fun PosRegisterScreen(
     isDarkTheme: Boolean = isSystemInDarkTheme(),
     isCartMinimized: Boolean = false,
     onToggleCartMinimized: (() -> Unit)? = null,
+    showSubHeader: Boolean = false,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -99,8 +251,6 @@ fun PosRegisterScreen(
         val prod = products.find { it.id == prodId }
         (prod?.sellingPrice ?: 0.0) * qty
     }
-    val totalAmountKhr = (totalAmountUsd * 4050.0).toLong()
-    val khrFormatted = NumberFormat.getNumberInstance(Locale.US).format(totalAmountKhr)
 
     Box(
         modifier = modifier
@@ -110,141 +260,109 @@ fun PosRegisterScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
         ) {
-            // 1. Top Bar (POS Register • My Stock • [ 📷 ] • [ 🧾 ] • [ 🛒 ])
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            // 1. POS Register Sub-Header Row with POS Action Buttons (shown only if not rendered as main top bar)
+            if (showSubHeader) {
                 Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f, fill = false)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    IconButton(
-                        onClick = onOpenDrawer,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "Menu",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-
-                    Spacer(Modifier.width(6.dp))
-
                     Text(
                         text = "POS Register",
-                        fontSize = 18.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
 
-                    Spacer(Modifier.width(8.dp))
-
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = NawanoPrimary200.copy(alpha = 0.15f),
-                        border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.3f))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        Text(
-                            text = "My Stock",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = NawanoPrimary200,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    // Unpaid Tabs / Pay Later Badge Button (matching Image 1 order)
-                    IconButton(
-                        onClick = onOpenUnpaidTabs,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        BadgedBox(
-                            badge = {
-                                if (unpaidTabsCount > 0) {
-                                    Badge(
-                                        containerColor = Color(0xFFF59E0B),
-                                        contentColor = Color.White
-                                    ) {
-                                        Text(
-                                            text = "$unpaidTabsCount",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 9.sp
-                                        )
+                        // Unpaid Tabs / Pay Later Badge Button (matching Image 1 order)
+                        IconButton(
+                            onClick = onOpenUnpaidTabs,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            BadgedBox(
+                                badge = {
+                                    if (unpaidTabsCount > 0) {
+                                        Badge(
+                                            containerColor = Color(0xFFF59E0B),
+                                            contentColor = Color.White
+                                        ) {
+                                            Text(
+                                                text = "$unpaidTabsCount",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 9.sp
+                                            )
+                                        }
                                     }
                                 }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.ReceiptLong,
+                                    contentDescription = "Unpaid Tabs",
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(22.dp)
+                                )
                             }
+                        }
+
+                        // Barcode Scanner Shortcut
+                        IconButton(
+                            onClick = onOpenScanner,
+                            modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.ReceiptLong,
-                                contentDescription = "Unpaid Tabs",
+                                imageVector = Icons.Outlined.QrCodeScanner,
+                                contentDescription = "Scan Barcode",
                                 tint = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
-                    }
 
-                    // Barcode Scanner Shortcut
-                    IconButton(
-                        onClick = onOpenScanner,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.QrCodeScanner,
-                            contentDescription = "Scan Barcode",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    // Cart Action Button with Badge (Always accessible to reopen or checkout!)
-                    IconButton(
-                        onClick = {
-                            if (totalCartItems > 0) {
-                                if (isCartMinimized && onToggleCartMinimized != null) {
-                                    onToggleCartMinimized()
-                                } else {
-                                    onOpenCheckout()
-                                }
-                            }
-                        },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        BadgedBox(
-                            badge = {
+                        // Cart Action Button with Badge (Always accessible to reopen or checkout!)
+                        IconButton(
+                            onClick = {
                                 if (totalCartItems > 0) {
-                                    Badge(
-                                        containerColor = Color(0xFFEF4444),
-                                        contentColor = Color.White
-                                    ) {
-                                        Text(
-                                            text = if (totalCartItems > 99) "99+" else "$totalCartItems",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 9.sp
-                                        )
+                                    if (isCartMinimized && onToggleCartMinimized != null) {
+                                        onToggleCartMinimized()
+                                    } else {
+                                        onOpenCheckout()
                                     }
                                 }
-                            }
+                            },
+                            modifier = Modifier.size(36.dp)
                         ) {
-                            Icon(
-                                imageVector = if (totalCartItems > 0) Icons.Filled.ShoppingCart else Icons.Outlined.ShoppingCart,
-                                contentDescription = "Shopping Cart",
-                                tint = if (totalCartItems > 0) NawanoPrimary200 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-                                modifier = Modifier.size(22.dp)
-                            )
+                            BadgedBox(
+                                badge = {
+                                    if (totalCartItems > 0) {
+                                        Badge(
+                                            containerColor = Color(0xFFEF4444),
+                                            contentColor = Color.White
+                                        ) {
+                                            Text(
+                                                text = if (totalCartItems > 99) "99+" else "$totalCartItems",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 9.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (totalCartItems > 0) Icons.Filled.ShoppingCart else Icons.Outlined.ShoppingCart,
+                                    contentDescription = "Shopping Cart",
+                                    tint = if (totalCartItems > 0) NawanoPrimary200 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -272,7 +390,7 @@ fun PosRegisterScreen(
                     Box(modifier = Modifier.weight(1f)) {
                         if (searchQuery.isEmpty()) {
                             Text(
-                                text = "Search My Stock or scan SKU...",
+                                text = "Search products or scan SKU...",
                                 fontSize = 14.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                             )
@@ -409,6 +527,8 @@ fun PosRegisterScreen(
                             product = product,
                             quantityInCart = currentQtyInCart,
                             isDarkTheme = isDarkTheme,
+                            currency = currency,
+                            exchangeRate = exchangeRate,
                             onAdd = {
                                 onUpdateCartQuantity(product, currentQtyInCart + 1)
                             },
@@ -478,18 +598,15 @@ fun PosRegisterScreen(
                                 modifier = Modifier.size(20.dp)
                             )
                         }
-                        Column {
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
+                            val cartDisplayTotal = CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate)
                             Text(
-                                text = "$totalCartItems Items • $${String.format(Locale.US, "%.2f", totalAmountUsd)}",
-                                fontSize = 14.sp,
+                                text = "$totalCartItems Items • $cartDisplayTotal",
+                                fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            Text(
-                                text = "≈ $khrFormatted ៛",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.White.copy(alpha = 0.85f)
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -569,8 +686,9 @@ fun PosRegisterScreen(
                         tint = Color.White,
                         modifier = Modifier.size(16.dp)
                     )
+                    val cartDisplayTotal = CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate)
                     Text(
-                        text = "$totalCartItems in Cart • $${String.format(Locale.US, "%.2f", totalAmountUsd)}",
+                        text = "$totalCartItems in Cart • $cartDisplayTotal",
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -600,6 +718,8 @@ private fun PosProductCard(
     product: ProductEntity,
     quantityInCart: Int,
     isDarkTheme: Boolean = isSystemInDarkTheme(),
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
     onAdd: () -> Unit,
     onIncrement: () -> Unit,
     onDecrement: () -> Unit
@@ -779,10 +899,13 @@ private fun PosProductCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "$${String.format(Locale.US, "%.2f", product.sellingPrice)}",
-                    fontSize = 15.sp,
+                    text = CurrencyFormatter.format(product.sellingPrice, currency, exchangeRate),
+                    fontSize = 14.5.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF10B981)
+                    color = Color(0xFF10B981),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
                 Text(
                     text = " / ${product.unit}",

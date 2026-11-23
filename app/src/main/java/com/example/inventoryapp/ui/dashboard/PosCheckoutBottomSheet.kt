@@ -1,15 +1,23 @@
 package com.example.inventoryapp.ui.dashboard
 
+import android.content.Intent
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.util.Base64
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -22,9 +30,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -32,8 +48,14 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.inventoryapp.data.local.entity.PosPaymentMethod
 import com.example.inventoryapp.data.local.entity.ProductEntity
+import com.example.inventoryapp.data.remote.payway.AbaPaywayService
+import com.example.inventoryapp.data.remote.payway.PayWayQrResult
 import com.example.inventoryapp.ui.theme.*
+import com.example.inventoryapp.util.AppCurrency
+import com.example.inventoryapp.util.CurrencyFormatter
 import com.example.inventoryapp.util.ProductImageHelper
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -57,6 +79,11 @@ fun PosCheckoutBottomSheet(
     cartItems: List<Pair<ProductEntity, Int>> = emptyList(),
     onUpdateQuantity: (ProductEntity, Int) -> Unit = { _, _ -> },
     itemsSummary: String = "",
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
+    paywayMerchantId: String = "ec000002",
+    paywayApiKey: String = "",
+    paywayIsSandbox: Boolean = true,
     onDismiss: () -> Unit,
     onConfirmSale: (
         paymentMethod: PosPaymentMethod,
@@ -72,29 +99,16 @@ fun PosCheckoutBottomSheet(
     var currentStep by remember { mutableStateOf(PosCheckoutStep.ITEM_SUMMARY) }
     var selectedMethod by remember { mutableStateOf<PosPaymentMethod?>(null) }
 
-    val totalAmountKhr = (totalAmountUsd * 4050.0).toLong()
-    val khrFormatted = NumberFormat.getNumberInstance(Locale.US).format(totalAmountKhr)
-
     var customerName by remember { mutableStateOf("") }
     var customerPhone by remember { mutableStateOf("") }
     var dueDaysOption by remember { mutableIntStateOf(14) }
     var note by remember { mutableStateOf("") }
-    var cashTenderedText by remember { mutableStateOf(String.format(Locale.US, "%.2f", totalAmountUsd)) }
-
-    // Intercept back button to navigate backwards through the multi-step checkout
-    BackHandler(enabled = true) {
-        when (currentStep) {
-            PosCheckoutStep.PAYMENT_PROCESSING -> {
-                currentStep = PosCheckoutStep.PAYMENT_SELECTION
-            }
-            PosCheckoutStep.PAYMENT_SELECTION -> {
-                currentStep = PosCheckoutStep.ITEM_SUMMARY
-            }
-            PosCheckoutStep.ITEM_SUMMARY -> {
-                onDismiss()
-            }
-        }
+    val defaultTender = if (currency == AppCurrency.USD) {
+        String.format(Locale.US, "%.2f", totalAmountUsd)
+    } else {
+        "${CurrencyFormatter.toKhr(totalAmountUsd, exchangeRate)}"
     }
+    var cashTenderedText by remember(totalAmountUsd, currency) { mutableStateOf(defaultTender) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -114,6 +128,21 @@ fun PosCheckoutBottomSheet(
             .statusBarsPadding()
             .padding(top = 24.dp)
     ) {
+        // Intercept back button INSIDE bottom sheet dialog to navigate backwards through multi-step checkout
+        BackHandler(enabled = true) {
+            when (currentStep) {
+                PosCheckoutStep.PAYMENT_PROCESSING -> {
+                    currentStep = PosCheckoutStep.PAYMENT_SELECTION
+                }
+                PosCheckoutStep.PAYMENT_SELECTION -> {
+                    currentStep = PosCheckoutStep.ITEM_SUMMARY
+                }
+                PosCheckoutStep.ITEM_SUMMARY -> {
+                    onDismiss()
+                }
+            }
+        }
+
         // Locked height prevents M3 AnchoredDraggableState recalculation glitches
         Column(
             modifier = Modifier
@@ -206,6 +235,9 @@ fun PosCheckoutBottomSheet(
                                 Text(
                                     text = when (selectedMethod) {
                                         PosPaymentMethod.ABA_KHQR -> "ABA KHQR"
+                                        PosPaymentMethod.CARD -> "Credit/Debit Card"
+                                        PosPaymentMethod.ALIPAY -> "Alipay"
+                                        PosPaymentMethod.WECHAT -> "WeChat Pay"
                                         PosPaymentMethod.CASH -> "Cash Payment"
                                         PosPaymentMethod.COD -> "Cash on Delivery"
                                         else -> "Payment"
@@ -230,21 +262,15 @@ fun PosCheckoutBottomSheet(
                     color = NawanoPrimary200.copy(alpha = 0.12f),
                     border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.35f))
                 ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        horizontalAlignment = Alignment.End
+                    Box(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "$${String.format(Locale.US, "%.2f", totalAmountUsd)}",
+                            text = CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = NawanoPrimary200
-                        )
-                        Text(
-                            text = "≈ $khrFormatted ៛",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -256,20 +282,10 @@ fun PosCheckoutBottomSheet(
                 color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
             )
 
-            // Animated Screen Transition between Steps
-            AnimatedContent(
+            // Stable screen transition between Steps without displacement gestures
+            Crossfade(
                 targetState = currentStep,
-                transitionSpec = {
-                    if (targetState.ordinal > initialState.ordinal) {
-                        (slideInHorizontally(tween(220)) { width -> width } + fadeIn(tween(180))).togetherWith(
-                            slideOutHorizontally(tween(200)) { width -> -width } + fadeOut(tween(160))
-                        )
-                    } else {
-                        (slideInHorizontally(tween(220)) { width -> -width } + fadeIn(tween(180))).togetherWith(
-                            slideOutHorizontally(tween(200)) { width -> width } + fadeOut(tween(160))
-                        )
-                    }
-                },
+                animationSpec = tween(150),
                 label = "CheckoutStepTransition",
                 modifier = Modifier
                     .fillMaxWidth()
@@ -283,7 +299,8 @@ fun PosCheckoutBottomSheet(
                         ItemSummaryView(
                             cartItems = cartItems,
                             totalAmountUsd = totalAmountUsd,
-                            khrFormatted = khrFormatted,
+                            currency = currency,
+                            exchangeRate = exchangeRate,
                             onUpdateQuantity = onUpdateQuantity,
                             onProceedToPayment = {
                                 currentStep = PosCheckoutStep.PAYMENT_SELECTION
@@ -297,7 +314,8 @@ fun PosCheckoutBottomSheet(
                     PosCheckoutStep.PAYMENT_SELECTION -> {
                         PaymentSelectionView(
                             totalAmountUsd = totalAmountUsd,
-                            khrFormatted = khrFormatted,
+                            currency = currency,
+                            exchangeRate = exchangeRate,
                             itemCount = itemCount,
                             onSelectMethod = { method ->
                                 selectedMethod = method
@@ -314,7 +332,12 @@ fun PosCheckoutBottomSheet(
                             PosPaymentMethod.ABA_KHQR -> {
                                 AbaKhqrPaymentView(
                                     totalAmountUsd = totalAmountUsd,
-                                    khrFormatted = khrFormatted,
+                                    currency = currency,
+                                    exchangeRate = exchangeRate,
+                                    merchantId = paywayMerchantId,
+                                    apiKey = paywayApiKey,
+                                    isSandbox = paywayIsSandbox,
+                                    itemsSummary = itemsSummary,
                                     isProcessing = isProcessing,
                                     onConfirmPaid = {
                                         if (!isProcessing) {
@@ -330,12 +353,74 @@ fun PosCheckoutBottomSheet(
                                     }
                                 )
                             }
+                            PosPaymentMethod.CARD -> {
+                                CreditDebitCardPaymentView(
+                                    totalAmountUsd = totalAmountUsd,
+                                    currency = currency,
+                                    exchangeRate = exchangeRate,
+                                    isProcessing = isProcessing,
+                                    onConfirmPaid = {
+                                        if (!isProcessing) {
+                                            isProcessing = true
+                                            onConfirmSale(
+                                                PosPaymentMethod.CARD,
+                                                "Walk-in Customer",
+                                                "",
+                                                null,
+                                                note
+                                            )
+                                        }
+                                    }
+                                )
+                            }
+                            PosPaymentMethod.ALIPAY -> {
+                                AlipayPaymentView(
+                                    totalAmountUsd = totalAmountUsd,
+                                    currency = currency,
+                                    exchangeRate = exchangeRate,
+                                    isProcessing = isProcessing,
+                                    onConfirmPaid = {
+                                        if (!isProcessing) {
+                                            isProcessing = true
+                                            onConfirmSale(
+                                                PosPaymentMethod.ALIPAY,
+                                                "Walk-in Customer",
+                                                "",
+                                                null,
+                                                note
+                                            )
+                                        }
+                                    }
+                                )
+                            }
+                            PosPaymentMethod.WECHAT -> {
+                                WeChatPaymentView(
+                                    totalAmountUsd = totalAmountUsd,
+                                    currency = currency,
+                                    exchangeRate = exchangeRate,
+                                    isProcessing = isProcessing,
+                                    onConfirmPaid = {
+                                        if (!isProcessing) {
+                                            isProcessing = true
+                                            onConfirmSale(
+                                                PosPaymentMethod.WECHAT,
+                                                "Walk-in Customer",
+                                                "",
+                                                null,
+                                                note
+                                            )
+                                        }
+                                    }
+                                )
+                            }
                             PosPaymentMethod.CASH -> {
                                 CashPaymentView(
                                     totalAmountUsd = totalAmountUsd,
                                     cashTenderedText = cashTenderedText,
                                     onTenderChange = { cashTenderedText = it },
                                     isProcessing = isProcessing,
+                                    currency = currency,
+                                    exchangeRate = exchangeRate,
                                     onConfirmPaid = {
                                         if (!isProcessing) {
                                             isProcessing = true
@@ -353,6 +438,8 @@ fun PosCheckoutBottomSheet(
                             PosPaymentMethod.COD -> {
                                 CodPaymentView(
                                     totalAmountUsd = totalAmountUsd,
+                                    currency = currency,
+                                    exchangeRate = exchangeRate,
                                     customerName = customerName,
                                     customerPhone = customerPhone,
                                     dueDaysOption = dueDaysOption,
@@ -402,7 +489,8 @@ fun PosCheckoutBottomSheet(
 private fun ItemSummaryView(
     cartItems: List<Pair<ProductEntity, Int>>,
     totalAmountUsd: Double,
-    khrFormatted: String,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
     onUpdateQuantity: (ProductEntity, Int) -> Unit,
     onProceedToPayment: () -> Unit
 ) {
@@ -455,7 +543,6 @@ private fun ItemSummaryView(
 
                 cartItems.forEach { (product, qty) ->
                     val lineTotalUsd = product.sellingPrice * qty
-                    val lineTotalKhr = (lineTotalUsd * 4050.0).toLong()
 
                     Surface(
                         shape = RoundedCornerShape(14.dp),
@@ -501,7 +588,7 @@ private fun ItemSummaryView(
                                 )
                                 Spacer(Modifier.height(2.dp))
                                 Text(
-                                    text = "$${String.format(Locale.US, "%.2f", product.sellingPrice)} / ${product.unit.ifBlank { "unit" }}",
+                                    text = "${CurrencyFormatter.format(product.sellingPrice, currency, exchangeRate)} / ${product.unit.ifBlank { "unit" }}",
                                     fontSize = 11.5.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -561,15 +648,10 @@ private fun ItemSummaryView(
                             // Line Total
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
-                                    text = "$${String.format(Locale.US, "%.2f", lineTotalUsd)}",
-                                    fontSize = 14.sp,
+                                    text = CurrencyFormatter.format(lineTotalUsd, currency, exchangeRate),
+                                    fontSize = 14.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = NawanoPrimary200
-                                )
-                                Text(
-                                    text = "≈ ${NumberFormat.getNumberInstance(Locale.US).format(lineTotalKhr)} ៛",
-                                    fontSize = 10.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -587,21 +669,29 @@ private fun ItemSummaryView(
                 ) {
                     Column(
                         modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Subtotal", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("$${String.format(Locale.US, "%.2f", totalAmountUsd)}", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Subtotal", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                text = CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Official Exchange Rate", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("1 USD = 4,050 KHR", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Items Count", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                text = "${cartItems.size} products ($totalPieces pcs)",
+                                fontSize = 12.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                         HorizontalDivider(
                             modifier = Modifier.padding(vertical = 4.dp),
@@ -613,21 +703,13 @@ private fun ItemSummaryView(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Total Payable", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = "$${String.format(Locale.US, "%.2f", totalAmountUsd)}",
-                                    fontSize = 16.5.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = NawanoPrimary200
-                                )
-                                Text(
-                                    text = "≈ $khrFormatted ៛",
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            Text("Total Payable", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Black,
+                                color = NawanoPrimary200
+                            )
                         }
                     }
                 }
@@ -665,7 +747,7 @@ private fun ItemSummaryView(
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                text = "$${String.format(Locale.US, "%.2f", totalAmountUsd)}",
+                                text = CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White
@@ -695,7 +777,8 @@ private fun ItemSummaryView(
 @Composable
 private fun PaymentSelectionView(
     totalAmountUsd: Double,
-    khrFormatted: String,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
     itemCount: Int,
     onSelectMethod: (PosPaymentMethod) -> Unit
 ) {
@@ -721,7 +804,31 @@ private fun PaymentSelectionView(
             onClick = { onSelectMethod(PosPaymentMethod.ABA_KHQR) }
         )
 
-        // 2. Cash
+        // 2. Credit/Debit Card (Visa, Mastercard, UnionPay, JCB)
+        PaymentMethodCard(
+            title = "Credit/Debit Card",
+            subtitleContent = { CardBrandsRow() },
+            logoContent = { CreditCardLogoBadge() },
+            onClick = { onSelectMethod(PosPaymentMethod.CARD) }
+        )
+
+        // 3. Alipay
+        PaymentMethodCard(
+            title = "Alipay",
+            subtitle = "Scan to pay with Alipay",
+            logoContent = { AlipayLogoBadge() },
+            onClick = { onSelectMethod(PosPaymentMethod.ALIPAY) }
+        )
+
+        // 4. WeChat
+        PaymentMethodCard(
+            title = "WeChat",
+            subtitle = "Scan to pay with WeChat",
+            logoContent = { WeChatLogoBadge() },
+            onClick = { onSelectMethod(PosPaymentMethod.WECHAT) }
+        )
+
+        // 5. Cash
         PaymentMethodCard(
             title = "Cash",
             subtitle = "Pay directly at register with USD or KHR",
@@ -744,7 +851,7 @@ private fun PaymentSelectionView(
             onClick = { onSelectMethod(PosPaymentMethod.CASH) }
         )
 
-        // 3. Cash on Delivery (COD)
+        // 6. Cash on Delivery (COD)
         PaymentMethodCard(
             title = "Cash on Delivery (COD)",
             subtitle = "Pay upon delivery or record customer debt",
@@ -799,13 +906,25 @@ private fun PaymentSelectionView(
                     )
                 }
                 Text(
-                    text = "$${String.format(Locale.US, "%.2f", totalAmountUsd)} / $khrFormatted ៛",
-                    fontSize = 13.5.sp,
+                    text = CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate),
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = NawanoPrimary200
                 )
             }
         }
+    }
+}
+
+private fun decodeBase64ToBitmap(base64Str: String?): ImageBitmap? {
+    if (base64Str.isNullOrBlank()) return null
+    return try {
+        val clean = if (base64Str.contains(",")) base64Str.substringAfter(",") else base64Str
+        val bytes = Base64.decode(clean, Base64.DEFAULT)
+        val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        bmp?.asImageBitmap()
+    } catch (_: Exception) {
+        null
     }
 }
 
@@ -815,17 +934,125 @@ private fun PaymentSelectionView(
 @Composable
 private fun AbaKhqrPaymentView(
     totalAmountUsd: Double,
-    khrFormatted: String,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
+    merchantId: String = "ec000002",
+    apiKey: String = "",
+    isSandbox: Boolean = true,
+    itemsSummary: String = "Nawano POS Order",
     isProcessing: Boolean,
     onConfirmPaid: () -> Unit
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    var qrResult by remember { mutableStateOf<PayWayQrResult?>(null) }
+    var isLoadingQr by remember { mutableStateOf(true) }
+    var secondsRemaining by remember { mutableIntStateOf(180) } // 3 minutes
+    var isCheckingStatus by remember { mutableStateOf(false) }
+    var statusMessage by remember { mutableStateOf<String?>(null) }
+    var isPaymentApproved by remember { mutableStateOf(false) }
+
+    fun loadQr() {
+        isLoadingQr = true
+        statusMessage = null
+        secondsRemaining = 180
+        coroutineScope.launch {
+            val amount = if (currency == AppCurrency.KHR) {
+                CurrencyFormatter.toKhr(totalAmountUsd, exchangeRate).toDouble()
+            } else {
+                totalAmountUsd
+            }
+            val res = AbaPaywayService.generateKhqr(
+                merchantId = merchantId,
+                apiKey = apiKey,
+                isSandbox = isSandbox,
+                amount = amount,
+                currency = currency.name,
+                itemsSummary = itemsSummary.ifBlank { "POS Cart Order" }
+            )
+            qrResult = res
+            isLoadingQr = false
+        }
+    }
+
+    LaunchedEffect(totalAmountUsd, currency, merchantId, isSandbox) {
+        loadQr()
+    }
+
+    // Countdown Timer
+    LaunchedEffect(isLoadingQr, secondsRemaining) {
+        if (!isLoadingQr && secondsRemaining > 0 && !isPaymentApproved) {
+            delay(1000)
+            secondsRemaining -= 1
+        }
+    }
+
+    // Automated Polling every 4 seconds if API key is present
+    LaunchedEffect(qrResult?.tranId, apiKey, isPaymentApproved) {
+        val tranId = qrResult?.tranId
+        if (apiKey.isNotBlank() && tranId != null && !isPaymentApproved) {
+            while (secondsRemaining > 0 && !isPaymentApproved) {
+                delay(4000)
+                val check = AbaPaywayService.checkTransaction(merchantId, apiKey, isSandbox, tranId)
+                if (check.isApproved) {
+                    isPaymentApproved = true
+                    statusMessage = "Payment Approved! Completing sale..."
+                    delay(1200)
+                    onConfirmPaid()
+                    break
+                }
+            }
+        }
+    }
+
+    val qrBitmap = remember(qrResult?.qrImageBase64) {
+        decodeBase64ToBitmap(qrResult?.qrImageBase64)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = 20.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // Mode indicator pill
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(bottom = 8.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (isSandbox) NawanoPrimary200.copy(alpha = 0.15f) else Color(0xFF10B981).copy(alpha = 0.15f)
+            ) {
+                Text(
+                    text = if (isSandbox) "ABA PAYWAY SANDBOX" else "ABA PAYWAY LIVE",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (isSandbox) NawanoPrimary200 else Color(0xFF10B981),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                )
+            }
+            if (qrResult?.isLiveApi == true) {
+                Spacer(Modifier.width(6.dp))
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF10B981).copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = "● CONNECTED",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF10B981),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                    )
+                }
+            }
+        }
+
+        // KHQR Authentic Card
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = Color.White,
@@ -863,87 +1090,193 @@ private fun AbaKhqrPaymentView(
                     color = Color(0xFF1E293B)
                 )
                 Text(
-                    text = "$${String.format(Locale.US, "%.2f", totalAmountUsd)} / $khrFormatted ៛",
-                    fontSize = 14.sp,
+                    text = CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate),
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Black,
                     color = Color(0xFF0F172A)
                 )
+                val equiv = CurrencyFormatter.formatEquivalentOnly(totalAmountUsd, currency, exchangeRate)
+                if (equiv.isNotBlank()) {
+                    Text(
+                        text = "≈ $equiv",
+                        fontSize = 11.sp,
+                        color = Color(0xFF64748B),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
 
                 Spacer(Modifier.height(8.dp))
 
-                // Dynamic QR Graphic Box
+                // QR Graphic Display
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = Color(0xFF0F172A),
                     modifier = Modifier.size(150.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.QrCode2,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(130.dp)
-                        )
-                        // Center ABA Bank emblem
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0xFF005B82),
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("ABA", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        if (isLoadingQr) {
+                            CircularProgressIndicator(color = NawanoPrimary200, strokeWidth = 3.dp, modifier = Modifier.size(36.dp))
+                        } else if (qrBitmap != null) {
+                            Image(
+                                bitmap = qrBitmap,
+                                contentDescription = "ABA KHQR Code",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(6.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                        } else {
+                            // Standard high-contrast vector KHQR representation
+                            Icon(
+                                imageVector = Icons.Default.QrCode2,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(130.dp)
+                            )
+                            // Center ABA Bank emblem
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFF005B82),
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("ABA", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                }
                             }
                         }
                     }
                 }
 
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "Scan with any Bank or Wallet",
-                    fontSize = 10.sp,
-                    color = Color(0xFF64748B),
-                    fontWeight = FontWeight.Medium
-                )
+                Spacer(Modifier.height(6.dp))
+                qrResult?.tranId?.let { id ->
+                    Text(
+                        text = "Ref: #$id",
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = Color(0xFF94A3B8)
+                    )
+                }
                 Spacer(Modifier.height(4.dp))
+                val minutes = secondsRemaining / 60
+                val seconds = secondsRemaining % 60
+                val timeStr = String.format(Locale.US, "%02d:%02d", minutes, seconds)
                 Text(
-                    text = "Expires in 02:59",
-                    fontSize = 9.sp,
+                    text = if (secondsRemaining > 0) "Expires in $timeStr" else "Expired",
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFFE11D48),
+                    color = if (secondsRemaining > 30) Color(0xFFE11D48) else Color(0xFFDC2626),
                     modifier = Modifier.padding(bottom = 10.dp)
                 )
             }
         }
 
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = "Supports ABA, ACLEDA, Wing, Sathapana & all Bakong apps",
-            fontSize = 11.5.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(10.dp))
 
-        Button(
-            onClick = onConfirmPaid,
-            enabled = !isProcessing,
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
+        // Open in ABA Mobile Button (App-to-App Deeplink)
+        qrResult?.deeplink?.let { dl ->
+            OutlinedButton(
+                onClick = {
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(dl))
+                        context.startActivity(intent)
+                    } catch (_: Exception) {
+                        try {
+                            val storeIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=com.ABA.Mobile"))
+                            context.startActivity(storeIntent)
+                        } catch (_: Exception) {}
+                    }
+                },
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, Color(0xFF005E7B).copy(alpha = 0.5f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF005E7B)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(42.dp)
+            ) {
+                Icon(Icons.Default.PhoneAndroid, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Open in ABA Mobile App", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
+        // Status Feedback (if checking)
+        if (statusMessage != null) {
+            Text(
+                text = statusMessage ?: "",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = if (isPaymentApproved) Color(0xFF10B981) else NawanoPrimary200,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(6.dp))
+        }
+
+        // Action Buttons Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            if (isProcessing) {
-                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = "Confirm KHQR Paid ($${String.format(Locale.US, "%.2f", totalAmountUsd)})",
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+            // Check status on demand
+            OutlinedButton(
+                onClick = {
+                    val tranId = qrResult?.tranId
+                    if (tranId != null && apiKey.isNotBlank()) {
+                        isCheckingStatus = true
+                        statusMessage = "Checking with ABA PayWay..."
+                        coroutineScope.launch {
+                            val check = AbaPaywayService.checkTransaction(merchantId, apiKey, isSandbox, tranId)
+                            isCheckingStatus = false
+                            if (check.isApproved) {
+                                isPaymentApproved = true
+                                statusMessage = "Payment Approved! Completing sale..."
+                                delay(1000)
+                                onConfirmPaid()
+                            } else {
+                                statusMessage = "Status: ${check.statusMessage}"
+                            }
+                        }
+                    } else if (secondsRemaining <= 0) {
+                        loadQr()
+                    } else {
+                        statusMessage = "Simulated QR active (tap Confirm to finalize)"
+                    }
+                },
+                enabled = !isCheckingStatus && !isProcessing,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .weight(0.38f)
+                    .height(48.dp)
+            ) {
+                if (isCheckingStatus) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Text(if (secondsRemaining <= 0) "Refresh" else "Check", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            // Confirm Paid
+            Button(
+                onClick = onConfirmPaid,
+                enabled = !isProcessing,
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200),
+                modifier = Modifier
+                    .weight(0.62f)
+                    .height(48.dp)
+            ) {
+                if (isProcessing) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Confirm Paid",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
@@ -959,11 +1292,14 @@ private fun CashPaymentView(
     cashTenderedText: String,
     onTenderChange: (String) -> Unit,
     isProcessing: Boolean,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
     onConfirmPaid: () -> Unit
 ) {
-    val tendered = cashTenderedText.toDoubleOrNull() ?: totalAmountUsd
-    val changeUsd = (tendered - totalAmountUsd).coerceAtLeast(0.0)
-    val changeKhr = (changeUsd * 4050.0).toLong()
+    val totalAmountInCurrency = if (currency == AppCurrency.USD) totalAmountUsd else CurrencyFormatter.toKhr(totalAmountUsd, exchangeRate).toDouble()
+    val tendered = cashTenderedText.toDoubleOrNull() ?: totalAmountInCurrency
+    val change = (tendered - totalAmountInCurrency).coerceAtLeast(0.0)
+    val changeUsd = if (currency == AppCurrency.USD) change else (change / exchangeRate)
 
     Column(
         modifier = Modifier
@@ -974,26 +1310,43 @@ private fun CashPaymentView(
     ) {
         Text("Fast Cash Tender:", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            listOf(totalAmountUsd, 5.0, 10.0, 20.0, 50.0).distinct().forEach { amt ->
-                val isChosen = cashTenderedText == String.format(Locale.US, "%.2f", amt)
+            val quickAmounts = if (currency == AppCurrency.USD) {
+                listOf(totalAmountUsd, 5.0, 10.0, 20.0, 50.0).distinct()
+            } else {
+                val totalKhr = CurrencyFormatter.toKhr(totalAmountUsd, exchangeRate).toDouble()
+                listOf(totalKhr, 10000.0, 20000.0, 50000.0, 100000.0).distinct()
+            }
+            quickAmounts.forEach { amt ->
+                val amtFormatted = if (currency == AppCurrency.USD) {
+                    String.format(Locale.US, "%.2f", amt)
+                } else {
+                    "${amt.toLong()}"
+                }
+                val isChosen = cashTenderedText == amtFormatted
+                val displayLabel = if (currency == AppCurrency.USD) {
+                    "$${String.format(Locale.US, if (amt % 1.0 == 0.0) "%.0f" else "%.2f", amt)}"
+                } else {
+                    "${NumberFormat.getNumberInstance(Locale.US).format(amt.toLong())} ៛"
+                }
                 Surface(
                     onClick = {
-                        onTenderChange(String.format(Locale.US, "%.2f", amt))
+                        onTenderChange(amtFormatted)
                     },
                     shape = RoundedCornerShape(10.dp),
-                    color = if (isChosen) Color(0xFF10B981) else MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.weight(1f)
+                    color = if (isChosen) Color(0xFF10B981) else MaterialTheme.colorScheme.surfaceVariant
                 ) {
                     Text(
-                        text = "$${String.format(Locale.US, if (amt % 1.0 == 0.0) "%.0f" else "%.2f", amt)}",
+                        text = displayLabel,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (isChosen) Color.White else MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(vertical = 8.dp)
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                     )
                 }
             }
@@ -1002,8 +1355,8 @@ private fun CashPaymentView(
         OutlinedTextField(
             value = cashTenderedText,
             onValueChange = { onTenderChange(it.filter { c -> c.isDigit() || c == '.' }) },
-            label = { Text("Cash Received ($)") },
-            prefix = { Text("$ ") },
+            label = { Text("Cash Received (${currency.symbol})") },
+            prefix = { Text("${currency.symbol} ") },
             singleLine = true,
             shape = RoundedCornerShape(14.dp),
             modifier = Modifier.fillMaxWidth()
@@ -1021,16 +1374,9 @@ private fun CashPaymentView(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text("Change Due:", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFF059669))
-                    Text(
-                        text = "≈ ${NumberFormat.getNumberInstance(Locale.US).format(changeKhr)} ៛",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                Text("Change Due:", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF059669))
                 Text(
-                    text = "$${String.format(Locale.US, "%.2f", changeUsd)}",
+                    text = CurrencyFormatter.format(changeUsd, currency, exchangeRate),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Black,
                     color = Color(0xFF059669)
@@ -1056,7 +1402,7 @@ private fun CashPaymentView(
                     Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "Complete Cash Sale ($${String.format(Locale.US, "%.2f", totalAmountUsd)})",
+                        text = "Complete Cash Sale (${CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate)})",
                         fontSize = 14.5.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -1081,6 +1427,8 @@ private fun CodPaymentView(
     onDaysChange: (Int) -> Unit,
     onNoteChange: (String) -> Unit,
     isProcessing: Boolean,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
     onConfirmPaid: () -> Unit
 ) {
     Column(
@@ -1177,7 +1525,7 @@ private fun CodPaymentView(
                     Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "Confirm COD Tab ($${String.format(Locale.US, "%.2f", totalAmountUsd)})",
+                        text = "Confirm COD Tab (${CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate)})",
                         fontSize = 14.5.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -1191,13 +1539,14 @@ private fun CodPaymentView(
  * Reusable Payment Method Card strictly following Figma Mockup:
  * - Circular logo badge (46.dp)
  * - Bold title (15.5.sp)
- * - Subtitle (#697386)
+ * - Subtitle (#697386) or custom Subtitle Content (Card brand badges)
  * - Trailing rounded chevron pill (>)
  */
 @Composable
 private fun PaymentMethodCard(
     title: String,
-    subtitle: String,
+    subtitle: String? = null,
+    subtitleContent: (@Composable () -> Unit)? = null,
     logoContent: @Composable () -> Unit,
     onClick: () -> Unit
 ) {
@@ -1219,7 +1568,7 @@ private fun PaymentMethodCard(
 
             Spacer(Modifier.width(16.dp))
 
-            // Title + Subtitle
+            // Title + Subtitle or SubtitleContent
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
@@ -1227,13 +1576,17 @@ private fun PaymentMethodCard(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = subtitle,
-                    fontSize = 12.5.sp,
-                    color = Color(0xFF697386), // Exact grey from Figma Merchant Guideline Node 1:1672
-                    lineHeight = 16.sp
-                )
+                Spacer(Modifier.height(4.dp))
+                if (subtitleContent != null) {
+                    subtitleContent()
+                } else if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        text = subtitle,
+                        fontSize = 12.sp,
+                        color = Color(0xFF697386), // Exact grey from Figma Merchant Guideline Node 1:1672
+                        lineHeight = 16.sp
+                    )
+                }
             }
 
             Spacer(Modifier.width(10.dp))
@@ -1250,6 +1603,990 @@ private fun PaymentMethodCard(
                         contentDescription = null,
                         tint = Color(0xFF697386),
                         modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Authentic Card Brand Badges strictly adhering to Figma Merchant Integration Guideline:
+ * - Visa (Blue background, italicized bold white VISA)
+ * - Mastercard (Dark background with interlocking red and orange circles)
+ * - UnionPay (Red/Blue gradient block with white UnionPay text)
+ * - JCB (White badge with blue, red, green stripes and JCB text)
+ */
+@Composable
+private fun VisaBadge(modifier: Modifier = Modifier) {
+    Surface(
+        shape = RoundedCornerShape(3.dp),
+        color = Color(0xFF1A1F71),
+        modifier = modifier.height(18.dp)
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 6.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "VISA",
+                fontSize = 9.sp,
+                fontWeight = FontWeight.ExtraBold,
+                fontStyle = FontStyle.Italic,
+                color = Color.White,
+                letterSpacing = (-0.4).sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun MastercardBadge(modifier: Modifier = Modifier) {
+    Surface(
+        shape = RoundedCornerShape(3.dp),
+        color = Color(0xFF222222),
+        modifier = modifier
+            .width(28.dp)
+            .height(18.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Canvas(modifier = Modifier.size(20.dp, 12.dp)) {
+                val circleRadius = 5.5.dp.toPx()
+                val centerY = size.height / 2
+                drawCircle(
+                    color = Color(0xFFEB001B),
+                    radius = circleRadius,
+                    center = Offset(size.width * 0.38f, centerY)
+                )
+                drawCircle(
+                    color = Color(0xFFF79E1B),
+                    radius = circleRadius,
+                    center = Offset(size.width * 0.62f, centerY)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UnionPayBadge(modifier: Modifier = Modifier) {
+    Surface(
+        shape = RoundedCornerShape(3.dp),
+        color = Color.White,
+        border = BorderStroke(0.5.dp, Color(0xFFE2E8F0)),
+        modifier = modifier
+            .width(32.dp)
+            .height(18.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(Color(0xFFE60012), Color(0xFF004B87), Color(0xFF007A3D))
+                    )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "UnionPay",
+                fontSize = 6.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        }
+    }
+}
+
+@Composable
+private fun JcbBadge(modifier: Modifier = Modifier) {
+    Surface(
+        shape = RoundedCornerShape(3.dp),
+        color = Color.White,
+        border = BorderStroke(0.5.dp, Color(0xFFE2E8F0)),
+        modifier = modifier
+            .width(26.dp)
+            .height(18.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(1.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color(0xFF003B91))
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color(0xFFD81E06))
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color(0xFF007A3D))
+                )
+            }
+            Text(
+                text = "JCB",
+                fontSize = 7.sp,
+                fontWeight = FontWeight.Black,
+                color = Color.White
+            )
+        }
+    }
+}
+
+@Composable
+private fun CardBrandsRow(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        VisaBadge()
+        MastercardBadge()
+        UnionPayBadge()
+        JcbBadge()
+    }
+}
+
+@Composable
+private fun CreditCardLogoBadge() {
+    Box(
+        modifier = Modifier
+            .size(46.dp)
+            .clip(CircleShape)
+            .background(Color(0xFF0E5268)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.CreditCard,
+            contentDescription = "Credit/Debit Card",
+            tint = Color.White,
+            modifier = Modifier.size(24.dp)
+        )
+    }
+}
+
+@Composable
+private fun AlipayLogoBadge() {
+    Box(
+        modifier = Modifier
+            .size(46.dp)
+            .clip(CircleShape)
+            .background(Color(0xFF1677FF)),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "支",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Black,
+            color = Color.White
+        )
+    }
+}
+
+@Composable
+private fun WeChatLogoBadge() {
+    Box(
+        modifier = Modifier
+            .size(46.dp)
+            .clip(CircleShape)
+            .background(Color(0xFF07C160)),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.size(26.dp)) {
+            // Main larger speech bubble (top-left)
+            drawCircle(
+                color = Color.White,
+                radius = 7.5.dp.toPx(),
+                center = Offset(10.dp.toPx(), 11.dp.toPx())
+            )
+            // Eyes on large bubble
+            drawCircle(
+                color = Color(0xFF07C160),
+                radius = 1.2.dp.toPx(),
+                center = Offset(8.dp.toPx(), 10.dp.toPx())
+            )
+            drawCircle(
+                color = Color(0xFF07C160),
+                radius = 1.2.dp.toPx(),
+                center = Offset(12.dp.toPx(), 10.dp.toPx())
+            )
+
+            // Smaller speech bubble (bottom-right)
+            drawCircle(
+                color = Color.White,
+                radius = 6.dp.toPx(),
+                center = Offset(17.dp.toPx(), 16.dp.toPx())
+            )
+            // Eyes on small bubble
+            drawCircle(
+                color = Color(0xFF07C160),
+                radius = 1.0.dp.toPx(),
+                center = Offset(15.5.dp.toPx(), 15.5.dp.toPx())
+            )
+            drawCircle(
+                color = Color(0xFF07C160),
+                radius = 1.0.dp.toPx(),
+                center = Offset(18.5.dp.toPx(), 15.5.dp.toPx())
+            )
+        }
+    }
+}
+
+/**
+ * Step 3C: Credit / Debit Card Payment Processing View
+ */
+@Composable
+private fun CreditDebitCardPaymentView(
+    totalAmountUsd: Double,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
+    isProcessing: Boolean,
+    onConfirmPaid: () -> Unit
+) {
+    var rawCardNumber by remember { mutableStateOf("") }
+    var expiryDate by remember { mutableStateOf("") }
+    var cvv by remember { mutableStateOf("") }
+    var cardholderName by remember { mutableStateOf("") }
+    var isNfcSimulating by remember { mutableStateOf(false) }
+
+    val coroutineScope = rememberCoroutineScope()
+
+    val detectedBrand = remember(rawCardNumber) {
+        when {
+            rawCardNumber.startsWith("4") -> "VISA"
+            rawCardNumber.startsWith("5") -> "MASTERCARD"
+            rawCardNumber.startsWith("62") -> "UNIONPAY"
+            rawCardNumber.startsWith("35") -> "JCB"
+            else -> null
+        }
+    }
+
+    val formattedCardNumber = remember(rawCardNumber) {
+        rawCardNumber.chunked(4).joinToString(" ")
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // Luxury Visual Card Preview
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            shadowElevation = 6.dp,
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(185.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.linearGradient(
+                            listOf(Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF334155))
+                        )
+                    )
+                    .padding(18.dp)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // Top: EMV Chip + NFC Waves + Brand Badge
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(5.dp),
+                                color = Color(0xFFD4AF37),
+                                border = BorderStroke(1.dp, Color(0xFFF3E5AB)),
+                                modifier = Modifier.size(width = 34.dp, height = 26.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier.padding(2.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Canvas(modifier = Modifier.fillMaxSize()) {
+                                        drawLine(
+                                            color = Color(0xFF996515),
+                                            start = Offset(0f, size.height / 2),
+                                            end = Offset(size.width, size.height / 2),
+                                            strokeWidth = 1.dp.toPx()
+                                        )
+                                        drawLine(
+                                            color = Color(0xFF996515),
+                                            start = Offset(size.width / 2, 0f),
+                                            end = Offset(size.width / 2, size.height),
+                                            strokeWidth = 1.dp.toPx()
+                                        )
+                                    }
+                                }
+                            }
+
+                            Icon(
+                                imageVector = Icons.Default.Nfc,
+                                contentDescription = "Contactless",
+                                tint = Color.White.copy(alpha = 0.85f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        when (detectedBrand) {
+                            "VISA" -> VisaBadge()
+                            "MASTERCARD" -> MastercardBadge()
+                            "UNIONPAY" -> UnionPayBadge()
+                            "JCB" -> JcbBadge()
+                            else -> CardBrandsRow()
+                        }
+                    }
+
+                    // Middle: Card Number
+                    Text(
+                        text = if (formattedCardNumber.isNotBlank()) formattedCardNumber else "••••  ••••  ••••  ••••",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        color = Color.White,
+                        letterSpacing = 2.sp
+                    )
+
+                    // Bottom: Cardholder & Expiry
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        Column {
+                            Text(
+                                text = "CARDHOLDER",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White.copy(alpha = 0.6f),
+                                letterSpacing = 1.sp
+                            )
+                            Text(
+                                text = cardholderName.ifBlank { "VALUED CUSTOMER" }.uppercase(Locale.US),
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "EXPIRES",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White.copy(alpha = 0.6f),
+                                letterSpacing = 1.sp
+                            )
+                            Text(
+                                text = if (expiryDate.isNotBlank()) expiryDate else "MM/YY",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fast Terminal Tap Simulator Banner
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Sensors,
+                        contentDescription = null,
+                        tint = NawanoPrimary200,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Column {
+                        Text(
+                            text = "POS Card Terminal / Contactless",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Tap or insert customer card",
+                            fontSize = 10.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        isNfcSimulating = true
+                        rawCardNumber = "4532891234567890"
+                        expiryDate = "12/28"
+                        cvv = "888"
+                        cardholderName = "Walk-in Customer"
+                        coroutineScope.launch {
+                            delay(600)
+                            isNfcSimulating = false
+                            onConfirmPaid()
+                        }
+                    },
+                    enabled = !isProcessing && !isNfcSimulating,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    if (isNfcSimulating) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Simulate Tap", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // Manual Card Inputs
+        OutlinedTextField(
+            value = formattedCardNumber,
+            onValueChange = { input ->
+                val digitsOnly = input.filter { it.isDigit() }.take(16)
+                rawCardNumber = digitsOnly
+            },
+            label = { Text("Card Number") },
+            placeholder = { Text("4532 0000 0000 0000") },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.CreditCard,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            trailingIcon = {
+                when (detectedBrand) {
+                    "VISA" -> VisaBadge(modifier = Modifier.padding(end = 6.dp))
+                    "MASTERCARD" -> MastercardBadge(modifier = Modifier.padding(end = 6.dp))
+                    "UNIONPAY" -> UnionPayBadge(modifier = Modifier.padding(end = 6.dp))
+                    "JCB" -> JcbBadge(modifier = Modifier.padding(end = 6.dp))
+                    else -> null
+                }
+            },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true,
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            OutlinedTextField(
+                value = expiryDate,
+                onValueChange = { input ->
+                    val digits = input.filter { it.isDigit() }.take(4)
+                    expiryDate = if (digits.length >= 3) {
+                        "${digits.substring(0, 2)}/${digits.substring(2)}"
+                    } else {
+                        digits
+                    }
+                },
+                label = { Text("Expiry (MM/YY)") },
+                placeholder = { Text("12/28") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.weight(1f)
+            )
+
+            OutlinedTextField(
+                value = cvv,
+                onValueChange = { input ->
+                    cvv = input.filter { it.isDigit() }.take(4)
+                },
+                label = { Text("CVV / CVC") },
+                placeholder = { Text("888") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        OutlinedTextField(
+            value = cardholderName,
+            onValueChange = { cardholderName = it },
+            label = { Text("Cardholder Name (Optional)") },
+            placeholder = { Text("John Doe") },
+            singleLine = true,
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        // Authorize & Pay CTA
+        Button(
+            onClick = onConfirmPaid,
+            enabled = !isProcessing && (rawCardNumber.length >= 12 || isNfcSimulating),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+        ) {
+            if (isProcessing) {
+                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Charge ${CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate)} to Card",
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Step 3D: Alipay Cross-Border Payment Processing View
+ */
+@Composable
+private fun AlipayPaymentView(
+    totalAmountUsd: Double,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
+    isProcessing: Boolean,
+    onConfirmPaid: () -> Unit
+) {
+    var secondsRemaining by remember { mutableIntStateOf(180) }
+    val cnyAmount = remember(totalAmountUsd) { totalAmountUsd * 7.24 }
+
+    LaunchedEffect(secondsRemaining) {
+        if (secondsRemaining > 0) {
+            delay(1000)
+            secondsRemaining -= 1
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = Color.White,
+            shadowElevation = 4.dp,
+            modifier = Modifier.width(260.dp)
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Surface(
+                    color = Color(0xFF1677FF),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "支 Alipay",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = "NAWANO POS",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
+                )
+                Text(
+                    text = CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color(0xFF0F172A)
+                )
+                Text(
+                    text = "≈ ¥${String.format(Locale.US, "%.2f", cnyAmount)} CNY",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1677FF)
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF0A192F),
+                    modifier = Modifier.size(150.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.QrCode2,
+                            contentDescription = "Alipay QR Code",
+                            tint = Color.White,
+                            modifier = Modifier.size(130.dp)
+                        )
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFF1677FF),
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("支", fontSize = 14.sp, fontWeight = FontWeight.Black, color = Color.White)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Alipay+ Global QR",
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = Color(0xFF94A3B8)
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFFF1F5F9),
+                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Timer,
+                            contentDescription = null,
+                            tint = if (secondsRemaining < 30) Color(0xFFE11D48) else Color(0xFF64748B),
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "${secondsRemaining / 60}:${(secondsRemaining % 60).toString().padStart(2, '0')}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (secondsRemaining < 30) Color(0xFFE11D48) else Color(0xFF1E293B)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AlipayLogoBadge()
+                Column {
+                    Text(
+                        text = "Scan with Alipay or Partner Wallets",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Supports Alipay (CN), AlipayHK, KakaoPay, GCash & Touch 'n Go",
+                        fontSize = 10.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        Button(
+            onClick = onConfirmPaid,
+            enabled = !isProcessing,
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1677FF)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+        ) {
+            if (isProcessing) {
+                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Confirm Alipay Paid (${CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate)})",
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Step 3E: WeChat Pay Payment Processing View
+ */
+@Composable
+private fun WeChatPaymentView(
+    totalAmountUsd: Double,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
+    isProcessing: Boolean,
+    onConfirmPaid: () -> Unit
+) {
+    var secondsRemaining by remember { mutableIntStateOf(180) }
+    val cnyAmount = remember(totalAmountUsd) { totalAmountUsd * 7.24 }
+
+    LaunchedEffect(secondsRemaining) {
+        if (secondsRemaining > 0) {
+            delay(1000)
+            secondsRemaining -= 1
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = Color.White,
+            shadowElevation = 4.dp,
+            modifier = Modifier.width(260.dp)
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Surface(
+                    color = Color(0xFF07C160),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "WeChat Pay (微信支付)",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = "NAWANO POS",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
+                )
+                Text(
+                    text = CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color(0xFF0F172A)
+                )
+                Text(
+                    text = "≈ ¥${String.format(Locale.US, "%.2f", cnyAmount)} CNY",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF07C160)
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF062C18),
+                    modifier = Modifier.size(150.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.QrCode2,
+                            contentDescription = "WeChat Pay QR Code",
+                            tint = Color.White,
+                            modifier = Modifier.size(130.dp)
+                        )
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFF07C160),
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Canvas(modifier = Modifier.size(18.dp)) {
+                                    drawCircle(
+                                        color = Color.White,
+                                        radius = 5.dp.toPx(),
+                                        center = Offset(7.dp.toPx(), 8.dp.toPx())
+                                    )
+                                    drawCircle(
+                                        color = Color.White,
+                                        radius = 4.dp.toPx(),
+                                        center = Offset(12.dp.toPx(), 11.dp.toPx())
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "WeChat Official QR Pay",
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = Color(0xFF94A3B8)
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFFF1F5F9),
+                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Timer,
+                            contentDescription = null,
+                            tint = if (secondsRemaining < 30) Color(0xFFE11D48) else Color(0xFF64748B),
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "${secondsRemaining / 60}:${(secondsRemaining % 60).toString().padStart(2, '0')}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (secondsRemaining < 30) Color(0xFFE11D48) else Color(0xFF1E293B)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                WeChatLogoBadge()
+                Column {
+                    Text(
+                        text = "Scan with WeChat App",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Open WeChat > Scan > Pay directly from WeChat wallet",
+                        fontSize = 10.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        Button(
+            onClick = onConfirmPaid,
+            enabled = !isProcessing,
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF07C160)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+        ) {
+            if (isProcessing) {
+                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Confirm WeChat Paid (${CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate)})",
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }

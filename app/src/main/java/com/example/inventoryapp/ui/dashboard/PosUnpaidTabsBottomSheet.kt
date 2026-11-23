@@ -21,6 +21,8 @@ import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.data.local.entity.PosPaymentMethod
 import com.example.inventoryapp.data.local.entity.SalesOrderEntity
 import com.example.inventoryapp.ui.theme.*
+import com.example.inventoryapp.util.AppCurrency
+import com.example.inventoryapp.util.CurrencyFormatter
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -30,12 +32,14 @@ import java.util.Locale
 @Composable
 fun PosUnpaidTabsBottomSheet(
     unpaidOrders: List<SalesOrderEntity>,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
+    currency: AppCurrency = AppCurrency.USD,
     onDismiss: () -> Unit,
     onSettleOrder: (orderId: String, method: PosPaymentMethod) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val totalDebtUsd = unpaidOrders.sumOf { it.remainingAmountUsd }
-    val totalDebtKhr = (totalDebtUsd * 4050.0).toLong()
+    val totalDebtKhr = (totalDebtUsd * exchangeRate).toLong()
     val khrFormatted = NumberFormat.getNumberInstance(Locale.US).format(totalDebtKhr)
 
     ModalBottomSheet(
@@ -146,6 +150,7 @@ fun PosUnpaidTabsBottomSheet(
                     items(unpaidOrders, key = { it.id }) { tab ->
                         UnpaidTabCard(
                             order = tab,
+                            exchangeRate = exchangeRate,
                             onSettle = { method ->
                                 onSettleOrder(tab.id, method)
                             }
@@ -160,6 +165,7 @@ fun PosUnpaidTabsBottomSheet(
 @Composable
 private fun UnpaidTabCard(
     order: SalesOrderEntity,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
     onSettle: (PosPaymentMethod) -> Unit
 ) {
     val now = System.currentTimeMillis()
@@ -169,7 +175,7 @@ private fun UnpaidTabCard(
         (diff / (86_400_000L)).toInt()
     } else null
 
-    val khrAmount = (order.remainingAmountUsd * 4050.0).toLong()
+    val khrAmount = (order.remainingAmountUsd * exchangeRate).toLong()
     val khrFormatted = NumberFormat.getNumberInstance(Locale.US).format(khrAmount)
 
     Surface(
