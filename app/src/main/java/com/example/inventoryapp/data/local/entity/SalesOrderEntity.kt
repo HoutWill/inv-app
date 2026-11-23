@@ -10,7 +10,9 @@ enum class PosPaymentMethod {
     CASH,
     CARD,
     PAY_LATER,
-    COD
+    COD,
+    ALIPAY,
+    WECHAT
 }
 
 enum class PosPaymentStatus {
