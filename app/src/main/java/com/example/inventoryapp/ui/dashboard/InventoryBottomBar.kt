@@ -16,11 +16,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.PointOfSale
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -106,10 +108,10 @@ fun InventoryBottomBar(
                     onClick = { onTabSelected(2) }
                 )
 
-                // Tab 3: Settings
+                // Tab 3: POS Register
                 FloatingNavItem(
-                    title = "Settings",
-                    icon = if (selectedTab == 3) Icons.Default.Settings else Icons.Outlined.Settings,
+                    title = "POS",
+                    icon = if (selectedTab == 3) Icons.Default.PointOfSale else Icons.Outlined.PointOfSale,
                     isSelected = selectedTab == 3,
                     onClick = { onTabSelected(3) }
                 )

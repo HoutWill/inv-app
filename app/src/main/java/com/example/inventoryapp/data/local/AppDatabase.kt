@@ -10,14 +10,18 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.inventoryapp.data.local.dao.PartnerConnectionDao
 import com.example.inventoryapp.data.local.dao.ProductDao
 import com.example.inventoryapp.data.local.dao.PurchaseOrderDao
+import com.example.inventoryapp.data.local.dao.SalesOrderDao
 import com.example.inventoryapp.data.local.dao.StockTransactionDao
 import com.example.inventoryapp.data.local.dao.SupplierDao
 import com.example.inventoryapp.data.local.dao.UserDao
 import com.example.inventoryapp.data.local.entity.PartnerConnectionEntity
+import com.example.inventoryapp.data.local.entity.PosPaymentMethod
+import com.example.inventoryapp.data.local.entity.PosPaymentStatus
 import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderItemEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
+import com.example.inventoryapp.data.local.entity.SalesOrderEntity
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
 import com.example.inventoryapp.data.local.entity.SupplierEntity
 import com.example.inventoryapp.data.local.entity.UserEntity
@@ -35,9 +39,10 @@ import kotlinx.coroutines.launch
         SupplierEntity::class,
         PurchaseOrderEntity::class,
         PurchaseOrderItemEntity::class,
-        PartnerConnectionEntity::class
+        PartnerConnectionEntity::class,
+        SalesOrderEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -47,6 +52,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun supplierDao(): SupplierDao
     abstract fun purchaseOrderDao(): PurchaseOrderDao
     abstract fun partnerConnectionDao(): PartnerConnectionDao
+    abstract fun salesOrderDao(): SalesOrderDao
 
     companion object {
         @Volatile
@@ -178,6 +184,36 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `sales_orders` (
+                        `id` TEXT NOT NULL,
+                        `invoiceNumber` TEXT NOT NULL,
+                        `customerName` TEXT NOT NULL,
+                        `customerPhone` TEXT NOT NULL DEFAULT '',
+                        `totalAmountUsd` REAL NOT NULL,
+                        `totalAmountKhr` INTEGER NOT NULL,
+                        `paidAmountUsd` REAL NOT NULL DEFAULT 0.0,
+                        `remainingAmountUsd` REAL NOT NULL,
+                        `paymentStatus` TEXT NOT NULL,
+                        `paymentMethod` TEXT NOT NULL,
+                        `dueDate` INTEGER,
+                        `note` TEXT NOT NULL DEFAULT '',
+                        `itemsSummary` TEXT NOT NULL DEFAULT '',
+                        `itemCount` INTEGER NOT NULL DEFAULT 0,
+                        `createdAt` INTEGER NOT NULL,
+                        `settledAt` INTEGER,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_sales_orders_paymentStatus` ON `sales_orders` (`paymentStatus`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_sales_orders_createdAt` ON `sales_orders` (`createdAt`)")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = try {
@@ -186,7 +222,7 @@ abstract class AppDatabase : RoomDatabase() {
                         AppDatabase::class.java,
                         "inventory_database"
                     )
-                        .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_6_8, MIGRATION_8_9)
+                        .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_6_8, MIGRATION_8_9, MIGRATION_9_10)
                         .fallbackToDestructiveMigration(true)
                         .addCallback(DatabaseSeederCallback())
                         .build()
@@ -702,6 +738,70 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     orderDao.insertOrder(po3)
                     orderDao.insertOrderItems(po3Items)
+
+                    // Seed 3 sample customer Pay Later tabs for POS
+                    try {
+                        val salesDao = database.salesOrderDao()
+                        salesDao.insertOrder(
+                            SalesOrderEntity(
+                                id = "tab_sample_01",
+                                invoiceNumber = "TAB-1122-001",
+                                customerName = "Sokha Pich",
+                                customerPhone = "+855 12 345 678",
+                                totalAmountUsd = 12.50,
+                                totalAmountKhr = 50600,
+                                paidAmountUsd = 0.0,
+                                remainingAmountUsd = 12.50,
+                                paymentStatus = PosPaymentStatus.UNPAID,
+                                paymentMethod = PosPaymentMethod.PAY_LATER,
+                                dueDate = now + 86400_000L * 3,
+                                note = "Customer promised to pay on Friday",
+                                itemsSummary = "2x Coca-Cola, 1x Wagyu Beef",
+                                itemCount = 3,
+                                createdAt = now - 86400_000L * 2
+                            )
+                        )
+                        salesDao.insertOrder(
+                            SalesOrderEntity(
+                                id = "tab_sample_02",
+                                invoiceNumber = "TAB-1122-002",
+                                customerName = "Chhay Lim",
+                                customerPhone = "+855 98 765 432",
+                                totalAmountUsd = 28.00,
+                                totalAmountKhr = 113400,
+                                paidAmountUsd = 0.0,
+                                remainingAmountUsd = 28.00,
+                                paymentStatus = PosPaymentStatus.UNPAID,
+                                paymentMethod = PosPaymentMethod.PAY_LATER,
+                                dueDate = now + 86400_000L * 5,
+                                note = "Regular buyer from restaurant nearby",
+                                itemsSummary = "5x Red Bull, 2x Salmon",
+                                itemCount = 7,
+                                createdAt = now - 86400_000L * 1
+                            )
+                        )
+                        salesDao.insertOrder(
+                            SalesOrderEntity(
+                                id = "tab_sample_03",
+                                invoiceNumber = "TAB-1122-003",
+                                customerName = "Visal Meng",
+                                customerPhone = "+855 77 112 233",
+                                totalAmountUsd = 8.80,
+                                totalAmountKhr = 35600,
+                                paidAmountUsd = 0.0,
+                                remainingAmountUsd = 8.80,
+                                paymentStatus = PosPaymentStatus.UNPAID,
+                                paymentMethod = PosPaymentMethod.PAY_LATER,
+                                dueDate = now + 86400_000L * 1,
+                                note = "Office team order",
+                                itemsSummary = "8x Dasani Water, 4x Orange Juice",
+                                itemCount = 12,
+                                createdAt = now - 86400_000L * 3
+                            )
+                        )
+                    } catch (e: Exception) {
+                        Log.w("AppDatabase", "Error seeding sample unpaid tabs: ${e.message}")
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("AppDatabase", "Error seeding default suppliers", e)

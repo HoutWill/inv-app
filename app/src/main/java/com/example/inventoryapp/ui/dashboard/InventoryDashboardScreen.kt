@@ -48,6 +48,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.inventoryapp.R
@@ -227,9 +230,27 @@ fun InventoryDashboardScreen(
                 drawerDestination = null
             }
 
+            // Scroll-aware visibility for Floating Bottom Navigation Bar & FAB
+            var isBottomBarVisible by remember { mutableStateOf(true) }
+            val nestedScrollConnection = remember {
+                object : NestedScrollConnection {
+                    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                        // Scrolling down: hide bottom bar & FAB to maximize screen estate
+                        if (available.y < -12f) {
+                            if (isBottomBarVisible) isBottomBarVisible = false
+                        } else if (available.y > 12f) {
+                            // Scrolling up: reveal bottom bar & FAB smoothly
+                            if (!isBottomBarVisible) isBottomBarVisible = true
+                        }
+                        return Offset.Zero
+                    }
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .nestedScroll(nestedScrollConnection)
                     .padding(
                         top = if (drawerDestination == null) innerPadding.calculateTopPadding() else 0.dp,
                         bottom = if (drawerDestination == null) innerPadding.calculateBottomPadding() else 0.dp
@@ -539,7 +560,15 @@ fun InventoryDashboardScreen(
                 }
 
                 // Floating Action Button (+ Add) positioned at bottom-right above the bottom navigation bar
-                if (drawerDestination == null && (activeTab == 0 || activeTab == 1)) {
+                AnimatedVisibility(
+                    visible = isBottomBarVisible && drawerDestination == null && (activeTab == 0 || activeTab == 1),
+                    enter = scaleIn(animationSpec = tween(180)) + fadeIn(animationSpec = tween(150)),
+                    exit = scaleOut(animationSpec = tween(180)) + fadeOut(animationSpec = tween(150)),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                        .padding(end = 20.dp, bottom = 96.dp)
+                ) {
                     FloatingActionButton(
                         onClick = {
                             addProductDraft = AddProductDraft(sku = uiState.searchQuery)
@@ -548,11 +577,7 @@ fun InventoryDashboardScreen(
                         containerColor = NawanoPrimary200,
                         contentColor = Color.White,
                         shape = CircleShape,
-                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .navigationBarsPadding()
-                            .padding(end = 20.dp, bottom = 96.dp)
+                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
@@ -563,19 +588,33 @@ fun InventoryDashboardScreen(
                 }
 
                 // Floating Bottom Navigation Bar (handles system bars padding safely)
-                InventoryBottomBar(
-                    selectedTab = activeTab,
-                    onTabSelected = { tab ->
-                        drawerDestination = null
-                        activeTab = tab
-                    },
-                    onScanClicked = { scannerTarget = ScannerTarget.DASHBOARD_SCAN },
-                    totalItemCount = uiState.totalSkus,
+                AnimatedVisibility(
+                    visible = isBottomBarVisible && drawerDestination == null,
+                    enter = slideInVertically(
+                        initialOffsetY = { it },
+                        animationSpec = tween(220, easing = FastOutSlowInEasing)
+                    ) + fadeIn(animationSpec = tween(200)),
+                    exit = slideOutVertically(
+                        targetOffsetY = { it },
+                        animationSpec = tween(200, easing = FastOutSlowInEasing)
+                    ) + fadeOut(animationSpec = tween(150)),
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 12.dp)
-                )
+                ) {
+                    InventoryBottomBar(
+                        selectedTab = activeTab,
+                        onTabSelected = { tab ->
+                            drawerDestination = null
+                            activeTab = tab
+                            isBottomBarVisible = true
+                        },
+                        onScanClicked = { scannerTarget = ScannerTarget.DASHBOARD_SCAN },
+                        totalItemCount = uiState.totalSkus,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
             // Fullscreen Camera Barcode Scanner
@@ -1073,6 +1112,12 @@ private enum class StockStatusFilter {
     OUT_OF_STOCK
 }
 
+private enum class CatalogViewMode {
+    DETAILED,
+    COMPACT,
+    GRID
+}
+
 /**
  * TAB 1: Dedicated Full Items Catalog Screen
  * Focuses on search, category filtering, multi-criteria sorting, and item management.
@@ -1098,6 +1143,7 @@ private fun InventoryItemsCatalogTab(
 ) {
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var stockStatusFilter by remember { mutableStateOf(StockStatusFilter.ALL) }
+    var catalogViewMode by rememberSaveable { mutableStateOf(CatalogViewMode.DETAILED) }
 
     val inStockCount = remember(uiState.filteredProducts) {
         uiState.filteredProducts.count { it.quantity > 0 }
@@ -1424,7 +1470,7 @@ private fun InventoryItemsCatalogTab(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // 4. Sub-header Row: "Products" on left, "⇅ Sort: ... ▾" on right
+        // 4. Sub-header Row: "Products" on left, View Switcher & Sort on right
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1452,64 +1498,126 @@ private fun InventoryItemsCatalogTab(
                 }
             }
 
-            // "⇅ Sort ▾" Sort button
-            Box {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // View Mode Switcher: [ 🗂 Detailed | ☰ Compact | ⊞ Grid ]
                 Surface(
-                    onClick = { sortMenuExpanded = true },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(10.dp),
                     color = cardBg,
                     border = BorderStroke(1.dp, cardBorder)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.SwapVert,
-                            contentDescription = "Sort",
-                            tint = textSecondary,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = when (uiState.sortOption) {
-                                ProductSortOption.NAME_ASC -> "Sort: Name"
-                                ProductSortOption.STOCK_LOW_TO_HIGH -> "Sort: Stock ↑"
-                                ProductSortOption.STOCK_HIGH_TO_LOW -> "Sort: Stock ↓"
-                                ProductSortOption.PRICE_HIGH_TO_LOW -> "Sort: Price ↓"
-                            },
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = textPrimary
-                        )
-                        Spacer(Modifier.width(2.dp))
-                        Icon(
-                            imageVector = Icons.Default.ArrowDropDown,
-                            contentDescription = null,
-                            tint = textSecondary,
-                            modifier = Modifier.size(16.dp)
-                        )
+                        IconButton(
+                            onClick = { catalogViewMode = CatalogViewMode.DETAILED },
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (catalogViewMode == CatalogViewMode.DETAILED) NawanoPrimary200.copy(alpha = 0.25f) else Color.Transparent)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ViewAgenda,
+                                contentDescription = "Detailed View",
+                                tint = if (catalogViewMode == CatalogViewMode.DETAILED) NawanoPrimary200 else textSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { catalogViewMode = CatalogViewMode.COMPACT },
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (catalogViewMode == CatalogViewMode.COMPACT) NawanoPrimary200.copy(alpha = 0.25f) else Color.Transparent)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.FormatListBulleted,
+                                contentDescription = "Compact List View",
+                                tint = if (catalogViewMode == CatalogViewMode.COMPACT) NawanoPrimary200 else textSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { catalogViewMode = CatalogViewMode.GRID },
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (catalogViewMode == CatalogViewMode.GRID) NawanoPrimary200.copy(alpha = 0.25f) else Color.Transparent)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.GridView,
+                                contentDescription = "Grid View",
+                                tint = if (catalogViewMode == CatalogViewMode.GRID) NawanoPrimary200 else textSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
 
-                DropdownMenu(
-                    expanded = sortMenuExpanded,
-                    onDismissRequest = { sortMenuExpanded = false }
-                ) {
-                    ProductSortOption.values().forEach { option ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = option.displayName,
-                                    fontWeight = if (uiState.sortOption == option) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (uiState.sortOption == option) NawanoPrimary200 else MaterialTheme.colorScheme.onSurface
-                                )
-                            },
-                            onClick = {
-                                onSortChanged(option)
-                                sortMenuExpanded = false
-                            }
-                        )
+                // "⇅ Sort ▾" Sort button
+                Box {
+                    Surface(
+                        onClick = { sortMenuExpanded = true },
+                        shape = RoundedCornerShape(10.dp),
+                        color = cardBg,
+                        border = BorderStroke(1.dp, cardBorder)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SwapVert,
+                                contentDescription = "Sort",
+                                tint = textSecondary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(Modifier.width(3.dp))
+                            Text(
+                                text = when (uiState.sortOption) {
+                                    ProductSortOption.NAME_ASC -> "Name"
+                                    ProductSortOption.STOCK_LOW_TO_HIGH -> "Stock ↑"
+                                    ProductSortOption.STOCK_HIGH_TO_LOW -> "Stock ↓"
+                                    ProductSortOption.PRICE_HIGH_TO_LOW -> "Price ↓"
+                                },
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = textPrimary
+                            )
+                            Spacer(Modifier.width(2.dp))
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                tint = textSecondary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = sortMenuExpanded,
+                        onDismissRequest = { sortMenuExpanded = false }
+                    ) {
+                        ProductSortOption.values().forEach { option ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = option.displayName,
+                                        fontWeight = if (uiState.sortOption == option) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (uiState.sortOption == option) NawanoPrimary200 else MaterialTheme.colorScheme.onSurface
+                                    )
+                                },
+                                onClick = {
+                                    onSortChanged(option)
+                                    sortMenuExpanded = false
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -1589,20 +1697,67 @@ private fun InventoryItemsCatalogTab(
         } else {
             LazyColumn(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                contentPadding = PaddingValues(top = 4.dp, bottom = 170.dp)
+                verticalArrangement = Arrangement.spacedBy(
+                    if (catalogViewMode == CatalogViewMode.COMPACT) 8.dp else 12.dp
+                ),
+                contentPadding = PaddingValues(top = 4.dp, bottom = 120.dp)
             ) {
-                items(items = displayedProducts, key = { item -> item.id }) { item ->
-                    val isHighlighted = item.sku.equals(uiState.scannedSku, ignoreCase = true)
-                    InventoryItemCard(
-                        item = item,
-                        isHighlighted = isHighlighted,
-                        isDarkTheme = isDarkTheme,
-                        onQuantityChange = { delta -> onQuantityChange(item, delta) },
-                        onCardClick = { onProductClick(item) },
-                        onDelete = { onDeleteProduct(item) },
-                        onRequestSupply = { onRequestSupply(item) }
-                    )
+                when (catalogViewMode) {
+                    CatalogViewMode.DETAILED -> {
+                        items(items = displayedProducts, key = { item -> item.id }) { item ->
+                            val isHighlighted = item.sku.equals(uiState.scannedSku, ignoreCase = true)
+                            InventoryItemCard(
+                                item = item,
+                                isHighlighted = isHighlighted,
+                                isDarkTheme = isDarkTheme,
+                                onQuantityChange = { delta -> onQuantityChange(item, delta) },
+                                onCardClick = { onProductClick(item) },
+                                onDelete = { onDeleteProduct(item) },
+                                onRequestSupply = { onRequestSupply(item) }
+                            )
+                        }
+                    }
+                    CatalogViewMode.COMPACT -> {
+                        items(items = displayedProducts, key = { item -> item.id }) { item ->
+                            val isHighlighted = item.sku.equals(uiState.scannedSku, ignoreCase = true)
+                            InventoryItemCompactRow(
+                                item = item,
+                                isHighlighted = isHighlighted,
+                                isDarkTheme = isDarkTheme,
+                                onQuantityChange = { delta -> onQuantityChange(item, delta) },
+                                onCardClick = { onProductClick(item) },
+                                onDelete = { onDeleteProduct(item) }
+                            )
+                        }
+                    }
+                    CatalogViewMode.GRID -> {
+                        val productPairs = displayedProducts.chunked(2)
+                        items(
+                            items = productPairs,
+                            key = { pair -> pair.map { it.id }.joinToString("-") }
+                        ) { pair ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                for (item in pair) {
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        val isHighlighted = item.sku.equals(uiState.scannedSku, ignoreCase = true)
+                                        InventoryItemGridCard(
+                                            item = item,
+                                            isHighlighted = isHighlighted,
+                                            isDarkTheme = isDarkTheme,
+                                            onQuantityChange = { delta -> onQuantityChange(item, delta) },
+                                            onCardClick = { onProductClick(item) }
+                                        )
+                                    }
+                                }
+                                if (pair.size == 1) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

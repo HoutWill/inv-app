@@ -12,6 +12,9 @@ import com.example.inventoryapp.data.local.entity.PartnerConnectionWithUser
 import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderItemEntity
+import com.example.inventoryapp.data.local.entity.PosPaymentMethod
+import com.example.inventoryapp.data.local.entity.PosPaymentStatus
+import com.example.inventoryapp.data.local.entity.SalesOrderEntity
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
 import com.example.inventoryapp.data.local.entity.SupplierEntity
 import com.example.inventoryapp.data.local.entity.UserEntity
@@ -27,6 +30,10 @@ import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 enum class ProductSortOption(val displayName: String) {
@@ -108,6 +115,152 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val _partnerUiState = MutableStateFlow(PartnerConnectionUiState())
     val partnerUiState: StateFlow<PartnerConnectionUiState> = _partnerUiState.asStateFlow()
+
+    val unpaidSalesOrders: StateFlow<List<SalesOrderEntity>> = database.salesOrderDao().getUnpaidOrders()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val unpaidSalesOrdersCount: StateFlow<Int> = database.salesOrderDao().getUnpaidOrdersCount()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            val count = database.salesOrderDao().getUnpaidOrdersCount().first()
+            if (count == 0) {
+                val now = System.currentTimeMillis()
+                val dayMs = 24 * 60 * 60 * 1000L
+                val sampleTabs = listOf(
+                    SalesOrderEntity(
+                        invoiceNumber = "INV-TAB-001",
+                        customerName = "Sokha Pich",
+                        customerPhone = "012 998 776",
+                        totalAmountUsd = 45.00,
+                        totalAmountKhr = (45.00 * 4050).toLong(),
+                        paidAmountUsd = 0.0,
+                        remainingAmountUsd = 45.00,
+                        paymentStatus = PosPaymentStatus.UNPAID,
+                        paymentMethod = PosPaymentMethod.PAY_LATER,
+                        dueDate = now - (2 * dayMs),
+                        itemsSummary = "2x Coca-Cola Original, 1x Red Bull",
+                        itemCount = 3,
+                        createdAt = now - (9 * dayMs),
+                        note = "Neighborhood shop customer tab"
+                    ),
+                    SalesOrderEntity(
+                        invoiceNumber = "INV-TAB-002",
+                        customerName = "Chhay Lim",
+                        customerPhone = "098 776 543",
+                        totalAmountUsd = 12.50,
+                        totalAmountKhr = (12.50 * 4050).toLong(),
+                        paidAmountUsd = 0.0,
+                        remainingAmountUsd = 12.50,
+                        paymentStatus = PosPaymentStatus.UNPAID,
+                        paymentMethod = PosPaymentMethod.PAY_LATER,
+                        dueDate = now + (3 * dayMs),
+                        itemsSummary = "5x Dasani Water 500ml",
+                        itemCount = 5,
+                        createdAt = now - (4 * dayMs),
+                        note = "Regular delivery order"
+                    ),
+                    SalesOrderEntity(
+                        invoiceNumber = "INV-TAB-003",
+                        customerName = "Visal Meng",
+                        customerPhone = "087 112 233",
+                        totalAmountUsd = 84.00,
+                        totalAmountKhr = (84.00 * 4050).toLong(),
+                        paidAmountUsd = 0.0,
+                        remainingAmountUsd = 84.00,
+                        paymentStatus = PosPaymentStatus.UNPAID,
+                        paymentMethod = PosPaymentMethod.PAY_LATER,
+                        dueDate = now + (12 * dayMs),
+                        itemsSummary = "1x A5 Wagyu Beef, 2x Orangina",
+                        itemCount = 3,
+                        createdAt = now - (2 * dayMs),
+                        note = "Weekend dinner banquet tab"
+                    )
+                )
+                sampleTabs.forEach { database.salesOrderDao().insertOrder(it) }
+            }
+        }
+    }
+
+    fun processPosSale(
+        items: List<Pair<ProductEntity, Int>>,
+        paymentMethod: PosPaymentMethod,
+        customerName: String,
+        customerPhone: String = "",
+        dueDate: Long? = null,
+        note: String = "",
+        onSuccess: (SalesOrderEntity) -> Unit = {}
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val totalUsd = items.sumOf { it.first.sellingPrice * it.second }
+            val totalKhr = (totalUsd * 4050.0).toLong()
+            val itemCount = items.sumOf { it.second }
+            val itemsSummary = items.joinToString(", ") { "${it.second}x ${it.first.name}" }
+            val invoiceNo = "INV-${SimpleDateFormat("MMdd", Locale.getDefault()).format(Date())}-${(System.currentTimeMillis() % 10000).toString().padStart(4, '0')}"
+
+            val isPayLater = paymentMethod == PosPaymentMethod.PAY_LATER || paymentMethod == PosPaymentMethod.COD
+            val order = SalesOrderEntity(
+                invoiceNumber = invoiceNo,
+                customerName = if (isPayLater) customerName.ifBlank { "Customer (COD Tab)" } else customerName.ifBlank { "Walk-in Customer" },
+                customerPhone = customerPhone,
+                totalAmountUsd = totalUsd,
+                totalAmountKhr = totalKhr,
+                paidAmountUsd = if (isPayLater) 0.0 else totalUsd,
+                remainingAmountUsd = if (isPayLater) totalUsd else 0.0,
+                paymentStatus = if (isPayLater) PosPaymentStatus.UNPAID else PosPaymentStatus.PAID,
+                paymentMethod = paymentMethod,
+                dueDate = dueDate,
+                note = note,
+                itemsSummary = itemsSummary,
+                itemCount = itemCount,
+                createdAt = System.currentTimeMillis(),
+                settledAt = if (isPayLater) null else System.currentTimeMillis()
+            )
+
+            // 1. Insert Sales Order
+            database.salesOrderDao().insertOrder(order)
+
+            // 2. Deduct inventory & record StockTransaction
+            for ((product, qty) in items) {
+                val newQty = (product.quantity - qty).coerceAtLeast(0)
+                database.productDao().updateProduct(product.copy(quantity = newQty, updatedAt = System.currentTimeMillis()))
+                database.stockTransactionDao().insertTransaction(
+                    StockTransactionEntity(
+                        productId = product.id,
+                        sku = product.sku,
+                        productName = product.name,
+                        transactionType = if (isPayLater) "POS_SALE_PAY_LATER" else "POS_SALE",
+                        quantityDelta = -qty,
+                        previousQuantity = product.quantity,
+                        newQuantity = newQty,
+                        note = "POS ${order.invoiceNumber} (${order.paymentMethod})"
+                    )
+                )
+            }
+
+            withContext(Dispatchers.Main) {
+                onSuccess(order)
+            }
+        }
+    }
+
+    fun settleSalesOrder(orderId: String, paymentMethod: PosPaymentMethod = PosPaymentMethod.CASH, onComplete: () -> Unit = {}) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val order = database.salesOrderDao().getOrderById(orderId) ?: return@launch
+            val updated = order.copy(
+                paidAmountUsd = order.totalAmountUsd,
+                remainingAmountUsd = 0.0,
+                paymentStatus = PosPaymentStatus.PAID,
+                paymentMethod = paymentMethod,
+                settledAt = System.currentTimeMillis()
+            )
+            database.salesOrderDao().updateOrder(updated)
+            withContext(Dispatchers.Main) {
+                onComplete()
+            }
+        }
+    }
 
     fun searchPartner(query: String, currentUser: UserEntity) {
         viewModelScope.launch {

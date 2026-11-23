@@ -388,8 +388,7 @@ fun PosRegisterScreen(
 
                         Surface(
                             shape = RoundedCornerShape(16.dp),
-                            color = Color.White,
-                            modifier = Modifier.clickable { onOpenCheckout() }
+                            color = Color.White
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
