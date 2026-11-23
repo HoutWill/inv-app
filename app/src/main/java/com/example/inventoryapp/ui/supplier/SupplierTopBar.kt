@@ -73,11 +73,11 @@ fun SupplierTopBar(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left Group: Hamburger + Title ("Nawano") & Subtitle ("Wholesale • X SKUs")
+            // Left Group: Hamburger (and optional Title & Subtitle if showTitleAndLogo is true)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.weight(1f, fill = false)
+                modifier = if (showTitleAndLogo) Modifier.weight(1f, fill = false) else Modifier
             ) {
                 IconButton(
                     onClick = onOpenDrawer,
@@ -90,23 +90,25 @@ fun SupplierTopBar(
                     )
                 }
 
-                Column(modifier = Modifier.weight(1f, fill = false)) {
-                    Text(
-                        text = "Nawano",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(1.dp))
-                    Text(
-                        text = "Wholesale • $catalogCount SKUs",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                if (showTitleAndLogo) {
+                    Column(modifier = Modifier.weight(1f, fill = false)) {
+                        Text(
+                            text = "Nawano",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(1.dp))
+                        Text(
+                            text = "Wholesale • $catalogCount SKUs",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
 

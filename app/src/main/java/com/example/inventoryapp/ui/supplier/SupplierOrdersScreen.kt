@@ -2,6 +2,7 @@ package com.example.inventoryapp.ui.supplier
 
 import android.widget.Toast
 import com.example.inventoryapp.ui.dashboard.DrawerEdgeSwipeZone
+import com.example.inventoryapp.ui.dashboard.EditProfileBottomSheet
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -104,6 +105,7 @@ fun SupplierOrdersScreen(
 
     var isConnectPartnerOpen by remember { mutableStateOf(false) }
     var isPartnerRequestsOpen by remember { mutableStateOf(false) }
+    var isEditProfileOpen by remember { mutableStateOf(false) }
 
     // Active View Tab:
     // 0: Home (Orders), 1: Items (Wholesale Catalog), 2: Stats (Analytics), 3: Settings
@@ -327,6 +329,10 @@ fun SupplierOrdersScreen(
                 onOpenPartnerNetwork = {
                     scope.launch { drawerState.close() }
                     isPartnerRequestsOpen = true
+                },
+                onEditProfile = {
+                    scope.launch { drawerState.close() }
+                    isEditProfileOpen = true
                 }
             )
         }
@@ -386,7 +392,7 @@ fun SupplierOrdersScreen(
                         onOpenNotifications = { showNotificationSheet = true },
                         onOpenScanner = { scannerTarget = SupplierScannerTarget.GENERAL_SCAN },
                         onQuickAdd = null,
-                        showTitleAndLogo = true,
+                        showTitleAndLogo = false,
                         pendingPartnerRequestsCount = pendingPartnerCount,
                         onOpenPartnerNetwork = { isPartnerRequestsOpen = true }
                     )
@@ -873,6 +879,28 @@ fun SupplierOrdersScreen(
             onDismiss = { isConnectPartnerOpen = false },
             isDarkTheme = isDarkTheme,
             pendingRequestsCount = pendingPartnerCount
+        )
+    }
+
+    // Modal: Edit Profile Bottom Sheet
+    if (isEditProfileOpen) {
+        EditProfileBottomSheet(
+            user = user,
+            isDarkTheme = isDarkTheme,
+            onDismiss = { isEditProfileOpen = false },
+            onSave = { updatedName, updatedPhone, updatedCode ->
+                effectiveViewModel.updateUserProfile(
+                    userId = user.id,
+                    fullName = if (updatedName.contains("(Supplier)")) updatedName else "$updatedName (Supplier)",
+                    phoneNumber = updatedPhone,
+                    uniqueCode = updatedCode
+                ) { success, _ ->
+                    if (success) {
+                        isEditProfileOpen = false
+                        Toast.makeText(context, "Profile updated successfully!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
         )
     }
 

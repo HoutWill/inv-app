@@ -117,6 +117,15 @@ fun InventoryDashboardScreen(
         )
     }
 
+    var localUser by remember(effectiveUser) { mutableStateOf(effectiveUser) }
+    var isEditProfileOpen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(currentUser) {
+        if (currentUser != null) {
+            localUser = currentUser
+        }
+    }
+
     val partnerUiState by viewModel.partnerUiState.collectAsState()
     val incomingPartnerRequests by viewModel.observeIncomingRequests(effectiveUser.id).collectAsState(initial = emptyList())
     val sentPartnerRequests by viewModel.observeSentRequests(effectiveUser.id).collectAsState(initial = emptyList())
@@ -172,10 +181,14 @@ fun InventoryDashboardScreen(
             2 -> DrawerDestination.STATISTICS
             else -> DrawerDestination.DASHBOARD
         },
-        userName = userName,
+        userName = localUser.fullName,
         userRole = userRole,
         onLogout = onLogout,
         onSwitchToSupplier = onSwitchToSupplier,
+        onEditProfile = {
+            scope.launch { drawerState.close() }
+            isEditProfileOpen = true
+        },
         onDestinationSelected = { dest ->
             scope.launch { drawerState.close() }
             when (dest) {
@@ -258,7 +271,7 @@ fun InventoryDashboardScreen(
                         onToggleTheme = onToggleTheme,
                         onOpenNotifications = { isNotificationsOpen = true },
                         onAddProduct = null,
-                        showTitleAndLogo = true,
+                        showTitleAndLogo = false,
                         pendingPartnerRequestsCount = pendingPartnerCount,
                         onOpenPartnerNetwork = { isPartnerRequestsOpen = true }
                     )
@@ -1073,6 +1086,40 @@ fun InventoryDashboardScreen(
                     }
                 )
             }
+
+            // Edit Profile Modal Bottom Sheet (Swipe-up bottom sheet)
+            if (isEditProfileOpen) {
+                EditProfileBottomSheet(
+                    user = localUser,
+                    isDarkTheme = isDarkTheme,
+                    onDismiss = { isEditProfileOpen = false },
+                    onSave = { updatedName, updatedPhone, updatedCode ->
+                        viewModel.updateUserProfile(
+                            userId = localUser.id,
+                            fullName = updatedName,
+                            phoneNumber = updatedPhone,
+                            uniqueCode = updatedCode
+                        ) { success, error ->
+                            if (success) {
+                                localUser = localUser.copy(
+                                    fullName = updatedName,
+                                    phoneNumber = updatedPhone,
+                                    uniqueCode = updatedCode
+                                )
+                                isEditProfileOpen = false
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Profile updated successfully!")
+                                }
+                            } else {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(error ?: "Failed to update profile")
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+
             // Connect Partner Modal Bottom Sheet
             if (isConnectPartnerOpen) {
                 ConnectPartnerBottomSheet(
