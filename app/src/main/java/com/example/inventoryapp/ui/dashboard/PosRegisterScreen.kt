@@ -1,6 +1,7 @@
 package com.example.inventoryapp.ui.dashboard
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -16,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -49,6 +51,8 @@ fun PosRegisterScreen(
     onOpenScanner: () -> Unit,
     onOpenCheckout: () -> Unit,
     isDarkTheme: Boolean = isSystemInDarkTheme(),
+    isCartMinimized: Boolean = false,
+    onToggleCartMinimized: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -108,16 +112,22 @@ fun PosRegisterScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
         ) {
-            // 1. Top Bar (POS Register • My Stock • [ 🧾³ ] • [ 📷 ])
+            // 1. Top Bar (POS Register • My Stock • [ 📷 ] • [ 🧾 ] • [ 🛒 ])
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onOpenDrawer) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    IconButton(
+                        onClick = onOpenDrawer,
+                        modifier = Modifier.size(36.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Menu,
                             contentDescription = "Menu",
@@ -125,13 +135,15 @@ fun PosRegisterScreen(
                         )
                     }
 
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(6.dp))
 
                     Text(
                         text = "POS Register",
-                        fontSize = 20.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
 
                     Spacer(Modifier.width(8.dp))
@@ -143,17 +155,23 @@ fun PosRegisterScreen(
                     ) {
                         Text(
                             text = "My Stock",
-                            fontSize = 11.5.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = NawanoPrimary200,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                         )
                     }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Unpaid Tabs / Pay Later Badge Button
-                    IconButton(onClick = onOpenUnpaidTabs) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    // Unpaid Tabs / Pay Later Badge Button (matching Image 1 order)
+                    IconButton(
+                        onClick = onOpenUnpaidTabs,
+                        modifier = Modifier.size(36.dp)
+                    ) {
                         BadgedBox(
                             badge = {
                                 if (unpaidTabsCount > 0) {
@@ -161,7 +179,11 @@ fun PosRegisterScreen(
                                         containerColor = Color(0xFFF59E0B),
                                         contentColor = Color.White
                                     ) {
-                                        Text("$unpaidTabsCount", fontWeight = FontWeight.Bold)
+                                        Text(
+                                            text = "$unpaidTabsCount",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 9.sp
+                                        )
                                     }
                                 }
                             }
@@ -170,19 +192,60 @@ fun PosRegisterScreen(
                                 imageVector = Icons.Outlined.ReceiptLong,
                                 contentDescription = "Unpaid Tabs",
                                 tint = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                     }
 
                     // Barcode Scanner Shortcut
-                    IconButton(onClick = onOpenScanner) {
+                    IconButton(
+                        onClick = onOpenScanner,
+                        modifier = Modifier.size(36.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.Outlined.QrCodeScanner,
                             contentDescription = "Scan Barcode",
                             tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(22.dp)
                         )
+                    }
+
+                    // Cart Action Button with Badge (Always accessible to reopen or checkout!)
+                    IconButton(
+                        onClick = {
+                            if (totalCartItems > 0) {
+                                if (isCartMinimized && onToggleCartMinimized != null) {
+                                    onToggleCartMinimized()
+                                } else {
+                                    onOpenCheckout()
+                                }
+                            }
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        BadgedBox(
+                            badge = {
+                                if (totalCartItems > 0) {
+                                    Badge(
+                                        containerColor = Color(0xFFEF4444),
+                                        contentColor = Color.White
+                                    ) {
+                                        Text(
+                                            text = if (totalCartItems > 99) "99+" else "$totalCartItems",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 9.sp
+                                        )
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = if (totalCartItems > 0) Icons.Filled.ShoppingCart else Icons.Outlined.ShoppingCart,
+                                contentDescription = "Shopping Cart",
+                                tint = if (totalCartItems > 0) NawanoPrimary200 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -338,7 +401,7 @@ fun PosRegisterScreen(
                         .padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(bottom = 170.dp) // Scroll above floating cart banner and bottom bar
+                    contentPadding = PaddingValues(bottom = 96.dp) // Scroll above floating cart banner
                 ) {
                     items(filteredProducts, key = { it.id }) { product ->
                         val currentQtyInCart = cart[product.id] ?: 0
@@ -363,21 +426,26 @@ fun PosRegisterScreen(
             }
         }
 
-        // Floating Cart Summary Banner (Anchored at BottomCenter above bottom navigation bar, matching Image 1)
+        // Floating Cart Summary Banner (Anchored at BottomCenter, replaces bottom navigation bar when items exist)
         AnimatedVisibility(
-            visible = totalCartItems > 0,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            visible = totalCartItems > 0 && !isCartMinimized,
+            enter = slideInVertically(
+                initialOffsetY = { it },
+                animationSpec = tween(220, easing = FastOutSlowInEasing)
+            ) + fadeIn(animationSpec = tween(200)),
+            exit = slideOutVertically(
+                targetOffsetY = { it },
+                animationSpec = tween(200, easing = FastOutSlowInEasing)
+            ) + fadeOut(animationSpec = tween(150)),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 106.dp)
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Surface(
-                onClick = onOpenCheckout,
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(22.dp),
                 color = NawanoPrimary200,
-                shadowElevation = 6.dp,
+                shadowElevation = 8.dp,
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -390,7 +458,12 @@ fun PosRegisterScreen(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable(onClick = onOpenCheckout)
+                            .padding(vertical = 2.dp)
                     ) {
                         Box(
                             modifier = Modifier
@@ -421,26 +494,98 @@ fun PosRegisterScreen(
                         }
                     }
 
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color.White
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        if (onToggleCartMinimized != null) {
+                            IconButton(
+                                onClick = onToggleCartMinimized,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "Minimize Cart",
+                                    tint = Color.White.copy(alpha = 0.85f),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+
+                        Surface(
+                            onClick = onOpenCheckout,
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color.White
                         ) {
-                            Text(
-                                text = "Checkout",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = NawanoPrimary200
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "Checkout",
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = NawanoPrimary200
+                                )
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = null,
+                                    tint = NawanoPrimary200,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Compact Floating Reopen Pill (Shown when cart is minimized, hovering above bottom navigation bar)
+        AnimatedVisibility(
+            visible = totalCartItems > 0 && isCartMinimized,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 86.dp)
+        ) {
+            Surface(
+                onClick = { onToggleCartMinimized?.invoke() },
+                shape = RoundedCornerShape(20.dp),
+                color = NawanoPrimary200,
+                shadowElevation = 8.dp,
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ShoppingCart,
+                        contentDescription = "Cart",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "$totalCartItems in Cart • $${String.format(Locale.US, "%.2f", totalAmountUsd)}",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White.copy(alpha = 0.22f),
+                        modifier = Modifier.size(20.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null,
-                                tint = NawanoPrimary200,
-                                modifier = Modifier.size(15.dp)
+                                imageVector = Icons.Default.KeyboardArrowUp,
+                                contentDescription = "Reopen",
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
                             )
                         }
                     }

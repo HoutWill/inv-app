@@ -149,6 +149,7 @@ fun InventoryDashboardScreen(
     val posCart = remember { mutableStateMapOf<String, Int>() }
     var isPosCheckoutOpen by remember { mutableStateOf(false) }
     var isPosUnpaidTabsOpen by remember { mutableStateOf(false) }
+    var isPosCartMinimized by remember { mutableStateOf(false) }
     val unpaidOrders by viewModel.unpaidSalesOrders.collectAsState()
     val unpaidOrdersCount by viewModel.unpaidSalesOrdersCount.collectAsState()
 
@@ -214,10 +215,41 @@ fun InventoryDashboardScreen(
         onToggleTheme = onToggleTheme,
         totalSkus = uiState.totalSkus
     ) {
+        // Scroll-aware visibility for Top App Bar, Floating Bottom Navigation Bar & FAB
+        var isBarsVisible by remember { mutableStateOf(true) }
+        val nestedScrollConnection = remember {
+            object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    // Scrolling down (finger moves upward): hide bars to maximize screen estate
+                    if (available.y < -12f) {
+                        if (isBarsVisible) isBarsVisible = false
+                    } else if (available.y > 12f) {
+                        // Scrolling up (finger moves downward): reveal bars smoothly
+                        if (!isBarsVisible) isBarsVisible = true
+                    }
+                    return Offset.Zero
+                }
+            }
+        }
+
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
-                if (drawerDestination == null && activeTab != 3) {
+                AnimatedVisibility(
+                    visible = isBarsVisible && drawerDestination == null,
+                    enter = slideInVertically(
+                        initialOffsetY = { -it },
+                        animationSpec = tween(220, easing = FastOutSlowInEasing)
+                    ) + expandVertically(
+                        animationSpec = tween(220, easing = FastOutSlowInEasing)
+                    ) + fadeIn(animationSpec = tween(200)),
+                    exit = slideOutVertically(
+                        targetOffsetY = { -it },
+                        animationSpec = tween(200, easing = FastOutSlowInEasing)
+                    ) + shrinkVertically(
+                        animationSpec = tween(200, easing = FastOutSlowInEasing)
+                    ) + fadeOut(animationSpec = tween(150))
+                ) {
                     InventoryTopBar(
                         totalSkus = uiState.totalSkus,
                         lowStockCount = uiState.lowStockCount,
@@ -226,7 +258,7 @@ fun InventoryDashboardScreen(
                         onToggleTheme = onToggleTheme,
                         onOpenNotifications = { isNotificationsOpen = true },
                         onAddProduct = null,
-                        showTitleAndLogo = false,
+                        showTitleAndLogo = true,
                         pendingPartnerRequestsCount = pendingPartnerCount,
                         onOpenPartnerNetwork = { isPartnerRequestsOpen = true }
                     )
@@ -236,23 +268,6 @@ fun InventoryDashboardScreen(
             // System back button returns from full-screen drawer destination back to the dashboard
             BackHandler(enabled = drawerDestination != null) {
                 drawerDestination = null
-            }
-
-            // Scroll-aware visibility for Floating Bottom Navigation Bar & FAB
-            var isBottomBarVisible by remember { mutableStateOf(true) }
-            val nestedScrollConnection = remember {
-                object : NestedScrollConnection {
-                    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                        // Scrolling down: hide bottom bar & FAB to maximize screen estate
-                        if (available.y < -12f) {
-                            if (isBottomBarVisible) isBottomBarVisible = false
-                        } else if (available.y > 12f) {
-                            // Scrolling up: reveal bottom bar & FAB smoothly
-                            if (!isBottomBarVisible) isBottomBarVisible = true
-                        }
-                        return Offset.Zero
-                    }
-                }
             }
 
             Box(
@@ -567,6 +582,9 @@ fun InventoryDashboardScreen(
                                     } else {
                                         posCart[product.id] = newQty
                                     }
+                                    if (posCart.isEmpty()) {
+                                        isPosCartMinimized = false
+                                    }
                                 },
                                 onOpenDrawer = { scope.launch { drawerState.open() } },
                                 onOpenUnpaidTabs = { isPosUnpaidTabsOpen = true },
@@ -582,6 +600,8 @@ fun InventoryDashboardScreen(
                                     isPosCheckoutOpen = true
                                 },
                                 isDarkTheme = isDarkTheme,
+                                isCartMinimized = isPosCartMinimized,
+                                onToggleCartMinimized = { isPosCartMinimized = !isPosCartMinimized },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -590,7 +610,7 @@ fun InventoryDashboardScreen(
 
                 // Floating Action Button (+ Add) positioned at bottom-right above the bottom navigation bar
                 AnimatedVisibility(
-                    visible = isBottomBarVisible && drawerDestination == null && (activeTab == 0 || activeTab == 1),
+                    visible = isBarsVisible && drawerDestination == null && (activeTab == 0 || activeTab == 1),
                     enter = scaleIn(animationSpec = tween(180)) + fadeIn(animationSpec = tween(150)),
                     exit = scaleOut(animationSpec = tween(180)) + fadeOut(animationSpec = tween(150)),
                     modifier = Modifier
@@ -617,8 +637,10 @@ fun InventoryDashboardScreen(
                 }
 
                 // Floating Bottom Navigation Bar (handles system bars padding safely)
+                // Disappears when checkout sheet is active or when POS cart bar is shown
+                val isCartBarActive = activeTab == 3 && posCart.isNotEmpty() && !isPosCartMinimized
                 AnimatedVisibility(
-                    visible = isBottomBarVisible && drawerDestination == null,
+                    visible = isBarsVisible && drawerDestination == null && !isPosCheckoutOpen && !isCartBarActive,
                     enter = slideInVertically(
                         initialOffsetY = { it },
                         animationSpec = tween(220, easing = FastOutSlowInEasing)
@@ -635,20 +657,28 @@ fun InventoryDashboardScreen(
                     InventoryBottomBar(
                         selectedTab = activeTab,
                         onTabSelected = { tab ->
-                            drawerDestination = null
-                            isUpcomingSheetOpen = false
-                            isLowStockSheetOpen = false
-                            isStockTransfersSheetOpen = false
-                            isStockHistorySheetOpen = false
-                            isNotificationsOpen = false
-                            isPosCheckoutOpen = false
-                            isPosUnpaidTabsOpen = false
-                            viewingProductDetails = null
-                            activeTab = tab
-                            isBottomBarVisible = true
+                            if (tab == 3 && activeTab == 3 && posCart.isNotEmpty() && isPosCartMinimized) {
+                                isPosCartMinimized = false
+                            } else {
+                                drawerDestination = null
+                                isUpcomingSheetOpen = false
+                                isLowStockSheetOpen = false
+                                isStockTransfersSheetOpen = false
+                                isStockHistorySheetOpen = false
+                                isNotificationsOpen = false
+                                isPosCheckoutOpen = false
+                                isPosUnpaidTabsOpen = false
+                                viewingProductDetails = null
+                                activeTab = tab
+                                if (tab == 3 && posCart.isNotEmpty()) {
+                                    isPosCartMinimized = false
+                                }
+                                isBarsVisible = true
+                            }
                         },
                         onScanClicked = { scannerTarget = ScannerTarget.DASHBOARD_SCAN },
                         totalItemCount = uiState.totalSkus,
+                        cartItemCount = posCart.values.sum(),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -800,9 +830,21 @@ fun InventoryDashboardScreen(
                     "${qty}x ${prod?.name ?: "Item"}"
                 }
 
+                val cartItemsList = posCart.mapNotNull { (prodId, qty) ->
+                    uiState.products.find { it.id == prodId }?.let { it to qty }
+                }
+
                 PosCheckoutBottomSheet(
                     totalAmountUsd = totalAmountUsd,
                     itemCount = totalItemCount,
+                    cartItems = cartItemsList,
+                    onUpdateQuantity = { product, newQty ->
+                        if (newQty <= 0) {
+                            posCart.remove(product.id)
+                        } else {
+                            posCart[product.id] = newQty
+                        }
+                    },
                     itemsSummary = itemsSummary,
                     onDismiss = { isPosCheckoutOpen = false },
                     onConfirmSale = { paymentMethod, customerName, customerPhone, dueDate, note ->
@@ -818,6 +860,7 @@ fun InventoryDashboardScreen(
                             note = note,
                             onSuccess = { order ->
                                 posCart.clear()
+                                isPosCartMinimized = false
                                 isPosCheckoutOpen = false
                                 scope.launch {
                                     snackbarHostState.showSnackbar(

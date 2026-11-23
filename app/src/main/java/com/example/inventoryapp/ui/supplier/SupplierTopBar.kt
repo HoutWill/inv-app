@@ -93,8 +93,8 @@ fun SupplierTopBar(
                 Column(modifier = Modifier.weight(1f, fill = false)) {
                     Text(
                         text = "Nawano",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
                         color = textPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -104,7 +104,6 @@ fun SupplierTopBar(
                         text = "Wholesale • $catalogCount SKUs",
                         style = MaterialTheme.typography.bodySmall,
                         color = textSecondary,
-                        fontSize = 11.5.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

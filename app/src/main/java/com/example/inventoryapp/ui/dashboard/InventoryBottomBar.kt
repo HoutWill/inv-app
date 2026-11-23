@@ -24,6 +24,8 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.PointOfSale
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -60,6 +62,7 @@ fun InventoryBottomBar(
     onTabSelected: (Int) -> Unit,
     onScanClicked: () -> Unit,
     totalItemCount: Int = 0,
+    cartItemCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -108,11 +111,12 @@ fun InventoryBottomBar(
                     onClick = { onTabSelected(2) }
                 )
 
-                // Tab 3: POS Register
+                // Tab 3: POS Register (with notification badge when items are in cart)
                 FloatingNavItem(
                     title = "POS",
                     icon = if (selectedTab == 3) Icons.Default.PointOfSale else Icons.Outlined.PointOfSale,
                     isSelected = selectedTab == 3,
+                    badgeCount = cartItemCount,
                     onClick = { onTabSelected(3) }
                 )
             }
@@ -137,12 +141,14 @@ fun FloatingInventoryBottomBar(
     onTabSelected: (Int) -> Unit,
     onScanClicked: () -> Unit,
     totalItemCount: Int = 0,
+    cartItemCount: Int = 0,
     modifier: Modifier = Modifier
 ) = InventoryBottomBar(
     selectedTab = selectedTab,
     onTabSelected = onTabSelected,
     onScanClicked = onScanClicked,
     totalItemCount = totalItemCount,
+    cartItemCount = cartItemCount,
     modifier = modifier
 )
 
@@ -152,6 +158,7 @@ fun FloatingNavItem(
     isSelected: Boolean,
     icon: ImageVector? = null,
     painter: Painter? = null,
+    badgeCount: Int = 0,
     onClick: () -> Unit
 ) {
     val activeColor = NawanoPrimary200
@@ -181,31 +188,48 @@ fun FloatingNavItem(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .graphicsLayer {
-                    scaleX = animatedScale
-                    scaleY = animatedScale
+        BadgedBox(
+            badge = {
+                if (badgeCount > 0) {
+                    Badge(
+                        containerColor = Color(0xFFEF4444),
+                        contentColor = Color.White
+                    ) {
+                        Text(
+                            text = if (badgeCount > 99) "99+" else badgeCount.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
-                .clip(CircleShape)
-                .background(animatedBgColor),
-            contentAlignment = Alignment.Center
+            }
         ) {
-            if (painter != null) {
-                Icon(
-                    painter = painter,
-                    contentDescription = title,
-                    tint = animatedIconTint,
-                    modifier = Modifier.size(22.dp)
-                )
-            } else if (icon != null) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = title,
-                    tint = animatedIconTint,
-                    modifier = Modifier.size(22.dp)
-                )
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .graphicsLayer {
+                        scaleX = animatedScale
+                        scaleY = animatedScale
+                    }
+                    .clip(CircleShape)
+                    .background(animatedBgColor),
+                contentAlignment = Alignment.Center
+            ) {
+                if (painter != null) {
+                    Icon(
+                        painter = painter,
+                        contentDescription = title,
+                        tint = animatedIconTint,
+                        modifier = Modifier.size(22.dp)
+                    )
+                } else if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = title,
+                        tint = animatedIconTint,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             }
         }
         Spacer(modifier = Modifier.height(2.dp))

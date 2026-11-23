@@ -2,6 +2,11 @@ package com.example.inventoryapp.ui.supplier
 
 import android.widget.Toast
 import com.example.inventoryapp.ui.dashboard.DrawerEdgeSwipeZone
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -326,33 +331,66 @@ fun SupplierOrdersScreen(
             )
         }
     ) {
+        var isBarsVisible by remember { mutableStateOf(true) }
+        val nestedScrollConnection = remember {
+            object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    // Scrolling down (finger moves upward): hide bars to maximize screen estate
+                    if (available.y < -12f) {
+                        if (isBarsVisible) isBarsVisible = false
+                    } else if (available.y > 12f) {
+                        // Scrolling up (finger moves downward): reveal bars smoothly
+                        if (!isBarsVisible) isBarsVisible = true
+                    }
+                    return Offset.Zero
+                }
+            }
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(bgMain)
+                .nestedScroll(nestedScrollConnection)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // Modular Top App Bar
-                SupplierTopBar(
-                    userName = user.fullName.replace(" (Supplier)", ""),
-                    initials = initials,
-                    activeViewTab = activeViewTab,
-                    ordersCount = orders.size,
-                    catalogCount = products.size,
-                    shipmentsCount = inTransitCount,
-                    pendingNotificationCount = pendingCount,
-                    isDarkTheme = isDarkTheme,
-                    searchQuery = searchQuery,
-                    onSearchQueryChange = { searchQuery = it },
-                    onOpenDrawer = { scope.launch { drawerState.open() } },
-                    onToggleTheme = onToggleTheme,
-                    onOpenNotifications = { showNotificationSheet = true },
-                    onOpenScanner = { scannerTarget = SupplierScannerTarget.GENERAL_SCAN },
-                    onQuickAdd = null,
-                    showTitleAndLogo = false,
-                    pendingPartnerRequestsCount = pendingPartnerCount,
-                    onOpenPartnerNetwork = { isPartnerRequestsOpen = true }
-                )
+                // Modular Top App Bar with scroll-aware hide/reappear
+                AnimatedVisibility(
+                    visible = isBarsVisible,
+                    enter = slideInVertically(
+                        initialOffsetY = { -it },
+                        animationSpec = tween(220, easing = FastOutSlowInEasing)
+                    ) + expandVertically(
+                        animationSpec = tween(220, easing = FastOutSlowInEasing)
+                    ) + fadeIn(animationSpec = tween(200)),
+                    exit = slideOutVertically(
+                        targetOffsetY = { -it },
+                        animationSpec = tween(200, easing = FastOutSlowInEasing)
+                    ) + shrinkVertically(
+                        animationSpec = tween(200, easing = FastOutSlowInEasing)
+                    ) + fadeOut(animationSpec = tween(150))
+                ) {
+                    SupplierTopBar(
+                        userName = user.fullName.replace(" (Supplier)", ""),
+                        initials = initials,
+                        activeViewTab = activeViewTab,
+                        ordersCount = orders.size,
+                        catalogCount = products.size,
+                        shipmentsCount = inTransitCount,
+                        pendingNotificationCount = pendingCount,
+                        isDarkTheme = isDarkTheme,
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = { searchQuery = it },
+                        onOpenDrawer = { scope.launch { drawerState.open() } },
+                        onToggleTheme = onToggleTheme,
+                        onOpenNotifications = { showNotificationSheet = true },
+                        onOpenScanner = { scannerTarget = SupplierScannerTarget.GENERAL_SCAN },
+                        onQuickAdd = null,
+                        showTitleAndLogo = true,
+                        pendingPartnerRequestsCount = pendingPartnerCount,
+                        onOpenPartnerNetwork = { isPartnerRequestsOpen = true }
+                    )
+                }
 
                 // Main Content Switching by Tab
                 when (activeViewTab) {
@@ -731,7 +769,15 @@ fun SupplierOrdersScreen(
 
 
             // Floating Action Button (+ Add) positioned at bottom-right above the bottom navigation bar
-            if (activeViewTab == 0 || activeViewTab == 1) {
+            AnimatedVisibility(
+                visible = isBarsVisible && (activeViewTab == 0 || activeViewTab == 1),
+                enter = scaleIn(animationSpec = tween(180)) + fadeIn(animationSpec = tween(150)),
+                exit = scaleOut(animationSpec = tween(180)) + fadeOut(animationSpec = tween(150)),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = 20.dp, bottom = 96.dp)
+            ) {
                 FloatingActionButton(
                     onClick = {
                         if (activeViewTab == 1) {
@@ -744,11 +790,7 @@ fun SupplierOrdersScreen(
                     containerColor = NawanoPrimary200,
                     contentColor = Color.White,
                     shape = CircleShape,
-                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .navigationBarsPadding()
-                        .padding(end = 20.dp, bottom = 96.dp)
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
@@ -759,21 +801,36 @@ fun SupplierOrdersScreen(
             }
 
             // Floating Bottom Navigation Dock with Central Elevated Scanner FAB
-            SupplierBottomBar(
-                activeViewTab = activeViewTab,
-                onTabSelected = { activeViewTab = it },
-                onScanClicked = {
-                    scannerTarget = SupplierScannerTarget.GENERAL_SCAN
-                },
-                onOpenMenu = {
-                    scope.launch { drawerState.open() }
-                },
-                isDarkTheme = isDarkTheme,
+            AnimatedVisibility(
+                visible = isBarsVisible,
+                enter = slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(220, easing = FastOutSlowInEasing)
+                ) + fadeIn(animationSpec = tween(200)),
+                exit = slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(200, easing = FastOutSlowInEasing)
+                ) + fadeOut(animationSpec = tween(150)),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 12.dp)
-            )
+            ) {
+                SupplierBottomBar(
+                    activeViewTab = activeViewTab,
+                    onTabSelected = {
+                        activeViewTab = it
+                        isBarsVisible = true
+                    },
+                    onScanClicked = {
+                        scannerTarget = SupplierScannerTarget.GENERAL_SCAN
+                    },
+                    onOpenMenu = {
+                        scope.launch { drawerState.open() }
+                    },
+                    isDarkTheme = isDarkTheme
+                )
+            }
 
             // Left edge swipe zone to open navigation drawer without triggering Android system back
             DrawerEdgeSwipeZone(
