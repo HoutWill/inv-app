@@ -178,6 +178,35 @@ class AuthRepository(
         sessionStore.clearSession()
     }
 
+    suspend fun updateProfile(
+        userId: String,
+        fullName: String,
+        phoneNumber: String,
+        uniqueCode: String
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val existing = userDao.findById(userId)
+            if (existing != null) {
+                userDao.updateProfile(userId, fullName, phoneNumber, uniqueCode)
+            } else {
+                userDao.insert(
+                    UserEntity(
+                        id = userId,
+                        fullName = fullName,
+                        email = "middleman@nawano.com",
+                        passwordHash = "",
+                        role = UserRole.OWNER,
+                        uniqueCode = uniqueCode,
+                        phoneNumber = phoneNumber
+                    )
+                )
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     private val emailRegex = Regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
 
     private fun isValidEmail(email: String): Boolean {

@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.ui.theme.*
@@ -46,6 +47,7 @@ fun SupplierDrawerSheet(
     onAddProduct: () -> Unit = {},
     pendingPartnerRequestsCount: Int = 0,
     onOpenPartnerNetwork: (() -> Unit)? = null,
+    onEditProfile: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
@@ -66,8 +68,10 @@ fun SupplierDrawerSheet(
                 .navigationBarsPadding()
                 .padding(vertical = 16.dp, horizontal = 16.dp)
         ) {
-            // Profile & Branding Header (Matching Middleman Drawer Header)
+            // Profile & Branding Header (Matching Middleman Drawer Header, clickable to edit profile)
             Surface(
+                onClick = { onEditProfile?.invoke() },
+                enabled = onEditProfile != null,
                 modifier = Modifier.fillMaxWidth(),
                 color = if (isDarkTheme) NawanoDark400 else MaterialTheme.colorScheme.primaryContainer,
                 shape = RoundedCornerShape(20.dp),
@@ -79,47 +83,122 @@ fun SupplierDrawerSheet(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = NawanoPrimary200,
-                            modifier = Modifier.size(46.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = initials.filter { it.isLetter() }.take(2).ifBlank { "FS" },
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 18.sp,
-                                    color = Color.White
-                                )
+                        Box {
+                            Surface(
+                                shape = CircleShape,
+                                color = NawanoPrimary200,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = initials.filter { it.isLetter() }.take(2).ifBlank { "FS" },
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 18.sp,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                            if (onEditProfile != null) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = if (isDarkTheme) NawanoDark200 else Color.White,
+                                    border = BorderStroke(1.5.dp, NawanoPrimary200),
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .align(Alignment.BottomEnd)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Edit Profile",
+                                            tint = NawanoPrimary200,
+                                            modifier = Modifier.size(10.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
 
-                        IconButton(
-                            onClick = onCloseDrawer,
-                            modifier = Modifier.size(32.dp)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Close Menu",
-                                tint = textSecondary,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            if (onEditProfile != null) {
+                                Surface(
+                                    onClick = onEditProfile,
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = NawanoPrimary200.copy(alpha = 0.15f),
+                                    border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.3f))
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = null,
+                                            tint = NawanoPrimary200,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Text(
+                                            text = "Edit",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = NawanoPrimary200
+                                        )
+                                    }
+                                }
+                            }
+
+                            IconButton(
+                                onClick = onCloseDrawer,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close Menu",
+                                    tint = textSecondary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Text(
-                        text = userName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = textPrimary
-                    )
-                    Text(
-                        text = "Supplier",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = textSecondary
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
+                            Text(
+                                text = userName,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = textPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "Supplier • Verified Partner",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = textSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        if (onEditProfile != null) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowRight,
+                                contentDescription = "Edit Profile",
+                                tint = textSecondary.copy(alpha = 0.6f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
 

@@ -105,6 +105,7 @@ fun InventoryNavigationDrawer(
     userRole: String = "Middle Man • Nawano HQ",
     onLogout: (() -> Unit)? = null,
     onSwitchToSupplier: (() -> Unit)? = null,
+    onEditProfile: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
@@ -124,7 +125,8 @@ fun InventoryNavigationDrawer(
                 userName = userName,
                 userRole = userRole,
                 onLogout = onLogout,
-                onSwitchToSupplier = onSwitchToSupplier
+                onSwitchToSupplier = onSwitchToSupplier,
+                onEditProfile = onEditProfile
             )
         },
         content = {
@@ -160,6 +162,7 @@ fun InventoryDrawerSheet(
     userRole: String = "Middle Man • Nawano HQ",
     onLogout: (() -> Unit)? = null,
     onSwitchToSupplier: (() -> Unit)? = null,
+    onEditProfile: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     ModalDrawerSheet(
@@ -177,8 +180,10 @@ fun InventoryDrawerSheet(
                 .navigationBarsPadding()
                 .padding(vertical = 16.dp, horizontal = 16.dp)
         ) {
-            // Profile & Branding Header
+            // Profile & Branding Header (Clickable to edit profile info)
             Surface(
+                onClick = { onEditProfile?.invoke() },
+                enabled = onEditProfile != null,
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.primaryContainer,
                 shape = RoundedCornerShape(20.dp),
@@ -190,7 +195,7 @@ fun InventoryDrawerSheet(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Avatar
+                        // Avatar with Edit Badge
                         val initials = userName.trim().split("\\s+".toRegex())
                             .mapNotNull { part -> part.firstOrNull { it.isLetter() }?.toString() }
                             .take(2)
@@ -198,48 +203,123 @@ fun InventoryDrawerSheet(
                             .uppercase()
                             .ifEmpty { "NW" }
 
-                        Surface(
-                            shape = CircleShape,
-                            color = NawanoPrimary200,
-                            modifier = Modifier.size(46.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = initials,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 18.sp,
-                                    color = Color.White
-                                )
+                        Box {
+                            Surface(
+                                shape = CircleShape,
+                                color = NawanoPrimary200,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = initials,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 18.sp,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                            if (onEditProfile != null) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.surface,
+                                    border = BorderStroke(1.5.dp, NawanoPrimary200),
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .align(Alignment.BottomEnd)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Edit Profile",
+                                            tint = NawanoPrimary200,
+                                            modifier = Modifier.size(10.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
 
-                        // Close Button
-                        IconButton(
-                            onClick = onCloseDrawer,
-                            modifier = Modifier.size(32.dp)
+                        // Right actions: Edit Chip + Close Button
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Close Menu",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            if (onEditProfile != null) {
+                                Surface(
+                                    onClick = onEditProfile,
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = NawanoPrimary200.copy(alpha = 0.15f),
+                                    border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.3f))
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = null,
+                                            tint = NawanoPrimary200,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Text(
+                                            text = "Edit",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = NawanoPrimary200
+                                        )
+                                    }
+                                }
+                            }
+
+                            IconButton(
+                                onClick = onCloseDrawer,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close Menu",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Text(
-                        text = userName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = userRole,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
+                            Text(
+                                text = userName,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = userRole,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        if (onEditProfile != null) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowRight,
+                                contentDescription = "Edit Profile",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -396,6 +476,7 @@ fun NawanoDrawerSheet(
     userName: String = "Anthony",
     userRole: String = "Middle Man • Nawano HQ",
     onLogout: (() -> Unit)? = null,
+    onEditProfile: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) = InventoryDrawerSheet(
     currentDestination = currentDestination,
@@ -407,6 +488,7 @@ fun NawanoDrawerSheet(
     userName = userName,
     userRole = userRole,
     onLogout = onLogout,
+    onEditProfile = onEditProfile,
     modifier = modifier
 )
 

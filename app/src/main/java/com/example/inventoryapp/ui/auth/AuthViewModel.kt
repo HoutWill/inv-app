@@ -143,6 +143,22 @@ class AuthViewModel(
             onSuccess()
         }
     }
+
+    fun updateProfile(
+        userId: String,
+        fullName: String,
+        phoneNumber: String,
+        uniqueCode: String,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            val result = authRepository.updateProfile(userId, fullName, phoneNumber, uniqueCode)
+            result.fold(
+                onSuccess = { onComplete?.invoke(true, null) },
+                onFailure = { error -> onComplete?.invoke(false, error.message ?: "Failed to update profile") }
+            )
+        }
+    }
 }
 
 class AuthViewModelFactory(private val application: Application) : ViewModelProvider.Factory {
