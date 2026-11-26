@@ -2,6 +2,12 @@ package com.example.inventoryapp.ui.supplier
 
 import android.widget.Toast
 import com.example.inventoryapp.ui.dashboard.DrawerEdgeSwipeZone
+import com.example.inventoryapp.ui.dashboard.EditProfileBottomSheet
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,6 +46,10 @@ import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
 import com.example.inventoryapp.data.local.entity.UserEntity
 import com.example.inventoryapp.data.repository.OrderWithItems
+import com.example.inventoryapp.ui.dashboard.InventoryViewModel
+import com.example.inventoryapp.ui.dashboard.InventoryViewModelFactory
+import com.example.inventoryapp.ui.partner.ConnectPartnerBottomSheet
+import com.example.inventoryapp.ui.partner.PartnerRequestsBottomSheet
 import com.example.inventoryapp.ui.scanner.BarcodeScannerScreen
 import com.example.inventoryapp.ui.theme.*
 import kotlinx.coroutines.launch
@@ -77,13 +87,32 @@ fun SupplierOrdersScreen(
     onDeleteProduct: (ProductEntity) -> Unit = {},
     onLoadOrderDetails: suspend (String) -> OrderWithItems? = { null },
     onLogout: () -> Unit = {},
-    onSwitchToMiddleman: (() -> Unit)? = null
+    onSwitchToMiddleman: (() -> Unit)? = null,
+    viewModel: InventoryViewModel? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    val effectiveViewModel = viewModel ?: androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = InventoryViewModelFactory(context.applicationContext as android.app.Application)
+    )
+
+    val partnerUiState by effectiveViewModel.partnerUiState.collectAsState()
+    val incomingPartnerRequests by effectiveViewModel.observeIncomingRequests(user.id).collectAsState(initial = emptyList())
+    val sentPartnerRequests by effectiveViewModel.observeSentRequests(user.id).collectAsState(initial = emptyList())
+    val activePartnerConnections by effectiveViewModel.observeActiveConnections(user.id).collectAsState(initial = emptyList())
+    val pendingPartnerCount by effectiveViewModel.observePendingIncomingCount(user.id).collectAsState(initial = 0)
+    val supplierIssues by effectiveViewModel.supplierIssues.collectAsState()
+    val openIssuesCount by effectiveViewModel.openSupplierIssuesCount.collectAsState()
+    val middlemanUsers by effectiveViewModel.middlemanUsers.collectAsState()
+
+    var isConnectPartnerOpen by remember { mutableStateOf(false) }
+    var isPartnerRequestsOpen by remember { mutableStateOf(false) }
+    var isEditProfileOpen by remember { mutableStateOf(false) }
+    var issueMiddlemanFilter by remember { mutableStateOf<String?>(null) }
+
     // Active View Tab:
-    // 0: Home (Orders), 1: Items (Wholesale Catalog), 2: Stats (Analytics), 3: Settings
+    // 0: Home (Orders), 1: Items (Wholesale Catalog), 2: Stats (Analytics), 3: Settings, 4: Middlemen List, 5: Issues from Middleman
     var activeViewTab by remember { mutableIntStateOf(0) }
     var selectedFilterIndex by remember { mutableIntStateOf(0) }
 
@@ -128,13 +157,30 @@ fun SupplierOrdersScreen(
     var showMiddlemenDropdown by remember { mutableStateOf(false) }
     var showSortDropdown by remember { mutableStateOf(false) }
 
-    val availableMiddlemen = remember(orders) {
-        val list = mutableListOf("Brandon Vaccaro", "David Kim")
+    val middlemanDirectory = remember(middlemanUsers, activePartnerConnections, orders, supplierIssues) {
+        buildMiddlemanDirectory(
+            middlemanUsers = middlemanUsers,
+            activeConnections = activePartnerConnections,
+            orders = orders,
+            issues = supplierIssues
+        )
+    }
+
+    val availableMiddlemen = remember(orders, middlemanDirectory) {
+        val list = mutableListOf<String>()
+        middlemanDirectory.forEach {
+            if (it.displayName.isNotBlank() && !list.contains(it.displayName)) {
+                list.add(it.displayName)
+            }
+        }
         orders.forEach {
             val pic = it.picSender.trim()
             if (pic.isNotBlank() && !list.contains(pic)) {
                 list.add(pic)
             }
+        }
+        if (list.isEmpty()) {
+            list.addAll(listOf("Brandon Vaccaro", "David Kim"))
         }
         list
     }
@@ -162,8 +208,11 @@ fun SupplierOrdersScreen(
         }.filter {
             if (selectedMiddlemanFilter == null) true
             else {
+                val filterVal = selectedMiddlemanFilter!!
                 val middlemanName = if (it.orderNumber.contains("0843")) "David Kim" else it.picSender.ifBlank { "Brandon Vaccaro" }
-                middlemanName.equals(selectedMiddlemanFilter, ignoreCase = true)
+                middlemanName.contains(filterVal, ignoreCase = true) ||
+                    filterVal.contains(middlemanName, ignoreCase = true) ||
+                    (filterVal.contains("Anthony", ignoreCase = true) && it.ownerNote.contains("Nawano HQ", ignoreCase = true))
             }
         }
 
@@ -286,6 +335,8 @@ fun SupplierOrdersScreen(
                 ordersCount = orders.size,
                 catalogCount = products.size,
                 shipmentsCount = inTransitCount,
+                middlemenCount = middlemanDirectory.size,
+                openIssuesCount = openIssuesCount,
                 isDarkTheme = isDarkTheme,
                 onToggleTheme = onToggleTheme,
                 onCloseDrawer = { scope.launch { drawerState.close() } },
@@ -293,48 +344,84 @@ fun SupplierOrdersScreen(
                 onSwitchToMiddleman = onSwitchToMiddleman,
                 onOpenShipments = {
                     scope.launch { drawerState.close() }
-                    activeViewTab = 0
-                    selectedFilterIndex = 2
+                    activeViewTab = 6
                 },
                 onOpenNotifications = {
                     scope.launch { drawerState.close() }
                     showNotificationSheet = true
+                },
+                pendingPartnerRequestsCount = pendingPartnerCount,
+                onOpenPartnerNetwork = {
+                    scope.launch { drawerState.close() }
+                    isPartnerRequestsOpen = true
+                },
+                onEditProfile = {
+                    scope.launch { drawerState.close() }
+                    isEditProfileOpen = true
                 }
             )
         }
     ) {
+        var isBarsVisible by remember { mutableStateOf(true) }
+        val nestedScrollConnection = remember {
+            object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    // Scrolling down (finger moves upward): hide bars to maximize screen estate
+                    if (available.y < -12f) {
+                        if (isBarsVisible) isBarsVisible = false
+                    } else if (available.y > 12f) {
+                        // Scrolling up (finger moves downward): reveal bars smoothly
+                        if (!isBarsVisible) isBarsVisible = true
+                    }
+                    return Offset.Zero
+                }
+            }
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(bgMain)
+                .nestedScroll(nestedScrollConnection)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // Modular Top App Bar
-                SupplierTopBar(
-                    userName = user.fullName.replace(" (Supplier)", ""),
-                    initials = initials,
-                    activeViewTab = activeViewTab,
-                    ordersCount = orders.size,
-                    catalogCount = products.size,
-                    shipmentsCount = inTransitCount,
-                    pendingNotificationCount = pendingCount,
-                    isDarkTheme = isDarkTheme,
-                    searchQuery = searchQuery,
-                    onSearchQueryChange = { searchQuery = it },
-                    onOpenDrawer = { scope.launch { drawerState.open() } },
-                    onToggleTheme = onToggleTheme,
-                    onOpenNotifications = { showNotificationSheet = true },
-                    onOpenScanner = { scannerTarget = SupplierScannerTarget.GENERAL_SCAN },
-                    onQuickAdd = {
-                        if (activeViewTab == 1) {
-                            scannedSkuForCatalog = ""
-                            showAddCatalogItemDialog = true
-                        } else {
-                            showQuickAddChoiceSheet = true
-                        }
-                    },
-                    showTitleAndLogo = false
-                )
+                // Modular Top App Bar with scroll-aware hide/reappear
+                AnimatedVisibility(
+                    visible = isBarsVisible,
+                    enter = slideInVertically(
+                        initialOffsetY = { -it },
+                        animationSpec = tween(220, easing = FastOutSlowInEasing)
+                    ) + expandVertically(
+                        animationSpec = tween(220, easing = FastOutSlowInEasing)
+                    ) + fadeIn(animationSpec = tween(200)),
+                    exit = slideOutVertically(
+                        targetOffsetY = { -it },
+                        animationSpec = tween(200, easing = FastOutSlowInEasing)
+                    ) + shrinkVertically(
+                        animationSpec = tween(200, easing = FastOutSlowInEasing)
+                    ) + fadeOut(animationSpec = tween(150))
+                ) {
+                    SupplierTopBar(
+                        userName = user.fullName.replace(" (Supplier)", ""),
+                        initials = initials,
+                        activeViewTab = activeViewTab,
+                        ordersCount = orders.size,
+                        catalogCount = products.size,
+                        shipmentsCount = inTransitCount,
+                        pendingNotificationCount = pendingCount + openIssuesCount,
+                        isDarkTheme = isDarkTheme,
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = { searchQuery = it },
+                        onOpenDrawer = { scope.launch { drawerState.open() } },
+                        onToggleTheme = onToggleTheme,
+                        onOpenNotifications = { showNotificationSheet = true },
+                        onOpenScanner = { scannerTarget = SupplierScannerTarget.GENERAL_SCAN },
+                        onQuickAdd = null,
+                        showTitleAndLogo = false,
+                        pendingPartnerRequestsCount = pendingPartnerCount,
+                        onOpenPartnerNetwork = { isPartnerRequestsOpen = true }
+                    )
+                }
 
                 // Main Content Switching by Tab
                 when (activeViewTab) {
@@ -345,7 +432,7 @@ fun SupplierOrdersScreen(
                                 .fillMaxSize()
                                 .padding(horizontal = 16.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp),
-                            contentPadding = PaddingValues(top = 10.dp, bottom = 96.dp)
+                            contentPadding = PaddingValues(top = 10.dp, bottom = 170.dp)
                         ) {
                             // 1. Modern Top Search Bar on Home
                             item {
@@ -420,7 +507,7 @@ fun SupplierOrdersScreen(
                                 }
                             }
 
-                            // 2. Horizontal Metric Cards Row (Clean 1-Word Labels)
+                            // 2. Horizontal Metric Cards Row (Display-only summary metrics)
                             item {
                                 Row(
                                     modifier = Modifier
@@ -432,6 +519,18 @@ fun SupplierOrdersScreen(
                                         value = "$totalOrders",
                                         label = "Orders",
                                         isDarkTheme = isDarkTheme
+                                    )
+                                    SupplierMetricCard(
+                                        value = "$openIssuesCount",
+                                        label = "Issues",
+                                        isDarkTheme = isDarkTheme,
+                                        accentColor = if (openIssuesCount > 0) Color(0xFFEF4444) else null
+                                    )
+                                    SupplierMetricCard(
+                                        value = "${middlemanDirectory.size}",
+                                        label = "Middlemen",
+                                        isDarkTheme = isDarkTheme,
+                                        accentColor = NawanoPrimary200
                                     )
                                     SupplierMetricCard(
                                         value = "${products.size}",
@@ -448,6 +547,52 @@ fun SupplierOrdersScreen(
                                         label = "Value",
                                         isDarkTheme = isDarkTheme
                                     )
+                                }
+                            }
+
+                            // 2b. Display-only Alert Summary for Open Middleman Issue Reports
+                            if (openIssuesCount > 0) {
+                                item {
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = if (isDarkTheme) Color(0xFF2D1518) else Color(0xFFFEF2F2),
+                                        border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.38f)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = Color(0xFFEF4444).copy(alpha = 0.16f),
+                                                modifier = Modifier.size(34.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.ReportProblem,
+                                                        contentDescription = null,
+                                                        tint = Color(0xFFEF4444),
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                            }
+                                            Spacer(Modifier.width(10.dp))
+                                            Column {
+                                                Text(
+                                                    text = "$openIssuesCount Open Issue${if (openIssuesCount > 1) "s" else ""} from Middleman",
+                                                    fontSize = 13.5.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isDarkTheme) Color(0xFFFCA5A5) else Color(0xFFB91C1C)
+                                                )
+                                                Text(
+                                                    text = "Check the Report tab in the bottom bar for details",
+                                                    fontSize = 11.5.sp,
+                                                    color = textSecondary
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
 
@@ -664,53 +809,12 @@ fun SupplierOrdersScreen(
                                     )
                                 }
                             }
-
-                            // 6. Wholesale Products Catalog Section on Home (Includes the Home with the reference design!)
-                            if (products.isNotEmpty()) {
-                                item {
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "Products (${products.size})",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = textPrimary
-                                        )
-                                        TextButton(onClick = { activeViewTab = 1 }) {
-                                            Text(
-                                                text = "View all >",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = NawanoPrimary200
-                                            )
-                                        }
-                                    }
-                                }
-
-                                items(products.take(6), key = { "home_prod_${it.id}" }) { product ->
-                                    SupplierCatalogProductCard(
-                                        product = product,
-                                        isDarkTheme = isDarkTheme,
-                                        onEdit = { catalogItemToEdit = product },
-                                        onDelete = { productToDelete = product },
-                                        onRestock = { productToRestock = product },
-                                        onQuantityChange = { prod, delta ->
-                                            val newQty = (prod.quantity + delta).coerceAtLeast(0)
-                                            onUpdateProduct(prod.copy(quantity = newQty))
-                                        }
-                                    )
-                                }
-                            }
                         }
                     }
                     1 -> {
                         // TAB 1: Dedicated Wholesale Catalog Tab
                         SupplierCatalogTab(
-                            products = filteredCatalogProducts,
+                            products = products,
                             isDarkTheme = isDarkTheme,
                             isSortAscending = isSortAscending,
                             onToggleSort = { isSortAscending = !isSortAscending },
@@ -749,26 +853,129 @@ fun SupplierOrdersScreen(
                             onLogout = onLogout
                         )
                     }
+                    4 -> {
+                        // TAB 4: Middleman List / Directory
+                        SupplierMiddlemenScreen(
+                            middlemen = middlemanDirectory,
+                            orders = orders,
+                            issues = supplierIssues,
+                            pendingPartnerRequestsCount = pendingPartnerCount,
+                            isDarkTheme = isDarkTheme,
+                            onOpenConnectPartner = { isConnectPartnerOpen = true },
+                            onViewOrdersForMiddleman = { mmName ->
+                                selectedMiddlemanFilter = mmName
+                                selectedFilterIndex = 0
+                                activeViewTab = 0
+                            },
+                            onViewIssuesForMiddleman = { mmName ->
+                                issueMiddlemanFilter = mmName
+                                activeViewTab = 5
+                            }
+                        )
+                    }
+                    5 -> {
+                        // TAB 5: Report Issues from Middleman
+                        SupplierIssuesScreen(
+                            issues = supplierIssues,
+                            initialMiddlemanFilter = issueMiddlemanFilter,
+                            isDarkTheme = isDarkTheme,
+                            onUpdateIssueStatus = { issueId, newStatus, response ->
+                                effectiveViewModel.updateSupplierIssueStatus(issueId, newStatus, response)
+                            },
+                            onFilterOrdersByMiddleman = { mmName ->
+                                selectedMiddlemanFilter = mmName
+                                selectedFilterIndex = 0
+                                activeViewTab = 0
+                            }
+                        )
+                    }
+                    6 -> {
+                        // TAB 6: Supplier Outbound Freight & Order Tracking
+                        androidx.activity.compose.BackHandler { activeViewTab = 0 }
+                        SupplierTrackingScreen(
+                            orders = orders,
+                            isDarkTheme = isDarkTheme,
+                            onViewOrder = { order -> orderToViewDetails = order },
+                            onConfirmOrder = { order ->
+                                onConfirmOrder(order.id, null)
+                                Toast.makeText(context, "Confirmed ${order.orderNumber}", Toast.LENGTH_SHORT).show()
+                            },
+                            onDispatchOrder = { order -> orderToDispatch = order }
+                        )
+                    }
                 }
             }
 
 
+            // Floating Action Button (+ Add) positioned at bottom-right above the bottom navigation bar
+            // Only visible on Catalog tab (activeViewTab == 1); removed from primary landing/orders tab
+            AnimatedVisibility(
+                visible = isBarsVisible && activeViewTab == 1,
+                enter = scaleIn(animationSpec = tween(180)) + fadeIn(animationSpec = tween(150)),
+                exit = scaleOut(animationSpec = tween(180)) + fadeOut(animationSpec = tween(150)),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = 20.dp, bottom = 96.dp)
+            ) {
+                FloatingActionButton(
+                    onClick = {
+                        if (activeViewTab == 1) {
+                            scannedSkuForCatalog = ""
+                            showAddCatalogItemDialog = true
+                        } else {
+                            showQuickAddChoiceSheet = true
+                        }
+                    },
+                    containerColor = NawanoPrimary200,
+                    contentColor = Color.White,
+                    shape = CircleShape,
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = if (activeViewTab == 1) "Add Catalog Item" else "Quick Action",
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+
             // Floating Bottom Navigation Dock with Central Elevated Scanner FAB
-            SupplierBottomBar(
-                activeViewTab = activeViewTab,
-                onTabSelected = { activeViewTab = it },
-                onScanClicked = {
-                    scannerTarget = SupplierScannerTarget.GENERAL_SCAN
-                },
-                onOpenMenu = {
-                    scope.launch { drawerState.open() }
-                },
-                isDarkTheme = isDarkTheme,
+            AnimatedVisibility(
+                visible = isBarsVisible,
+                enter = slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(220, easing = FastOutSlowInEasing)
+                ) + fadeIn(animationSpec = tween(200)),
+                exit = slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(200, easing = FastOutSlowInEasing)
+                ) + fadeOut(animationSpec = tween(150)),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 12.dp)
-            )
+            ) {
+                SupplierBottomBar(
+                    activeViewTab = activeViewTab,
+                    onTabSelected = { tab ->
+                        if (tab == 5) {
+                            issueMiddlemanFilter = null
+                        }
+                        activeViewTab = tab
+                        isBarsVisible = true
+                    },
+                    onScanClicked = {
+                        scannerTarget = SupplierScannerTarget.GENERAL_SCAN
+                    },
+                    openIssuesCount = openIssuesCount,
+                    middlemenCount = middlemanDirectory.size,
+                    onOpenMenu = {
+                        scope.launch { drawerState.open() }
+                    },
+                    isDarkTheme = isDarkTheme
+                )
+            }
 
             // Left edge swipe zone to open navigation drawer without triggering Android system back
             DrawerEdgeSwipeZone(
@@ -785,16 +992,107 @@ fun SupplierOrdersScreen(
     if (showNotificationSheet) {
         SupplierNotificationsSheet(
             orders = orders,
+            issues = supplierIssues,
             isDarkTheme = isDarkTheme,
+            onOpenIssues = {
+                issueMiddlemanFilter = null
+                activeViewTab = 5
+            },
             onDismiss = { showNotificationSheet = false }
+        )
+    }
+
+    // Modal: Connect Partner (Middleman) Bottom Sheet
+    if (isConnectPartnerOpen) {
+        ConnectPartnerBottomSheet(
+            currentUser = user,
+            partnerUiState = partnerUiState,
+            onSearch = { query -> effectiveViewModel.searchPartner(query, user) },
+            onClearSearch = { effectiveViewModel.clearPartnerSearch() },
+            onSendRequest = { target, note ->
+                effectiveViewModel.sendConnectionRequest(user, target, note) { success ->
+                    if (success) {
+                        Toast.makeText(context, "Connection request sent to ${target.fullName}!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
+            onOpenRequests = {
+                isConnectPartnerOpen = false
+                isPartnerRequestsOpen = true
+            },
+            onDismiss = { isConnectPartnerOpen = false },
+            isDarkTheme = isDarkTheme,
+            pendingRequestsCount = pendingPartnerCount
+        )
+    }
+
+    // Modal: Edit Profile Bottom Sheet
+    if (isEditProfileOpen) {
+        EditProfileBottomSheet(
+            user = user,
+            isDarkTheme = isDarkTheme,
+            onDismiss = { isEditProfileOpen = false },
+            onSave = { updatedName, updatedPhone, updatedCode ->
+                effectiveViewModel.updateUserProfile(
+                    userId = user.id,
+                    fullName = if (updatedName.contains("(Supplier)")) updatedName else "$updatedName (Supplier)",
+                    phoneNumber = updatedPhone,
+                    uniqueCode = updatedCode
+                ) { success, _ ->
+                    if (success) {
+                        isEditProfileOpen = false
+                        Toast.makeText(context, "Profile updated successfully!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        )
+    }
+
+    // Modal: Partner Requests & Manage Connections Bottom Sheet
+    if (isPartnerRequestsOpen) {
+        PartnerRequestsBottomSheet(
+            currentUser = user,
+            incomingRequests = incomingPartnerRequests,
+            sentRequests = sentPartnerRequests,
+            activeConnections = activePartnerConnections,
+            onAccept = { connectionId ->
+                effectiveViewModel.acceptConnection(connectionId) {
+                    Toast.makeText(context, "Connected with Middle Man!", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onDecline = { connectionId ->
+                effectiveViewModel.declineConnection(connectionId) {
+                    Toast.makeText(context, "Request declined", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onCancelSent = { connectionId ->
+                effectiveViewModel.cancelConnectionRequest(connectionId) {
+                    Toast.makeText(context, "Request cancelled", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onDisconnect = { connectionId ->
+                effectiveViewModel.disconnectPartner(connectionId) {
+                    Toast.makeText(context, "Partner disconnected", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onOpenAddPartner = {
+                isPartnerRequestsOpen = false
+                isConnectPartnerOpen = true
+            },
+            onDismiss = { isPartnerRequestsOpen = false },
+            isDarkTheme = isDarkTheme
         )
     }
 
     // Modal 2: Detailed Order Breakdown & Packing Slip Sheet
     orderToViewDetails?.let { order ->
+        val linkedOrderIssues = supplierIssues.filter {
+            it.orderId == order.id || (it.orderNumber.isNotBlank() && it.orderNumber == order.orderNumber)
+        }
         SupplierOrderDetailSheet(
             order = order,
             orderWithItems = detailedOrderWithItems,
+            linkedIssues = linkedOrderIssues,
             isDarkTheme = isDarkTheme,
             packedItemSku = scannedSkuForPacking,
             onDismiss = {
@@ -822,6 +1120,11 @@ fun SupplierOrdersScreen(
                 val target = orderToViewDetails
                 orderToViewDetails = null
                 orderToDelete = target
+            },
+            onInspectIssue = { issue ->
+                orderToViewDetails = null
+                issueMiddlemanFilter = issue.middlemanName
+                activeViewTab = 5
             }
         )
     }
@@ -1132,11 +1435,13 @@ fun SupplierMetricCard(
     value: String,
     label: String,
     isDarkTheme: Boolean,
+    accentColor: Color? = null,
     modifier: Modifier = Modifier
 ) {
     val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
-    val cardBorder = if (isDarkTheme) NawanoDarkOutline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-    val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
+    val cardBorder = if (accentColor != null) accentColor.copy(alpha = 0.4f)
+        else if (isDarkTheme) NawanoDarkOutline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+    val textPrimary = accentColor ?: if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
     val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
 
     Surface(
@@ -1256,7 +1561,7 @@ fun DeleteOrderBottomSheet(
     val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
     val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1368,7 +1673,7 @@ fun DeleteProductBottomSheet(
     val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
     val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

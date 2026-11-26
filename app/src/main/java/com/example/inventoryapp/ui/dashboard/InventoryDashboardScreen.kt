@@ -48,10 +48,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.inventoryapp.R
 import com.example.inventoryapp.data.local.entity.ProductEntity
+import com.example.inventoryapp.data.local.entity.PosPaymentMethod
 import com.example.inventoryapp.data.local.entity.canRequestSupply
 import com.example.inventoryapp.data.local.entity.isDirectSlot
 import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
@@ -59,12 +63,20 @@ import com.example.inventoryapp.data.local.entity.PurchaseOrderItemEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
 import com.example.inventoryapp.data.local.entity.SupplierEntity
+import com.example.inventoryapp.data.local.entity.UserEntity
+import com.example.inventoryapp.data.local.entity.UserRole
 import com.example.inventoryapp.data.remote.OnlineProductData
 import com.example.inventoryapp.data.repository.OrderWithItems
+import com.example.inventoryapp.ui.partner.ConnectPartnerBottomSheet
+import com.example.inventoryapp.ui.partner.PartnerRequestsBottomSheet
 import com.example.inventoryapp.ui.scanner.BarcodeScannerScreen
 import com.example.inventoryapp.ui.supplier.NewPurchaseOrderDialog
+import com.example.inventoryapp.ui.supplier.ReportSupplierIssueBottomSheet
+import com.example.inventoryapp.util.AppCurrency
+import com.example.inventoryapp.util.CurrencyFormatter
 import com.example.inventoryapp.util.ProductImageHelper
 import com.example.inventoryapp.util.ProductThumbnail
+import java.text.NumberFormat
 import com.example.inventoryapp.ui.supplier.SupplierAddEditDialog
 import com.example.inventoryapp.ui.supplier.SuppliersManagementScreen
 import com.example.inventoryapp.ui.theme.*
@@ -78,7 +90,8 @@ import java.util.Locale
 enum class ScannerTarget {
     NONE,
     DASHBOARD_SCAN,
-    ADD_PRODUCT_SKU
+    ADD_PRODUCT_SKU,
+    POS_SCAN
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -87,6 +100,7 @@ fun InventoryDashboardScreen(
     viewModel: InventoryViewModel = viewModel(
         factory = InventoryViewModelFactory(LocalContext.current.applicationContext as Application)
     ),
+    currentUser: UserEntity? = null,
     isDarkTheme: Boolean = isSystemInDarkTheme(),
     onToggleTheme: () -> Unit = {},
     userName: String = "Anthony",
@@ -96,6 +110,33 @@ fun InventoryDashboardScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    val effectiveUser = remember(currentUser, userName, userRole) {
+        currentUser ?: UserEntity(
+            id = "user_middleman",
+            fullName = userName.ifBlank { "Anthony (Middle Man)" },
+            email = "middleman@nawano.com",
+            passwordHash = "",
+            role = UserRole.OWNER,
+            uniqueCode = "MID-1001",
+            phoneNumber = "+1 (555) 019-2831"
+        )
+    }
+
+    var localUser by remember(effectiveUser) { mutableStateOf(effectiveUser) }
+    var isEditProfileOpen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(currentUser) {
+        if (currentUser != null) {
+            localUser = currentUser
+        }
+    }
+
+    val partnerUiState by viewModel.partnerUiState.collectAsState()
+    val incomingPartnerRequests by viewModel.observeIncomingRequests(effectiveUser.id).collectAsState(initial = emptyList())
+    val sentPartnerRequests by viewModel.observeSentRequests(effectiveUser.id).collectAsState(initial = emptyList())
+    val activePartnerConnections by viewModel.observeActiveConnections(effectiveUser.id).collectAsState(initial = emptyList())
+    val pendingPartnerCount by viewModel.observePendingIncomingCount(effectiveUser.id).collectAsState(initial = 0)
+
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -103,6 +144,8 @@ fun InventoryDashboardScreen(
     var scannerTarget by remember { mutableStateOf(ScannerTarget.NONE) }
     var isAddProductOpen by remember { mutableStateOf(false) }
     var isNotificationsOpen by remember { mutableStateOf(false) }
+    var isConnectPartnerOpen by remember { mutableStateOf(false) }
+    var isPartnerRequestsOpen by remember { mutableStateOf(false) }
     var viewingProductDetails by remember { mutableStateOf<ProductEntity?>(null) }
     var addProductDraft by remember { mutableStateOf(AddProductDraft()) }
     var scannedNotFoundSku by remember { mutableStateOf<String?>(null) }
@@ -115,6 +158,21 @@ fun InventoryDashboardScreen(
     var showAddSupplierDialog by remember { mutableStateOf(false) }
     var selectedSupplierForPo by remember { mutableStateOf<SupplierEntity?>(null) }
     var selectedProductForPo by remember { mutableStateOf<ProductEntity?>(null) }
+    var reportingIssueTarget by remember { mutableStateOf<Triple<String, String, OrderWithItems?>?>(null) }
+
+    // POS State & Cart
+    val posCart = remember { mutableStateMapOf<String, Int>() }
+    var isPosCheckoutOpen by remember { mutableStateOf(false) }
+    var isPosUnpaidTabsOpen by remember { mutableStateOf(false) }
+    var posOrdersInitialTab by remember { mutableIntStateOf(0) }
+    var isPosCartMinimized by remember { mutableStateOf(false) }
+    var receiptOrderToShow by remember { mutableStateOf<com.example.inventoryapp.data.local.entity.SalesOrderEntity?>(null) }
+    val unpaidOrders by viewModel.unpaidSalesOrders.collectAsState()
+    val unpaidOrdersCount by viewModel.unpaidSalesOrdersCount.collectAsState()
+    val allSalesOrders by viewModel.allSalesOrders.collectAsState()
+    val parkedCarts by viewModel.parkedCarts.collectAsState()
+    val parkedCartsCount by viewModel.parkedCartsCount.collectAsState()
+    var isPosHoldCartOpen by remember { mutableStateOf(false) }
 
     val handleRequestSupply: (ProductEntity) -> Unit = { item ->
         val sup = uiState.suppliers.find { it.id == item.supplierId }
@@ -135,10 +193,14 @@ fun InventoryDashboardScreen(
             2 -> DrawerDestination.STATISTICS
             else -> DrawerDestination.DASHBOARD
         },
-        userName = userName,
+        userName = localUser.fullName,
         userRole = userRole,
         onLogout = onLogout,
         onSwitchToSupplier = onSwitchToSupplier,
+        onEditProfile = {
+            scope.launch { drawerState.close() }
+            isEditProfileOpen = true
+        },
         onDestinationSelected = { dest ->
             scope.launch { drawerState.close() }
             when (dest) {
@@ -154,12 +216,21 @@ fun InventoryDashboardScreen(
                     drawerDestination = null
                     activeTab = 2
                 }
+                DrawerDestination.POS_ORDERS -> {
+                    drawerDestination = null
+                    activeTab = 3
+                    posOrdersInitialTab = 1
+                    isPosUnpaidTabsOpen = true
+                }
                 DrawerDestination.INVENTORY_SUMMARY -> {
                     drawerDestination = DrawerDestination.INVENTORY_SUMMARY
                 }
                 DrawerDestination.MOVEMENT_LIST -> {
                     drawerDestination = null
                     isStockTransfersSheetOpen = true
+                }
+                DrawerDestination.TRACKING -> {
+                    drawerDestination = DrawerDestination.TRACKING
                 }
                 DrawerDestination.AUDIT_LOGS -> {
                     drawerDestination = null
@@ -176,12 +247,48 @@ fun InventoryDashboardScreen(
         onCloseDrawer = { scope.launch { drawerState.close() } },
         isDarkTheme = isDarkTheme,
         onToggleTheme = onToggleTheme,
-        totalSkus = uiState.totalSkus
+        totalSkus = uiState.totalSkus,
+        activeTrackingCount = uiState.orders.count {
+            it.status == PurchaseOrderStatus.PENDING ||
+            it.status == PurchaseOrderStatus.CONFIRMED ||
+            it.status == PurchaseOrderStatus.DELIVERED
+        }
     ) {
+        // Scroll-aware visibility for Top App Bar, Floating Bottom Navigation Bar & FAB
+        var isBarsVisible by remember { mutableStateOf(true) }
+        val nestedScrollConnection = remember {
+            object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    // Scrolling down (finger moves upward): hide bars to maximize screen estate
+                    if (available.y < -12f) {
+                        if (isBarsVisible) isBarsVisible = false
+                    } else if (available.y > 12f) {
+                        // Scrolling up (finger moves downward): reveal bars smoothly
+                        if (!isBarsVisible) isBarsVisible = true
+                    }
+                    return Offset.Zero
+                }
+            }
+        }
+
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
-                if (drawerDestination == null) {
+                AnimatedVisibility(
+                    visible = isBarsVisible && drawerDestination == null,
+                    enter = slideInVertically(
+                        initialOffsetY = { -it },
+                        animationSpec = tween(220, easing = FastOutSlowInEasing)
+                    ) + expandVertically(
+                        animationSpec = tween(220, easing = FastOutSlowInEasing)
+                    ) + fadeIn(animationSpec = tween(200)),
+                    exit = slideOutVertically(
+                        targetOffsetY = { -it },
+                        animationSpec = tween(200, easing = FastOutSlowInEasing)
+                    ) + shrinkVertically(
+                        animationSpec = tween(200, easing = FastOutSlowInEasing)
+                    ) + fadeOut(animationSpec = tween(150))
+                ) {
                     InventoryTopBar(
                         totalSkus = uiState.totalSkus,
                         lowStockCount = uiState.lowStockCount,
@@ -189,11 +296,15 @@ fun InventoryDashboardScreen(
                         onOpenDrawer = { scope.launch { drawerState.open() } },
                         onToggleTheme = onToggleTheme,
                         onOpenNotifications = { isNotificationsOpen = true },
-                        onAddProduct = {
-                            addProductDraft = AddProductDraft(sku = uiState.searchQuery)
-                            isAddProductOpen = true
-                        },
-                        showTitleAndLogo = false
+                        onAddProduct = null,
+                        showTitleAndLogo = false,
+                        customTitle = null,
+                        showCurrencyPill = true,
+                        pendingPartnerRequestsCount = if (pendingPartnerCount > 0) pendingPartnerCount else 3,
+                        onOpenPartnerNetwork = { isPartnerRequestsOpen = true },
+                        currentCurrency = uiState.selectedCurrency,
+                        onCurrencySelected = { viewModel.setSelectedCurrency(it) },
+                        onToggleCurrency = { viewModel.toggleCurrency() }
                     )
                 }
             }
@@ -206,6 +317,7 @@ fun InventoryDashboardScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .nestedScroll(nestedScrollConnection)
                     .padding(
                         top = if (drawerDestination == null) innerPadding.calculateTopPadding() else 0.dp,
                         bottom = if (drawerDestination == null) innerPadding.calculateBottomPadding() else 0.dp
@@ -220,27 +332,91 @@ fun InventoryDashboardScreen(
                                 totalItems = uiState.totalItemsCount,
                                 totalValue = uiState.totalInventoryValue,
                                 onBack = { drawerDestination = null },
-                                onProductClick = { product -> viewingProductDetails = product }
+                                onProductClick = { product -> viewingProductDetails = product },
+                                currency = uiState.selectedCurrency,
+                                exchangeRate = uiState.exchangeRateUsdToKhr
                             )
                         }
                         DrawerDestination.MOVEMENT_LIST -> {
                             MovementListScreen(
                                 stockTransactions = uiState.transactions,
+                                products = uiState.products,
+                                onLogMovement = { product, delta, type, note ->
+                                    viewModel.adjustStock(product, delta, type, note)
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Logged $type for ${product.name} ($delta ${product.unit})")
+                                    }
+                                },
                                 onBack = { drawerDestination = null },
                                 onScanClicked = { scannerTarget = ScannerTarget.DASHBOARD_SCAN }
+                            )
+                        }
+                        DrawerDestination.TRACKING -> {
+                            MiddlemanTrackingScreen(
+                                orders = uiState.orders,
+                                onBack = { drawerDestination = null },
+                                onScanClicked = { scannerTarget = ScannerTarget.DASHBOARD_SCAN },
+                                onOrderClick = { orderId ->
+                                    scope.launch {
+                                        val loaded = viewModel.getOrderWithItems(orderId)
+                                        viewingOrderWithItems = loaded ?: uiState.orders.find { it.id == orderId }?.let { OrderWithItems(it, emptyList()) }
+                                    }
+                                },
+                                onReceiveOrder = { orderId ->
+                                    viewModel.receiveOrder(orderId) { success ->
+                                        if (success) {
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("Shipment received & inventory stocked!")
+                                            }
+                                        }
+                                    }
+                                },
+                                onReportIssue = { order ->
+                                    scope.launch {
+                                        val loaded = viewModel.getOrderWithItems(order.id)
+                                        reportingIssueTarget = Triple(
+                                            order.supplierId,
+                                            order.supplierName,
+                                            loaded ?: OrderWithItems(order, emptyList())
+                                        )
+                                    }
+                                },
+                                isDarkTheme = isDarkTheme,
+                                currency = uiState.selectedCurrency,
+                                exchangeRate = uiState.exchangeRateUsdToKhr
                             )
                         }
                         DrawerDestination.SUPPLIERS -> {
                             SuppliersManagementScreen(
                                 suppliers = uiState.suppliers,
                                 onBack = { drawerDestination = null },
-                                onSaveSupplier = { supplier -> viewModel.saveSupplier(supplier) },
+                                onSaveSupplier = { supplier ->
+                                    viewModel.saveSupplier(supplier) {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Saved supplier '${supplier.name}'")
+                                        }
+                                    }
+                                },
                                 onToggleSupplierActive = { id, active -> viewModel.toggleSupplierActive(id, active) },
+                                onDeleteSupplier = { supplier ->
+                                    viewModel.deleteSupplier(supplier) { success ->
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                if (success) "Deleted supplier '${supplier.name}'" else "Failed to delete supplier"
+                                            )
+                                        }
+                                    }
+                                },
                                 onNewPurchaseOrder = { supplier ->
                                     selectedSupplierForPo = supplier
                                     showNewPoDialog = true
                                 },
-                                isDarkTheme = isDarkTheme
+                                onReportIssue = { supplier ->
+                                    reportingIssueTarget = Triple(supplier.id, supplier.name, null)
+                                },
+                                isDarkTheme = isDarkTheme,
+                                onOpenConnectPartner = { isConnectPartnerOpen = true },
+                                pendingPartnerRequestsCount = pendingPartnerCount
                             )
                         }
                         DrawerDestination.AUDIT_LOGS -> {
@@ -290,6 +466,17 @@ fun InventoryDashboardScreen(
                                 InventorySettingsScreen(
                                     totalSkus = uiState.totalSkus,
                                     totalItems = uiState.totalItemsCount,
+                                    selectedCurrency = uiState.selectedCurrency,
+                                    exchangeRate = uiState.exchangeRateUsdToKhr,
+                                    onSelectCurrency = { viewModel.setSelectedCurrency(it) },
+                                    onSaveExchangeRate = { viewModel.setExchangeRate(it) },
+                                    paywayMerchantId = uiState.paywayMerchantId,
+                                    paywayApiKey = uiState.paywayApiKey,
+                                    paywayIsSandbox = uiState.paywayIsSandbox,
+                                    onSavePaywayConfig = { mId, key, sandbox ->
+                                        viewModel.setPaywayConfig(mId, key, sandbox)
+                                    },
+                                    isDarkTheme = isDarkTheme,
                                     onClearAllData = { viewModel.clearAllData() }
                                 )
                             }
@@ -326,7 +513,7 @@ fun InventoryDashboardScreen(
                             DashboardOverviewTab(
                                 uiState = uiState,
                                 isDarkTheme = isDarkTheme,
-                                onScanClicked = { scannerTarget = ScannerTarget.DASHBOARD_SCAN },
+                                onScanClicked = { scannerTarget = if (activeTab == 3) ScannerTarget.POS_SCAN else ScannerTarget.DASHBOARD_SCAN },
                                 onAddProductClicked = {
                                     addProductDraft = AddProductDraft()
                                     isAddProductOpen = true
@@ -448,7 +635,7 @@ fun InventoryDashboardScreen(
                                 onCategorySelected = { viewModel.onCategorySelected(it) },
                                 onSubcategorySelected = { viewModel.onSubcategorySelected(it) },
                                 onSortChanged = { viewModel.onSortOptionChanged(it) },
-                                onScanClicked = { scannerTarget = ScannerTarget.DASHBOARD_SCAN },
+                                onScanClicked = { scannerTarget = if (activeTab == 3) ScannerTarget.POS_SCAN else ScannerTarget.DASHBOARD_SCAN },
                                 onAddProductClicked = {
                                     addProductDraft = AddProductDraft(sku = uiState.searchQuery)
                                     isAddProductOpen = true
@@ -501,31 +688,131 @@ fun InventoryDashboardScreen(
                             )
                         }
                         3 -> {
-                            // TAB 3: Settings & Database Management
-                            InventorySettingsScreen(
-                                totalSkus = uiState.totalSkus,
-                                totalItems = uiState.totalItemsCount,
-                                onClearAllData = { viewModel.clearAllData() },
-                                modifier = Modifier.padding(bottom = 88.dp)
+                            // TAB 3: POS Register Screen (with My Stock, Cart, Pay Later)
+                            PosRegisterScreen(
+                                products = uiState.products,
+                                unpaidTabsCount = unpaidOrdersCount,
+                                parkedCartsCount = parkedCartsCount,
+                                salesHistoryCount = allSalesOrders.size,
+                                cart = posCart,
+                                onUpdateCartQuantity = { product, newQty ->
+                                    if (newQty <= 0) {
+                                        posCart.remove(product.id)
+                                    } else {
+                                        posCart[product.id] = newQty
+                                    }
+                                    if (posCart.isEmpty()) {
+                                        isPosCartMinimized = false
+                                    }
+                                },
+                                onOpenDrawer = { scope.launch { drawerState.open() } },
+                                onOpenUnpaidTabs = {
+                                    posOrdersInitialTab = 0
+                                    isPosUnpaidTabsOpen = true
+                                },
+                                onOpenSalesHistory = {
+                                    posOrdersInitialTab = 1
+                                    isPosUnpaidTabsOpen = true
+                                },
+                                onOpenScanner = { scannerTarget = ScannerTarget.POS_SCAN },
+                                onOpenCheckout = {
+                                    isUpcomingSheetOpen = false
+                                    isLowStockSheetOpen = false
+                                    isStockTransfersSheetOpen = false
+                                    isStockHistorySheetOpen = false
+                                    isNotificationsOpen = false
+                                    isPosUnpaidTabsOpen = false
+                                    viewingProductDetails = null
+                                    isPosCheckoutOpen = true
+                                },
+                                onHoldCart = { isPosHoldCartOpen = true },
+                                onOpenPartnerNetwork = { isPartnerRequestsOpen = true },
+                                isDarkTheme = isDarkTheme,
+                                isCartMinimized = isPosCartMinimized,
+                                isBottomBarVisible = isBarsVisible && !isPosCheckoutOpen,
+                                onToggleCartMinimized = { isPosCartMinimized = !isPosCartMinimized },
+                                currency = uiState.selectedCurrency,
+                                exchangeRate = uiState.exchangeRateUsdToKhr,
+                                showSubHeader = false,
+                                modifier = Modifier.fillMaxSize()
                             )
                         }
                     }
                 }
 
-                // Floating Bottom Navigation Bar (handles system bars padding safely)
-                InventoryBottomBar(
-                    selectedTab = activeTab,
-                    onTabSelected = { tab ->
-                        drawerDestination = null
-                        activeTab = tab
-                    },
-                    onScanClicked = { scannerTarget = ScannerTarget.DASHBOARD_SCAN },
-                    totalItemCount = uiState.totalSkus,
+                // Floating Action Button (+ Add) positioned at bottom-right above the bottom navigation bar
+                // Only visible on Items / Catalog tab (activeTab == 1); removed from Home page (activeTab == 0)
+                AnimatedVisibility(
+                    visible = isBarsVisible && drawerDestination == null && activeTab == 1,
+                    enter = scaleIn(animationSpec = tween(180)) + fadeIn(animationSpec = tween(150)),
+                    exit = scaleOut(animationSpec = tween(180)) + fadeOut(animationSpec = tween(150)),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                        .padding(end = 20.dp, bottom = 96.dp)
+                ) {
+                    FloatingActionButton(
+                        onClick = {
+                            addProductDraft = AddProductDraft(sku = uiState.searchQuery)
+                            isAddProductOpen = true
+                        },
+                        containerColor = NawanoPrimary200,
+                        contentColor = Color.White,
+                        shape = CircleShape,
+                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Add Product",
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
+
+                // Floating Bottom Navigation Bar (auto-hides on scroll down, stays accessible on POS when bars are visible)
+                AnimatedVisibility(
+                    visible = isBarsVisible && drawerDestination == null && !isPosCheckoutOpen,
+                    enter = slideInVertically(
+                        initialOffsetY = { it },
+                        animationSpec = tween(220, easing = FastOutSlowInEasing)
+                    ) + fadeIn(animationSpec = tween(200)),
+                    exit = slideOutVertically(
+                        targetOffsetY = { it },
+                        animationSpec = tween(200, easing = FastOutSlowInEasing)
+                    ) + fadeOut(animationSpec = tween(150)),
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 12.dp)
-                )
+                ) {
+                    InventoryBottomBar(
+                        selectedTab = activeTab,
+                        onTabSelected = { tab ->
+                            if (tab == 3 && activeTab == 3 && posCart.isNotEmpty() && isPosCartMinimized) {
+                                isPosCartMinimized = false
+                            } else {
+                                drawerDestination = null
+                                isUpcomingSheetOpen = false
+                                isLowStockSheetOpen = false
+                                isStockTransfersSheetOpen = false
+                                isStockHistorySheetOpen = false
+                                isNotificationsOpen = false
+                                isPosCheckoutOpen = false
+                                isPosUnpaidTabsOpen = false
+                                viewingProductDetails = null
+                                activeTab = tab
+                                if (tab == 3 && posCart.isNotEmpty()) {
+                                    isPosCartMinimized = false
+                                }
+                                isBarsVisible = true
+                            }
+                        },
+                        onScanClicked = { scannerTarget = if (activeTab == 3) ScannerTarget.POS_SCAN else ScannerTarget.DASHBOARD_SCAN },
+                        totalItemCount = uiState.totalSkus,
+                        cartItemCount = posCart.values.sum(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
             // Fullscreen Camera Barcode Scanner
@@ -586,6 +873,34 @@ fun InventoryDashboardScreen(
                                 isAddProductOpen = true
                                 scannerTarget = ScannerTarget.NONE
                             }
+                            ScannerTarget.POS_SCAN -> {
+                                val cleanSku = scannedSku.trim()
+                                val cleanWithoutHash = cleanSku.removePrefix("#").trim()
+                                val cleanNoZeros = cleanWithoutHash.trimStart('0')
+                                scannerTarget = ScannerTarget.NONE
+
+                                val exactMatch = uiState.products.find { it.sku.trim().equals(cleanSku, ignoreCase = true) }
+                                val matchedProd = exactMatch ?: uiState.products.find { prod ->
+                                    val prodSku = prod.sku.trim().removePrefix("#")
+                                    prodSku.equals(cleanWithoutHash, ignoreCase = true) ||
+                                    (cleanNoZeros.isNotBlank() && prodSku.trimStart('0').equals(cleanNoZeros, ignoreCase = true)) ||
+                                    (cleanNoZeros.isNotBlank() && prod.sku.trim().trimStart('0').equals(cleanNoZeros, ignoreCase = true)) ||
+                                    prod.sku.contains(cleanWithoutHash, ignoreCase = true)
+                                }
+
+                                if (matchedProd != null) {
+                                    val currentQty = posCart[matchedProd.id] ?: 0
+                                    posCart[matchedProd.id] = currentQty + 1
+                                    isPosCartMinimized = false
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Added '${matchedProd.name}' to cart (${currentQty + 1} ${matchedProd.unit})")
+                                    }
+                                } else {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Product #$cleanSku not found in inventory")
+                                    }
+                                }
+                            }
                             else -> {
                                 scannerTarget = ScannerTarget.NONE
                             }
@@ -605,6 +920,7 @@ fun InventoryDashboardScreen(
                 AddProductDialog(
                     initialDraft = addProductDraft,
                     suppliers = uiState.suppliers.filter { it.isActive },
+                    existingSkus = uiState.products.map { it.sku }.toSet(),
                     onDismiss = { isAddProductOpen = false },
                     onRequestScanSku = { draft ->
                         addProductDraft = draft
@@ -612,12 +928,16 @@ fun InventoryDashboardScreen(
                         scannerTarget = ScannerTarget.ADD_PRODUCT_SKU
                     },
                     onProductAdded = { newProduct ->
-                        viewModel.addProduct(newProduct)
+                        viewModel.addProduct(newProduct) { success, errMsg ->
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    if (success) "Product '${newProduct.name}' added to inventory!"
+                                    else (errMsg ?: "Could not add product")
+                                )
+                            }
+                        }
                         isAddProductOpen = false
                         activeTab = 0 // Stay on Home tab
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Product '${newProduct.name}' added to inventory!")
-                        }
                     }
                 )
             }
@@ -662,18 +982,211 @@ fun InventoryDashboardScreen(
                 )
             }
 
-            // In-App Stock Alerts & Activity Notifications Dialog
+            // POS Checkout Bottom Sheet (ABA PayWay 2.11 + Pay Later)
+            if (isPosCheckoutOpen) {
+                val totalAmountUsd = posCart.entries.sumOf { (prodId, qty) ->
+                    val prod = uiState.products.find { it.id == prodId }
+                    (prod?.sellingPrice ?: 0.0) * qty
+                }
+                val totalItemCount = posCart.values.sum()
+                val itemsSummary = posCart.entries.joinToString(", ") { (prodId, qty) ->
+                    val prod = uiState.products.find { it.id == prodId }
+                    "${qty}x ${prod?.name ?: "Item"}"
+                }
+
+                val cartItemsList = posCart.mapNotNull { (prodId, qty) ->
+                    uiState.products.find { it.id == prodId }?.let { it to qty }
+                }
+
+                PosCheckoutBottomSheet(
+                    totalAmountUsd = totalAmountUsd,
+                    itemCount = totalItemCount,
+                    cartItems = cartItemsList,
+                    onUpdateQuantity = { product, newQty ->
+                        if (newQty <= 0) {
+                            posCart.remove(product.id)
+                        } else {
+                            posCart[product.id] = newQty
+                        }
+                    },
+                    itemsSummary = itemsSummary,
+                    currency = uiState.selectedCurrency,
+                    exchangeRate = uiState.exchangeRateUsdToKhr,
+                    paywayMerchantId = uiState.paywayMerchantId,
+                    paywayApiKey = uiState.paywayApiKey,
+                    paywayIsSandbox = uiState.paywayIsSandbox,
+                    onDismiss = { isPosCheckoutOpen = false },
+                    onConfirmSale = { paymentMethod, customerName, customerPhone, dueDate, note, subtotalUsd, discountType, discountValue, discountAmountUsd, taxRate, taxAmountUsd, splitDetails ->
+                        val itemsToSell = posCart.mapNotNull { (prodId, qty) ->
+                            uiState.products.find { it.id == prodId }?.let { it to qty }
+                        }
+                        viewModel.processPosSale(
+                            items = itemsToSell,
+                            paymentMethod = paymentMethod,
+                            customerName = customerName,
+                            customerPhone = customerPhone,
+                            dueDate = dueDate,
+                            note = note,
+                            subtotalUsd = subtotalUsd,
+                            discountType = discountType,
+                            discountValue = discountValue,
+                            discountAmountUsd = discountAmountUsd,
+                            taxRate = taxRate,
+                            taxAmountUsd = taxAmountUsd,
+                            splitDetails = splitDetails,
+                            onSuccess = { order ->
+                                posCart.clear()
+                                isPosCartMinimized = false
+                                isPosCheckoutOpen = false
+                                receiptOrderToShow = order
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        when (paymentMethod) {
+                                            PosPaymentMethod.COD -> "Recorded COD Tab for ${order.customerName} (Invoice #${order.invoiceNumber})"
+                                            PosPaymentMethod.SPLIT -> "Split sale completed: Invoice #${order.invoiceNumber}"
+                                            else -> "Sale completed: Invoice #${order.invoiceNumber}"
+                                        }
+                                    )
+                                }
+                            }
+                        )
+                    }
+                )
+            }
+
+            // Post-Sale Invoice & Digital Receipt Modal Bottom Sheet
+            if (receiptOrderToShow != null) {
+                PosInvoiceReceiptBottomSheet(
+                    order = receiptOrderToShow!!,
+                    currency = uiState.selectedCurrency,
+                    exchangeRate = uiState.exchangeRateUsdToKhr,
+                    onViewHistory = {
+                        receiptOrderToShow = null
+                        posOrdersInitialTab = 1
+                        isPosUnpaidTabsOpen = true
+                    },
+                    onDismiss = { receiptOrderToShow = null }
+                )
+            }
+
+            // POS Orders Management (Unpaid Debt Tabs, Sales History with Refund/Issue/Void/Restock, and Parked Carts)
+            if (isPosUnpaidTabsOpen) {
+                PosOrdersManagementBottomSheet(
+                    unpaidOrders = unpaidOrders,
+                    allOrders = allSalesOrders,
+                    parkedCarts = parkedCarts,
+                    exchangeRate = uiState.exchangeRateUsdToKhr,
+                    currency = uiState.selectedCurrency,
+                    initialTab = posOrdersInitialTab,
+                    isDarkTheme = isDarkTheme,
+                    onDismiss = { isPosUnpaidTabsOpen = false },
+                    onSettleOrder = { orderId, method ->
+                        viewModel.settleSalesOrder(orderId, method) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Customer tab settled and marked PAID!")
+                            }
+                        }
+                    },
+                    onVoidOrder = { orderId, reason ->
+                        viewModel.voidSalesOrder(orderId, reason) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Sale voided and inventory automatically restocked!")
+                            }
+                        }
+                    },
+                    onProcessRefund = { orderId, returnedItems, issueType, conditionAnswer, reason, restockItems, refundMethod, proofImageUri, onUpdated ->
+                        viewModel.processPosRefund(
+                            orderId = orderId,
+                            returnedItems = returnedItems,
+                            issueType = issueType,
+                            conditionAnswer = conditionAnswer,
+                            reason = reason,
+                            restockItems = restockItems,
+                            refundMethod = refundMethod,
+                            proofImageUri = proofImageUri
+                        ) { updatedOrder ->
+                            onUpdated(updatedOrder)
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Refund & issue proof recorded for #${updatedOrder.invoiceNumber}")
+                            }
+                        }
+                    },
+                    onResumeParkedCart = { parkedCart ->
+                        try {
+                            val jsonArray = org.json.JSONArray(parkedCart.itemsJson)
+                            for (i in 0 until jsonArray.length()) {
+                                val item = jsonArray.getJSONObject(i)
+                                val prodId = item.optString("productId")
+                                val qty = item.optInt("quantity", 0)
+                                if (prodId.isNotBlank() && qty > 0) {
+                                    posCart[prodId] = (posCart[prodId] ?: 0) + qty
+                                }
+                            }
+                            viewModel.deleteParkedCart(parkedCart.id)
+                            isPosCartMinimized = false
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Resumed parked order '${parkedCart.label}'")
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("InventoryDashboard", "Failed to resume parked cart", e)
+                        }
+                    },
+                    onDeleteParkedCart = { cartId ->
+                        viewModel.deleteParkedCart(cartId) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Parked order removed")
+                            }
+                        }
+                    }
+                )
+            }
+
+            // POS Hold / Park Active Cart Bottom Sheet
+            if (isPosHoldCartOpen) {
+                PosHoldCartBottomSheet(
+                    cart = posCart,
+                    products = uiState.products,
+                    currency = uiState.selectedCurrency,
+                    exchangeRate = uiState.exchangeRateUsdToKhr,
+                    onDismiss = { isPosHoldCartOpen = false },
+                    onConfirmHold = { label, note ->
+                        viewModel.parkCart(label, note, posCart, uiState.products) {
+                            posCart.clear()
+                            isPosCartMinimized = false
+                            isPosHoldCartOpen = false
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Cart held as '$label'")
+                            }
+                        }
+                    }
+                )
+            }
+
+            // In-App Stock Alerts, Supplier & Activity Notifications Sheet
             if (isNotificationsOpen) {
                 val lowStockProducts = uiState.products.filter { it.quantity <= it.reorderLevel }
                 StockNotificationsDialog(
                     lowStockProducts = lowStockProducts,
                     recentTransactions = uiState.transactions,
+                    purchaseOrders = uiState.orders,
+                    suppliers = uiState.suppliers,
+                    isDarkTheme = isDarkTheme,
                     onDismiss = { isNotificationsOpen = false },
                     onRestock = { product, qty ->
                         viewModel.adjustStock(product, qty, "STOCK_IN", "Restocked from alert notification")
                         scope.launch {
                             snackbarHostState.showSnackbar("Restocked +$qty units for '${product.name}'")
                         }
+                    },
+                    onOpenOrder = { order ->
+                        isNotificationsOpen = false
+                        scope.launch {
+                            viewingOrderWithItems = viewModel.getOrderWithItems(order.id)
+                        }
+                    },
+                    onOpenSuppliers = {
+                        isNotificationsOpen = false
+                        drawerDestination = DrawerDestination.SUPPLIERS
                     },
                     onViewAllCatalog = {
                         isNotificationsOpen = false
@@ -775,7 +1288,9 @@ fun InventoryDashboardScreen(
                             snackbarHostState.showSnackbar("Deleted '${liveProduct.name}'")
                         }
                     },
-                    onRequestSupply = handleRequestSupply
+                    onRequestSupply = handleRequestSupply,
+                    currency = uiState.selectedCurrency,
+                    exchangeRate = uiState.exchangeRateUsdToKhr
                 )
             }
 
@@ -793,14 +1308,69 @@ fun InventoryDashboardScreen(
                         viewingOrderWithItems = null
                     },
                     onReceiveOrder = { orderId ->
-                        viewModel.receiveOrder(orderId) { success ->
+                        val isCodOrder = currentOrderWithItems.order.paymentMethod == com.example.inventoryapp.data.local.entity.SupplierPaymentMethod.COD
+                        viewModel.receiveOrder(orderId, markPaymentPaidOnReceive = isCodOrder) { success ->
                             if (success) {
                                 scope.launch {
-                                    snackbarHostState.showSnackbar("Shipment received & inventory stocked successfully!")
+                                    val msg = if (isCodOrder) {
+                                        "COD paid & inventory stocked successfully!"
+                                    } else {
+                                        "Shipment received & inventory stocked successfully!"
+                                    }
+                                    snackbarHostState.showSnackbar(msg)
                                 }
                             }
                         }
                         viewingOrderWithItems = null
+                    },
+                    onPaySupplier = { orderId, method ->
+                        viewModel.paySupplierOrder(orderId, method) { success ->
+                            if (success) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Supplier payment recorded via ${method.label}")
+                                }
+                            }
+                        }
+                        viewingOrderWithItems = null
+                    },
+                    onReportIssue = {
+                        val order = currentOrderWithItems.order
+                        reportingIssueTarget = Triple(order.supplierId, order.supplierName, currentOrderWithItems)
+                        viewingOrderWithItems = null
+                    }
+                )
+            }
+
+            reportingIssueTarget?.let { (supId, supName, orderData) ->
+                ReportSupplierIssueBottomSheet(
+                    supplierName = supName.ifBlank { "Supplier" },
+                    orderNumber = orderData?.order?.orderNumber ?: "",
+                    orderItems = orderData?.items ?: emptyList(),
+                    isDarkTheme = isDarkTheme,
+                    onDismiss = { reportingIssueTarget = null },
+                    onSubmitIssue = { issueType, severity, itemName, qty, desc ->
+                        viewModel.reportSupplierIssue(
+                            supplierId = supId,
+                            supplierName = supName.ifBlank { "Supplier" },
+                            middlemanId = currentUser?.id ?: "user_middleman",
+                            middlemanName = currentUser?.fullName?.ifBlank { userName } ?: userName,
+                            middlemanCode = currentUser?.uniqueCode?.ifBlank { "MID-1001" } ?: "MID-1001",
+                            orderId = orderData?.order?.id,
+                            orderNumber = orderData?.order?.orderNumber ?: "",
+                            issueType = issueType,
+                            severity = severity,
+                            affectedItemName = itemName,
+                            affectedQuantity = qty,
+                            description = desc
+                        ) { res ->
+                            scope.launch {
+                                if (res.isSuccess) {
+                                    snackbarHostState.showSnackbar("Issue ${res.getOrNull()?.issueCode ?: ""} sent to $supName")
+                                } else {
+                                    snackbarHostState.showSnackbar("Failed to report issue")
+                                }
+                            }
+                        }
                     }
                 )
             }
@@ -817,12 +1387,20 @@ fun InventoryDashboardScreen(
                         showNewPoDialog = false
                         selectedProductForPo = null
                     },
-                    onSubmit = { sup, title, pic, items, note, estArrival ->
-                        viewModel.createPurchaseOrder(sup, title, pic, items, note, estArrival) { created ->
+                    onSubmit = { sup, title, pic, items, note, estArrival, paymentMethod ->
+                        viewModel.createPurchaseOrder(
+                            supplier = sup,
+                            title = title,
+                            picSender = pic,
+                            items = items,
+                            ownerNote = note,
+                            estArrival = estArrival,
+                            paymentMethod = paymentMethod
+                        ) { created ->
                             showNewPoDialog = false
                             selectedProductForPo = null
                             scope.launch {
-                                snackbarHostState.showSnackbar("Purchase Order ${created?.orderNumber ?: ""} created!")
+                                snackbarHostState.showSnackbar("Purchase Order ${created?.orderNumber ?: ""} (${paymentMethod.label}) created!")
                             }
                         }
                     }
@@ -842,6 +1420,109 @@ fun InventoryDashboardScreen(
                             snackbarHostState.showSnackbar("Supplier '${newSupplier.name}' added successfully!")
                         }
                     }
+                )
+            }
+
+            // Edit Profile Modal Bottom Sheet (Swipe-up bottom sheet)
+            if (isEditProfileOpen) {
+                EditProfileBottomSheet(
+                    user = localUser,
+                    isDarkTheme = isDarkTheme,
+                    onDismiss = { isEditProfileOpen = false },
+                    onSave = { updatedName, updatedPhone, updatedCode ->
+                        viewModel.updateUserProfile(
+                            userId = localUser.id,
+                            fullName = updatedName,
+                            phoneNumber = updatedPhone,
+                            uniqueCode = updatedCode
+                        ) { success, error ->
+                            if (success) {
+                                localUser = localUser.copy(
+                                    fullName = updatedName,
+                                    phoneNumber = updatedPhone,
+                                    uniqueCode = updatedCode
+                                )
+                                isEditProfileOpen = false
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Profile updated successfully!")
+                                }
+                            } else {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(error ?: "Failed to update profile")
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+
+            // Connect Partner Modal Bottom Sheet
+            if (isConnectPartnerOpen) {
+                ConnectPartnerBottomSheet(
+                    currentUser = effectiveUser,
+                    partnerUiState = partnerUiState,
+                    onSearch = { query -> viewModel.searchPartner(query, effectiveUser) },
+                    onClearSearch = { viewModel.clearPartnerSearch() },
+                    onSendRequest = { target, note ->
+                        viewModel.sendConnectionRequest(effectiveUser, target, note) { success ->
+                            if (success) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Connection request sent to ${target.fullName}!")
+                                }
+                            }
+                        }
+                    },
+                    onOpenRequests = {
+                        isConnectPartnerOpen = false
+                        isPartnerRequestsOpen = true
+                    },
+                    onDismiss = { isConnectPartnerOpen = false },
+                    isDarkTheme = isDarkTheme,
+                    pendingRequestsCount = pendingPartnerCount
+                )
+            }
+
+            // Partner Requests & Manage Connections Modal Bottom Sheet
+            if (isPartnerRequestsOpen) {
+                PartnerRequestsBottomSheet(
+                    currentUser = effectiveUser,
+                    incomingRequests = incomingPartnerRequests,
+                    sentRequests = sentPartnerRequests,
+                    activeConnections = activePartnerConnections,
+                    onAccept = { connectionId ->
+                        viewModel.acceptConnection(connectionId) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Connected! Supplier added to your ordering directory.")
+                            }
+                        }
+                    },
+                    onDecline = { connectionId ->
+                        viewModel.declineConnection(connectionId) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Connection request declined")
+                            }
+                        }
+                    },
+                    onCancelSent = { connectionId ->
+                        viewModel.cancelConnectionRequest(connectionId) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Request cancelled")
+                            }
+                        }
+                    },
+                    onDisconnect = { connectionId ->
+                        viewModel.disconnectPartner(connectionId) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Partner disconnected (order records kept)")
+                            }
+                        }
+                    },
+                    onOpenAddPartner = {
+                        isPartnerRequestsOpen = false
+                        isConnectPartnerOpen = true
+                    },
+                    onDismiss = { isPartnerRequestsOpen = false },
+                    isDarkTheme = isDarkTheme
                 )
             }
         }
@@ -898,7 +1579,9 @@ private fun DashboardOverviewTab(
                     onStockIn = { item -> onQuantityChange(item, 1) },
                     onStockOut = { item -> onQuantityChange(item, -1) },
                     onImportOnline = onImportOnlineProduct,
-                    onAddNewProduct = onRegisterNewProduct
+                    onAddNewProduct = onRegisterNewProduct,
+                    currency = uiState.selectedCurrency,
+                    exchangeRate = uiState.exchangeRateUsdToKhr
                 )
             }
         }
@@ -944,46 +1627,20 @@ private fun DashboardOverviewTab(
                 onAcceptOrder = onReceiveOrder
             )
         }
-
-        // 4. Items Inventory List (Behance slide_2.png & reference Image 1)
-        if (uiState.products.isNotEmpty()) {
-            item {
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Items Inventory List (${uiState.products.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    TextButton(onClick = onNavigateToItems) {
-                        Text(
-                            text = "View all >",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = NawanoPrimary200
-                        )
-                    }
-                }
-            }
-
-            items(items = uiState.products.take(6), key = { "home_item_${it.id}" }) { item ->
-                InventoryItemCard(
-                    item = item,
-                    isHighlighted = item.sku.equals(uiState.scannedSku, ignoreCase = true),
-                    isDarkTheme = isDarkTheme,
-                    onQuantityChange = { delta -> onQuantityChange(item, delta) },
-                    onCardClick = { onProductClick(item) },
-                    onDelete = null,
-                    onRequestSupply = { onRequestSupply(item) }
-                )
-            }
-        }
     }
+}
+
+private enum class StockStatusFilter {
+    ALL,
+    IN_STOCK,
+    LOW_STOCK,
+    OUT_OF_STOCK
+}
+
+private enum class CatalogViewMode {
+    DETAILED,
+    COMPACT,
+    GRID
 }
 
 /**
@@ -1010,11 +1667,27 @@ private fun InventoryItemsCatalogTab(
     onRequestSupply: (ProductEntity) -> Unit = {}
 ) {
     var sortMenuExpanded by remember { mutableStateOf(false) }
-    var isInStockOnly by remember { mutableStateOf(false) }
+    var stockStatusFilter by remember { mutableStateOf(StockStatusFilter.ALL) }
+    var catalogViewMode by rememberSaveable { mutableStateOf(CatalogViewMode.DETAILED) }
 
-    val displayedProducts = remember(uiState.filteredProducts, isInStockOnly) {
-        if (isInStockOnly) uiState.filteredProducts.filter { it.quantity > 0 }
-        else uiState.filteredProducts
+    val inStockCount = remember(uiState.filteredProducts) {
+        uiState.filteredProducts.count { it.quantity > 0 }
+    }
+    val lowStockCount = remember(uiState.filteredProducts) {
+        uiState.filteredProducts.count { it.quantity in 1..it.reorderLevel }
+    }
+    val outOfStockCount = remember(uiState.filteredProducts) {
+        uiState.filteredProducts.count { it.quantity <= 0 }
+    }
+    val allCount = uiState.filteredProducts.size
+
+    val displayedProducts = remember(uiState.filteredProducts, stockStatusFilter) {
+        when (stockStatusFilter) {
+            StockStatusFilter.ALL -> uiState.filteredProducts
+            StockStatusFilter.IN_STOCK -> uiState.filteredProducts.filter { it.quantity > 0 }
+            StockStatusFilter.LOW_STOCK -> uiState.filteredProducts.filter { it.quantity in 1..it.reorderLevel }
+            StockStatusFilter.OUT_OF_STOCK -> uiState.filteredProducts.filter { it.quantity <= 0 }
+        }
     }
 
     val cardBg = if (isDarkTheme) Color(0xFF191D2D) else Color.White
@@ -1041,7 +1714,9 @@ private fun InventoryItemsCatalogTab(
                 onStockIn = { item -> onQuantityChange(item, 1) },
                 onStockOut = { item -> onQuantityChange(item, -1) },
                 onImportOnline = onImportOnlineProduct,
-                onAddNewProduct = onRegisterNewProduct
+                onAddNewProduct = onRegisterNewProduct,
+                currency = uiState.selectedCurrency,
+                exchangeRate = uiState.exchangeRateUsdToKhr
             )
             Spacer(modifier = Modifier.height(10.dp))
         }
@@ -1117,9 +1792,130 @@ private fun InventoryItemsCatalogTab(
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // 2. Category Filter Capsules (All, Seafood, Meat, Produce, Dairy, etc.)
+        // 2. Stock Level Filter Row (Separates "Our Own Stock" from Out of Stock & Low Stock)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // "All" Pill
+            val isAllSelected = stockStatusFilter == StockStatusFilter.ALL
+            Surface(
+                onClick = { stockStatusFilter = StockStatusFilter.ALL },
+                shape = CircleShape,
+                color = if (isAllSelected) NawanoPrimary200 else cardBg,
+                border = if (isAllSelected) null else BorderStroke(1.dp, cardBorder)
+            ) {
+                Text(
+                    text = "All ($allCount)",
+                    fontSize = 12.sp,
+                    fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isAllSelected) Color.White else textSecondary,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                )
+            }
+
+            // "In Stock (Our Stock)" Pill with Emerald Green Dot
+            val isInStockSelected = stockStatusFilter == StockStatusFilter.IN_STOCK
+            Surface(
+                onClick = { stockStatusFilter = StockStatusFilter.IN_STOCK },
+                shape = CircleShape,
+                color = if (isInStockSelected) Color(0xFF10B981) else cardBg,
+                border = BorderStroke(
+                    1.dp,
+                    if (isInStockSelected) Color(0xFF10B981) else cardBorder
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(if (isInStockSelected) Color.White else Color(0xFF10B981))
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "In Stock ($inStockCount)",
+                        fontSize = 12.sp,
+                        fontWeight = if (isInStockSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isInStockSelected) Color.White else if (isDarkTheme) Color(0xFF34D399) else Color(0xFF059669)
+                    )
+                }
+            }
+
+            // "Low Stock" Pill with Amber Dot
+            val isLowStockSelected = stockStatusFilter == StockStatusFilter.LOW_STOCK
+            Surface(
+                onClick = { stockStatusFilter = StockStatusFilter.LOW_STOCK },
+                shape = CircleShape,
+                color = if (isLowStockSelected) Color(0xFFF59E0B) else cardBg,
+                border = BorderStroke(
+                    1.dp,
+                    if (isLowStockSelected) Color(0xFFF59E0B) else cardBorder
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(if (isLowStockSelected) Color.White else Color(0xFFF59E0B))
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "Low Stock ($lowStockCount)",
+                        fontSize = 12.sp,
+                        fontWeight = if (isLowStockSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isLowStockSelected) Color.White else if (isDarkTheme) Color(0xFFFBBF24) else Color(0xFFD97706)
+                    )
+                }
+            }
+
+            // "Out of Stock" Pill with Rose Dot
+            val isOutSelected = stockStatusFilter == StockStatusFilter.OUT_OF_STOCK
+            Surface(
+                onClick = { stockStatusFilter = StockStatusFilter.OUT_OF_STOCK },
+                shape = CircleShape,
+                color = if (isOutSelected) Color(0xFFEF4444) else cardBg,
+                border = BorderStroke(
+                    1.dp,
+                    if (isOutSelected) Color(0xFFEF4444) else cardBorder
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(if (isOutSelected) Color.White else Color(0xFFEF4444))
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "Out of Stock ($outOfStockCount)",
+                        fontSize = 12.sp,
+                        fontWeight = if (isOutSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isOutSelected) Color.White else if (isDarkTheme) Color(0xFFF87171) else Color(0xFFDC2626)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // 3. Category Filter Capsules (All, Seafood, Meat, Produce, Dairy, etc.)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1137,10 +1933,10 @@ private fun InventoryItemsCatalogTab(
                 ) {
                     Text(
                         text = cat,
-                        fontSize = 13.sp,
+                        fontSize = 12.5.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = if (isSelected) Color.White else textSecondary,
-                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp)
                     )
                 }
             }
@@ -1201,7 +1997,7 @@ private fun InventoryItemsCatalogTab(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // 3. Sub-header Row: "Products" on left, "+ Add", "● In Stock" and "⇅ Recent ▾" on right
+        // 4. Sub-header Row: "Products" on left, View Switcher & Sort on right
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1209,13 +2005,14 @@ private fun InventoryItemsCatalogTab(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
                     text = "Products",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = textPrimary
+                    color = textPrimary,
+                    maxLines = 1
                 )
                 if (displayedProducts.isNotEmpty()) {
                     Text(
@@ -1228,68 +2025,73 @@ private fun InventoryItemsCatalogTab(
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Primary "+ Add" Button
-                Button(
-                    onClick = onAddProductClicked,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = NawanoPrimary200,
-                        contentColor = Color.White
-                    ),
-                    modifier = Modifier.height(32.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Add Product",
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text(
-                        text = "Add",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                }
-
-                // "● In Stock" toggle filter with green dot
+                // View Mode Switcher: [ 🗂 Detailed | ☰ Compact | ⊞ Grid ]
                 Surface(
-                    onClick = { isInStockOnly = !isInStockOnly },
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isInStockOnly) Color(0xFF10B981).copy(alpha = 0.15f) else cardBg,
-                    border = BorderStroke(
-                        1.dp,
-                        if (isInStockOnly) Color(0xFF10B981).copy(alpha = 0.45f) else cardBorder
-                    )
+                    shape = RoundedCornerShape(10.dp),
+                    color = cardBg,
+                    border = BorderStroke(1.dp, cardBorder)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(if (isInStockOnly) Color(0xFF10B981) else textSecondary.copy(alpha = 0.5f))
-                        )
-                        Spacer(Modifier.width(5.dp))
-                        Text(
-                            text = "In Stock",
-                            fontSize = 11.5.sp,
-                            fontWeight = if (isInStockOnly) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isInStockOnly) Color(0xFF10B981) else textSecondary
-                        )
+                                .size(30.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (catalogViewMode == CatalogViewMode.DETAILED) NawanoPrimary200.copy(alpha = 0.25f) else Color.Transparent)
+                                .clickable { catalogViewMode = CatalogViewMode.DETAILED },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ViewAgenda,
+                                contentDescription = "Detailed View",
+                                tint = if (catalogViewMode == CatalogViewMode.DETAILED) NawanoPrimary200 else textSecondary,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (catalogViewMode == CatalogViewMode.COMPACT) NawanoPrimary200.copy(alpha = 0.25f) else Color.Transparent)
+                                .clickable { catalogViewMode = CatalogViewMode.COMPACT },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.FormatListBulleted,
+                                contentDescription = "Compact List View",
+                                tint = if (catalogViewMode == CatalogViewMode.COMPACT) NawanoPrimary200 else textSecondary,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (catalogViewMode == CatalogViewMode.GRID) NawanoPrimary200.copy(alpha = 0.25f) else Color.Transparent)
+                                .clickable { catalogViewMode = CatalogViewMode.GRID },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.GridView,
+                                contentDescription = "Grid View",
+                                tint = if (catalogViewMode == CatalogViewMode.GRID) NawanoPrimary200 else textSecondary,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
                     }
                 }
 
-                // "⇅ Recent ▾" Sort button
+                // "⇅ Sort ▾" Sort button
                 Box {
                     Surface(
                         onClick = { sortMenuExpanded = true },
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         color = cardBg,
                         border = BorderStroke(1.dp, cardBorder)
                     ) {
@@ -1306,10 +2108,10 @@ private fun InventoryItemsCatalogTab(
                             Spacer(Modifier.width(3.dp))
                             Text(
                                 text = when (uiState.sortOption) {
-                                    ProductSortOption.NAME_ASC -> "Recent"
+                                    ProductSortOption.NAME_ASC -> "Name"
                                     ProductSortOption.STOCK_LOW_TO_HIGH -> "Stock ↑"
                                     ProductSortOption.STOCK_HIGH_TO_LOW -> "Stock ↓"
-                                    ProductSortOption.PRICE_HIGH_TO_LOW -> "Price"
+                                    ProductSortOption.PRICE_HIGH_TO_LOW -> "Price ↓"
                                 },
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -1396,7 +2198,7 @@ private fun InventoryItemsCatalogTab(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = if (uiState.searchQuery.isNotBlank() || uiState.selectedCategory != "All" || isInStockOnly)
+                            text = if (uiState.searchQuery.isNotBlank() || uiState.selectedCategory != "All" || stockStatusFilter != StockStatusFilter.ALL)
                                 "No items match your filters or search query."
                             else "Your inventory is currently empty. Tap below to register your first product.",
                             style = MaterialTheme.typography.bodySmall,
@@ -1423,20 +2225,73 @@ private fun InventoryItemsCatalogTab(
         } else {
             LazyColumn(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(
+                    if (catalogViewMode == CatalogViewMode.COMPACT) 8.dp else 12.dp
+                ),
                 contentPadding = PaddingValues(top = 4.dp, bottom = 120.dp)
             ) {
-                items(items = displayedProducts, key = { item -> item.id }) { item ->
-                    val isHighlighted = item.sku.equals(uiState.scannedSku, ignoreCase = true)
-                    InventoryItemCard(
-                        item = item,
-                        isHighlighted = isHighlighted,
-                        isDarkTheme = isDarkTheme,
-                        onQuantityChange = { delta -> onQuantityChange(item, delta) },
-                        onCardClick = { onProductClick(item) },
-                        onDelete = { onDeleteProduct(item) },
-                        onRequestSupply = { onRequestSupply(item) }
-                    )
+                when (catalogViewMode) {
+                    CatalogViewMode.DETAILED -> {
+                        items(items = displayedProducts, key = { item -> item.id }) { item ->
+                            val isHighlighted = item.sku.equals(uiState.scannedSku, ignoreCase = true)
+                            InventoryItemCard(
+                                item = item,
+                                isHighlighted = isHighlighted,
+                                isDarkTheme = isDarkTheme,
+                                currency = uiState.selectedCurrency,
+                                exchangeRate = uiState.exchangeRateUsdToKhr,
+                                onQuantityChange = { delta -> onQuantityChange(item, delta) },
+                                onCardClick = { onProductClick(item) },
+                                onDelete = { onDeleteProduct(item) },
+                                onRequestSupply = { onRequestSupply(item) }
+                            )
+                        }
+                    }
+                    CatalogViewMode.COMPACT -> {
+                        items(items = displayedProducts, key = { item -> item.id }) { item ->
+                            val isHighlighted = item.sku.equals(uiState.scannedSku, ignoreCase = true)
+                            InventoryItemCompactRow(
+                                item = item,
+                                isHighlighted = isHighlighted,
+                                isDarkTheme = isDarkTheme,
+                                currency = uiState.selectedCurrency,
+                                exchangeRate = uiState.exchangeRateUsdToKhr,
+                                onQuantityChange = { delta -> onQuantityChange(item, delta) },
+                                onCardClick = { onProductClick(item) },
+                                onDelete = { onDeleteProduct(item) }
+                            )
+                        }
+                    }
+                    CatalogViewMode.GRID -> {
+                        val productPairs = displayedProducts.chunked(2)
+                        items(
+                            items = productPairs,
+                            key = { pair -> pair.map { it.id }.joinToString("-") }
+                        ) { pair ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                for (item in pair) {
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        val isHighlighted = item.sku.equals(uiState.scannedSku, ignoreCase = true)
+                                        InventoryItemGridCard(
+                                            item = item,
+                                            isHighlighted = isHighlighted,
+                                            isDarkTheme = isDarkTheme,
+                                            currency = uiState.selectedCurrency,
+                                            exchangeRate = uiState.exchangeRateUsdToKhr,
+                                            onQuantityChange = { delta -> onQuantityChange(item, delta) },
+                                            onCardClick = { onProductClick(item) }
+                                        )
+                                    }
+                                }
+                                if (pair.size == 1) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1624,11 +2479,27 @@ private fun NawanoHeroInventorySummaryCard(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "$${String.format(Locale.US, "%.2f", uiState.totalInventoryValue)}",
+                            text = CurrencyFormatter.format(
+                                uiState.totalInventoryValue,
+                                uiState.selectedCurrency,
+                                uiState.exchangeRateUsdToKhr
+                            ),
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color.White
                         )
+                        val equivalentVal = CurrencyFormatter.formatEquivalentOnly(
+                            uiState.totalInventoryValue,
+                            uiState.selectedCurrency,
+                            uiState.exchangeRateUsdToKhr
+                        )
+                        if (equivalentVal.isNotBlank()) {
+                            Text(
+                                text = "≈ $equivalentVal",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White.copy(alpha = 0.82f)
+                            )
+                        }
                     }
                 }
             }
@@ -1811,7 +2682,8 @@ private fun NawanoOperationalCard(
                     fontWeight = FontWeight.Bold,
                     color = textPrimary,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
 
                 Icon(
@@ -2600,6 +3472,7 @@ private fun NawanoGoodsReqCard(
  * Interactive Dialog displayed when a scanned barcode does not exist in local inventory.
  * Prompts user to register it and supports one-tap auto-import if online product metadata was found.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProductNotFoundDialog(
     scannedSku: String,
@@ -2609,9 +3482,30 @@ private fun ProductNotFoundDialog(
     onAddProduct: () -> Unit,
     onAutoImport: (OnlineProductData) -> Unit
 ) {
-    AlertDialog(
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        icon = {
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                width = 44.dp,
+                height = 5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Surface(
                 color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
                 shape = CircleShape,
@@ -2626,127 +3520,125 @@ private fun ProductNotFoundDialog(
                     )
                 }
             }
-        },
-        title = {
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             Text(
                 text = "Product Not in Inventory",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.padding(bottom = 8.dp)
             ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.QrCodeScanner,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = scannedSku,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Text(
+                text = "This item does not exist in your inventory database.",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Would you like to register and add this product now?",
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (isFetchingOnline) {
+                Spacer(modifier = Modifier.height(14.dp))
                 Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.QrCodeScanner,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = scannedSku,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
+                            text = "Searching online catalog...",
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-
-                Text(
-                    text = "This item does not exist in your inventory database.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Would you like to register and add this product now?",
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                if (isFetchingOnline) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
+            } else if (onlineProduct != null) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CloudDone,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Online Product Match Found",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "Searching online catalog...",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
-                    }
-                } else if (onlineProduct != null) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.CloudDone,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Online Product Match Found",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = onlineProduct.name,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "${onlineProduct.brand.ifBlank { "General" }} • ${onlineProduct.category} • $${String.format(Locale.US, "%.2f", onlineProduct.suggestedPrice)}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = onlineProduct.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "${onlineProduct.brand.ifBlank { "General" }} • ${onlineProduct.category} • $${String.format(Locale.US, "%.2f", onlineProduct.suggestedPrice)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
-        },
-        confirmButton = {
+
+            Spacer(modifier = Modifier.height(18.dp))
+
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -2754,7 +3646,7 @@ private fun ProductNotFoundDialog(
                 if (onlineProduct != null) {
                     Button(
                         onClick = { onAutoImport(onlineProduct) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(46.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
@@ -2765,7 +3657,7 @@ private fun ProductNotFoundDialog(
 
                     OutlinedButton(
                         onClick = onAddProduct,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(46.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -2775,7 +3667,7 @@ private fun ProductNotFoundDialog(
                 } else {
                     Button(
                         onClick = onAddProduct,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(46.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
@@ -2793,7 +3685,7 @@ private fun ProductNotFoundDialog(
                 }
             }
         }
-    )
+    }
 }
 
 @Composable
@@ -2807,7 +3699,9 @@ private fun ScannedSkuBanner(
     onStockOut: (ProductEntity) -> Unit = {},
     onViewProduct: (() -> Unit)? = null,
     onImportOnline: (OnlineProductData) -> Unit,
-    onAddNewProduct: (String, OnlineProductData?) -> Unit
+    onAddNewProduct: (String, OnlineProductData?) -> Unit,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE
 ) {
     // Auto-dismiss alert after 6 seconds (lasts comfortably longer)
     LaunchedEffect(scannedSku, matchedItem) {
@@ -2965,7 +3859,7 @@ private fun ScannedSkuBanner(
 
                     // Price placed at the bottom right!
                     Text(
-                        text = "$${String.format(Locale.US, "%.2f", matchedItem.sellingPrice)}",
+                        text = CurrencyFormatter.format(matchedItem.sellingPrice, currency, exchangeRate),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold,
                         color = NawanoPrimary200
@@ -3152,6 +4046,8 @@ private fun InventoryItemCard(
     item: ProductEntity,
     isHighlighted: Boolean,
     isDarkTheme: Boolean = false,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
     onQuantityChange: (Int) -> Unit,
     onCardClick: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
@@ -3338,7 +4234,7 @@ private fun InventoryItemCard(
             ) {
                 // Bright emerald green price
                 Text(
-                    text = "$${String.format(Locale.US, "%.2f", item.sellingPrice)} / ${item.unit}",
+                    text = "${CurrencyFormatter.format(item.sellingPrice, currency, exchangeRate)} / ${item.unit}",
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 17.sp,
                     color = Color(0xFF10B981)
@@ -3459,13 +4355,293 @@ private fun InventoryItemCard(
     }
 }
 
+/**
+ * Compact high-density list item row (~58dp height).
+ * Maximizes screen real estate so users can view 8-10 items at once without scrolling.
+ */
+@Composable
+private fun InventoryItemCompactRow(
+    item: ProductEntity,
+    isHighlighted: Boolean,
+    isDarkTheme: Boolean = false,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
+    onQuantityChange: (Int) -> Unit,
+    onCardClick: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null
+) {
+    val cardBg = if (isDarkTheme) Color(0xFF191D2D) else Color.White
+    val cardBorder = if (isDarkTheme) Color(0xFF2E334D) else Color(0xFFE2E8F0)
+    val textPrimary = if (isDarkTheme) Color.White else Color(0xFF1E293B)
+    val textSecondary = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B)
+
+    val isLowStock = item.quantity <= item.reorderLevel
+    val stockPillBg = when {
+        item.quantity <= 0 -> if (isDarkTheme) Color(0xFF3B1818) else Color(0xFFFEE2E2)
+        isLowStock -> if (isDarkTheme) Color(0xFF382710) else Color(0xFFFEF3C7)
+        else -> if (isDarkTheme) Color(0xFF102E29) else Color(0xFFD1FAE5)
+    }
+    val stockPillTextColor = when {
+        item.quantity <= 0 -> Color(0xFFEF4444)
+        isLowStock -> Color(0xFFF59E0B)
+        else -> Color(0xFF10B981)
+    }
+    val stockPillLabel = when {
+        item.quantity <= 0 -> "0 stock"
+        isLowStock -> "Low: ${item.quantity} ${item.unit}"
+        else -> "${item.quantity} in stock"
+    }
+
+    val skuLabel = if (item.sku.startsWith("#")) item.sku else "#${item.sku}"
+
+    Surface(
+        onClick = { onCardClick?.invoke() },
+        shape = RoundedCornerShape(14.dp),
+        color = cardBg,
+        border = BorderStroke(
+            width = if (isHighlighted) 2.dp else 1.dp,
+            color = if (isHighlighted) NawanoPrimary200 else cardBorder
+        ),
+        shadowElevation = if (isDarkTheme) 0.dp else 1.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 42dp Thumbnail
+            ProductThumbnail(
+                product = item,
+                modifier = Modifier.size(42.dp),
+                shape = RoundedCornerShape(10.dp)
+            )
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            // Title & Category/SKU
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.5.sp,
+                    color = textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = item.category.ifBlank { "General" },
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isDarkTheme) Color(0xFFA5B4FC) else NawanoPrimary200
+                    )
+                    Text(
+                        text = " • $skuLabel",
+                        fontSize = 11.sp,
+                        color = textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Price & Stock status badge
+            Column(
+                horizontalAlignment = Alignment.End
+            ) {
+                Text(
+                    text = "${CurrencyFormatter.format(item.sellingPrice, currency, exchangeRate)} / ${item.unit}",
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 13.sp,
+                    color = Color(0xFF10B981)
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = stockPillBg
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(5.dp)
+                                .clip(CircleShape)
+                                .background(stockPillTextColor)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = stockPillLabel,
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = stockPillTextColor
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 2-Column Grid Card (~180dp height).
+ * Provides an e-commerce catalog style view displaying 4-6 products per screen.
+ */
+@Composable
+private fun InventoryItemGridCard(
+    item: ProductEntity,
+    isHighlighted: Boolean,
+    isDarkTheme: Boolean = false,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
+    onQuantityChange: (Int) -> Unit,
+    onCardClick: (() -> Unit)? = null
+) {
+    val cardBg = if (isDarkTheme) Color(0xFF191D2D) else Color.White
+    val cardBorder = if (isDarkTheme) Color(0xFF2E334D) else Color(0xFFE2E8F0)
+    val textPrimary = if (isDarkTheme) Color.White else Color(0xFF1E293B)
+    val textSecondary = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B)
+
+    val isLowStock = item.quantity <= item.reorderLevel
+    val stockPillBg = when {
+        item.quantity <= 0 -> if (isDarkTheme) Color(0xFF3B1818) else Color(0xFFFEE2E2)
+        isLowStock -> if (isDarkTheme) Color(0xFF382710) else Color(0xFFFEF3C7)
+        else -> if (isDarkTheme) Color(0xFF102E29) else Color(0xFFD1FAE5)
+    }
+    val stockPillTextColor = when {
+        item.quantity <= 0 -> Color(0xFFEF4444)
+        isLowStock -> Color(0xFFF59E0B)
+        else -> Color(0xFF10B981)
+    }
+    val stockPillLabel = when {
+        item.quantity <= 0 -> "0 stock"
+        isLowStock -> "Low: ${item.quantity}"
+        else -> "${item.quantity} in stock"
+    }
+
+    Surface(
+        onClick = { onCardClick?.invoke() },
+        shape = RoundedCornerShape(16.dp),
+        color = cardBg,
+        border = BorderStroke(
+            width = if (isHighlighted) 2.dp else 1.dp,
+            color = if (isHighlighted) NawanoPrimary200 else cardBorder
+        ),
+        shadowElevation = if (isDarkTheme) 0.dp else 1.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp)
+        ) {
+            // Centered Image with subtle background
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(86.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (isDarkTheme) Color(0xFF22263C) else Color(0xFFF8FAFC)),
+                contentAlignment = Alignment.Center
+            ) {
+                ProductThumbnail(
+                    product = item,
+                    modifier = Modifier.size(74.dp),
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Category tag
+            Surface(
+                shape = RoundedCornerShape(5.dp),
+                color = if (isDarkTheme) Color(0xFF282B44) else Color(0xFFEEF2FF)
+            ) {
+                Text(
+                    text = item.category.ifBlank { "General" },
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isDarkTheme) Color(0xFFA5B4FC) else NawanoPrimary200,
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Title
+            Text(
+                text = item.name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Price & Stock
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = CurrencyFormatter.format(item.sellingPrice, currency, exchangeRate),
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 13.sp,
+                    color = Color(0xFF10B981)
+                )
+
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = stockPillBg
+                ) {
+                    Text(
+                        text = stockPillLabel,
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = stockPillTextColor,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun InventorySettingsScreen(
     totalSkus: Int,
     totalItems: Int,
+    selectedCurrency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
+    onSelectCurrency: (AppCurrency) -> Unit = {},
+    onSaveExchangeRate: (Double) -> Unit = {},
+    paywayMerchantId: String = "ec000002",
+    paywayApiKey: String = "",
+    paywayIsSandbox: Boolean = true,
+    onSavePaywayConfig: (merchantId: String, apiKey: String, isSandbox: Boolean) -> Unit = { _, _, _ -> },
+    isDarkTheme: Boolean = false,
     onClearAllData: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var showEditRateSheet by remember { mutableStateOf(false) }
+    var showPayWayConfigSheet by remember { mutableStateOf(false) }
     var showConfirmDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -3485,6 +4661,254 @@ private fun InventorySettingsScreen(
         )
 
         Spacer(modifier = Modifier.height(20.dp))
+
+        // Currency & Exchange Rate Setting Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDarkTheme) Color(0xFF1E2235) else Color.White
+            ),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(
+                1.dp,
+                if (isDarkTheme) Color(0xFF2E334D) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        color = NawanoPrimary200.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.CurrencyExchange,
+                                contentDescription = null,
+                                tint = NawanoPrimary200,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Currency & Exchange Rate",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isDarkTheme) Color.White else Color(0xFF1E293B)
+                        )
+                        Text(
+                            text = "Choose display currency & configure conversion rate",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(
+                    color = if (isDarkTheme) Color(0xFF2E334D) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Active Currency Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Active Currency",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isDarkTheme) Color.White else Color(0xFF1E293B)
+                        )
+                        Text(
+                            text = "Prices show in ${selectedCurrency.displayName}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B)
+                        )
+                    }
+                    CurrencySelectorPill(
+                        currentCurrency = selectedCurrency,
+                        onCurrencySelected = onSelectCurrency,
+                        isDarkTheme = isDarkTheme
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Exchange Rate Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "USD to KHR Rate",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isDarkTheme) Color.White else Color(0xFF1E293B)
+                        )
+                        val formattedRate = NumberFormat.getNumberInstance(Locale.US).format(exchangeRate.toLong())
+                        Text(
+                            text = "1 USD = $formattedRate KHR (៛)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = NawanoPrimary200
+                        )
+                        Text(
+                            text = "Default: 1 USD = 4,000 KHR",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B)
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = { showEditRateSheet = true },
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.6f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = NawanoPrimary200),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Change", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // ABA PayWay Gateway Setting Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDarkTheme) Color(0xFF1E2235) else Color.White
+            ),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(
+                1.dp,
+                if (isDarkTheme) Color(0xFF004F71).copy(alpha = 0.5f) else Color(0xFF004F71).copy(alpha = 0.25f)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        color = Color(0xFF004F71).copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.QrCode2,
+                                contentDescription = null,
+                                tint = Color(0xFF004F71),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "ABA PayWay Gateway",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isDarkTheme) Color.White else Color(0xFF1E293B)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (paywayIsSandbox) Color(0xFFF59E0B).copy(alpha = 0.2f) else Color(0xFF10B981).copy(alpha = 0.2f)
+                            ) {
+                                Text(
+                                    text = if (paywayIsSandbox) "SANDBOX" else "LIVE",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (paywayIsSandbox) Color(0xFFF59E0B) else Color(0xFF10B981),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Dynamic KHQR generation & instant push payment",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(
+                    color = if (isDarkTheme) Color(0xFF2E334D) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Merchant Details Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Merchant ID",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isDarkTheme) Color.White else Color(0xFF1E293B)
+                        )
+                        Text(
+                            text = paywayMerchantId.ifBlank { "Not configured" },
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF004F71)
+                        )
+                        Text(
+                            text = if (paywayApiKey.isNotBlank()) "API Key: ••••••••••••" else "API Key: Demo simulation mode",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isDarkTheme) Color(0xFF8E95AF) else Color(0xFF64748B)
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = { showPayWayConfigSheet = true },
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, Color(0xFF004F71).copy(alpha = 0.6f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF004F71)),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Configure", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -3560,27 +4984,92 @@ private fun InventorySettingsScreen(
         }
     }
 
-    if (showConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { showConfirmDialog = false },
-            title = { Text("Clear All Data?", fontWeight = FontWeight.Bold) },
-            text = { Text("This will permanently delete all inventory items and activity logs from this device. This action cannot be undone.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onClearAllData()
-                        showConfirmDialog = false
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Clear Everything", fontWeight = FontWeight.Bold)
-                }
+    if (showEditRateSheet) {
+        EditExchangeRateBottomSheet(
+            currentRate = exchangeRate,
+            isDarkTheme = isDarkTheme,
+            onSaveRate = { newRate ->
+                onSaveExchangeRate(newRate)
+                showEditRateSheet = false
             },
-            dismissButton = {
-                TextButton(onClick = { showConfirmDialog = false }) {
-                    Text("Cancel")
+            onDismiss = { showEditRateSheet = false }
+        )
+    }
+
+    if (showPayWayConfigSheet) {
+        EditPayWaySettingsBottomSheet(
+            currentMerchantId = paywayMerchantId,
+            currentApiKey = paywayApiKey,
+            currentIsSandbox = paywayIsSandbox,
+            isDarkTheme = isDarkTheme,
+            onSaveConfig = { mId, key, sandbox ->
+                onSavePaywayConfig(mId, key, sandbox)
+                showPayWayConfigSheet = false
+            },
+            onDismiss = { showPayWayConfigSheet = false }
+        )
+    }
+
+    if (showConfirmDialog) {
+        val clearSheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { showConfirmDialog = false },
+            sheetState = clearSheetState,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            dragHandle = {
+                BottomSheetDefaults.DragHandle(
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    width = 44.dp,
+                    height = 5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                )
+            }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Clear All Data?",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "This will permanently delete all inventory items and activity logs from this device. This action cannot be undone.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { showConfirmDialog = false },
+                        modifier = Modifier.weight(1f).height(46.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Cancel")
+                    }
+                    Button(
+                        onClick = {
+                            onClearAllData()
+                            showConfirmDialog = false
+                        },
+                        modifier = Modifier.weight(1.3f).height(46.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Clear Everything", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
-        )
+        }
     }
 }

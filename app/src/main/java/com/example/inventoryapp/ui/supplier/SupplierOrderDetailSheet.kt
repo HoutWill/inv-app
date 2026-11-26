@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
+import com.example.inventoryapp.data.local.entity.SupplierIssueEntity
 import com.example.inventoryapp.data.repository.OrderWithItems
 import com.example.inventoryapp.ui.theme.*
 import java.util.Locale
@@ -39,6 +40,7 @@ import java.util.Locale
 fun SupplierOrderDetailSheet(
     order: PurchaseOrderEntity,
     orderWithItems: OrderWithItems?,
+    linkedIssues: List<SupplierIssueEntity> = emptyList(),
     isDarkTheme: Boolean = false,
     packedItemSku: String? = null,
     onDismiss: () -> Unit,
@@ -46,7 +48,8 @@ fun SupplierOrderDetailSheet(
     onAccept: () -> Unit,
     onRequestScanToPack: () -> Unit = {},
     onEditOrder: (() -> Unit)? = null,
-    onDeleteOrder: (() -> Unit)? = null
+    onDeleteOrder: (() -> Unit)? = null,
+    onInspectIssue: ((SupplierIssueEntity) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val items = orderWithItems?.items ?: emptyList()
@@ -74,7 +77,7 @@ fun SupplierOrderDetailSheet(
         }
     }
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -368,6 +371,40 @@ fun SupplierOrderDetailSheet(
                 }
             }
 
+            Spacer(Modifier.height(10.dp))
+
+            // Supplier Payment Method & Status strip
+            val isOrderPaid = order.paymentStatus == com.example.inventoryapp.data.local.entity.SupplierPaymentStatus.PAID
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = if (isOrderPaid) Color(0xFF10B981).copy(alpha = 0.10f) else Color(0xFFF59E0B).copy(alpha = 0.10f),
+                border = BorderStroke(1.dp, (if (isOrderPaid) Color(0xFF10B981) else Color(0xFFF59E0B)).copy(alpha = 0.30f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Supplier Payment Option", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = textSecondary)
+                        Text(order.paymentMethod.label, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = if (isOrderPaid) Color(0xFF10B981).copy(alpha = 0.18f) else Color(0xFFF59E0B).copy(alpha = 0.18f)
+                    ) {
+                        Text(
+                            text = if (isOrderPaid) "PAID" else "DUE ON DELIVERY",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (isOrderPaid) Color(0xFF059669) else Color(0xFFD97706),
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+            }
+
             Spacer(Modifier.height(14.dp))
             HorizontalDivider(color = dividerColor)
             Spacer(Modifier.height(14.dp))
@@ -393,6 +430,53 @@ fun SupplierOrderDetailSheet(
                         style = MaterialTheme.typography.bodySmall,
                         color = textPrimary
                     )
+                }
+            }
+
+            if (linkedIssues.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                linkedIssues.forEach { issue ->
+                    Surface(
+                        onClick = { onInspectIssue?.invoke(issue) },
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFEF4444).copy(alpha = 0.10f),
+                        border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.35f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ReportProblem,
+                                contentDescription = null,
+                                tint = Color(0xFFEF4444),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "${issue.issueCode} • ${issue.issueType}",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFEF4444)
+                                )
+                                Text(
+                                    text = "${issue.middlemanName}: ${issue.description}",
+                                    fontSize = 11.5.sp,
+                                    color = textPrimary
+                                )
+                            }
+                            Text(
+                                text = issue.status.name,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFEF4444)
+                            )
+                        }
+                    }
                 }
             }
 

@@ -11,6 +11,8 @@ import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderItemEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
+import com.example.inventoryapp.data.local.entity.SupplierPaymentMethod
+import com.example.inventoryapp.data.local.entity.SupplierPaymentStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -68,7 +70,9 @@ class OrderRepository(
         picSender: String,
         items: List<PurchaseOrderItemEntity>,
         ownerNote: String = "",
-        estArrival: String = ""
+        estArrival: String = "",
+        paymentMethod: SupplierPaymentMethod = SupplierPaymentMethod.COD,
+        isPaidUpfront: Boolean = false
     ): Result<PurchaseOrderEntity> = withContext(Dispatchers.IO) {
         try {
             val count = System.currentTimeMillis() % 10000
@@ -76,6 +80,8 @@ class OrderRepository(
             val orderNumber = "PO-$dateStr-${String.format(Locale.US, "%04d", count)}"
             val totalAmount = items.sumOf { it.quantity * it.unitCost }
             val totalQuantity = items.sumOf { it.quantity }
+            val now = System.currentTimeMillis()
+            val paidImmediately = isPaidUpfront && paymentMethod != SupplierPaymentMethod.COD && paymentMethod != SupplierPaymentMethod.NET_TERMS
 
             val orderId = UUID.randomUUID().toString()
             val order = PurchaseOrderEntity(
@@ -92,8 +98,11 @@ class OrderRepository(
                 trackingNumber = "TRK-${UUID.randomUUID().toString().take(8).uppercase()}",
                 ownerNote = ownerNote,
                 estArrival = estArrival.ifBlank { "Next Business Day" },
-                createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis()
+                paymentMethod = paymentMethod,
+                paymentStatus = if (paidImmediately) SupplierPaymentStatus.PAID else SupplierPaymentStatus.UNPAID,
+                paidAt = if (paidImmediately) now else null,
+                createdAt = now,
+                updatedAt = now
             )
 
             val itemsWithOrderId = items.map { it.copy(orderId = orderId) }
@@ -189,15 +198,45 @@ class OrderRepository(
         }
     }
 
+    suspend fun paySupplierOrder(
+        orderId: String,
+        paymentMethod: SupplierPaymentMethod = SupplierPaymentMethod.COD
+    ): Result<PurchaseOrderEntity> = withContext(Dispatchers.IO) {
+        try {
+            val order = orderDao.getOrderById(orderId)
+                ?: return@withContext Result.failure(IllegalArgumentException("Order not found"))
+
+            if (order.status == PurchaseOrderStatus.CANCELLED || order.status == PurchaseOrderStatus.REJECTED) {
+                return@withContext Result.failure(IllegalStateException("Cannot pay a cancelled or rejected order"))
+            }
+
+            val now = System.currentTimeMillis()
+            val updated = order.copy(
+                paymentMethod = paymentMethod,
+                paymentStatus = SupplierPaymentStatus.PAID,
+                paidAt = now,
+                updatedAt = now
+            )
+            orderDao.updateOrder(updated)
+            Result.success(updated)
+        } catch (e: Exception) {
+            Log.e("OrderRepository", "Error paying supplier order", e)
+            Result.failure(e)
+        }
+    }
+
     /**
      * Executes physical inbound receipt:
      * - Increments stock on hand for each item
      * - Recalculates weighted average cost
      * - Inserts PO_RECEIVED transaction audit logs
-     * - Marks the order as RECEIVED
+     * - Marks the order as RECEIVED (and settles COD payment if requested)
      * ALL in a single atomic database transaction.
      */
-    suspend fun receiveOrder(orderId: String): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun receiveOrder(
+        orderId: String,
+        markPaymentPaidOnReceive: Boolean = false
+    ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             inTransaction {
                 val order = orderDao.getOrderById(orderId)
@@ -284,10 +323,14 @@ class OrderRepository(
                 }
 
                 // Update order status to RECEIVED
+                val now = System.currentTimeMillis()
+                val shouldSettlePayment = markPaymentPaidOnReceive && order.paymentStatus == SupplierPaymentStatus.UNPAID
                 val updatedOrder = order.copy(
                     status = PurchaseOrderStatus.RECEIVED,
-                    receivedAt = System.currentTimeMillis(),
-                    updatedAt = System.currentTimeMillis()
+                    paymentStatus = if (shouldSettlePayment) SupplierPaymentStatus.PAID else order.paymentStatus,
+                    paidAt = if (shouldSettlePayment) now else order.paidAt,
+                    receivedAt = now,
+                    updatedAt = now
                 )
                 orderDao.updateOrder(updatedOrder)
             }

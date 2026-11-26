@@ -28,6 +28,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
 import com.example.inventoryapp.ui.theme.NawanoPrimary200
+import com.example.inventoryapp.ui.theme.consumeBottomSheetNestedDismiss
+import com.example.inventoryapp.ui.theme.rememberSafeModalBottomSheetState
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -349,31 +351,62 @@ fun StockTransactionHistoryScreen(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StockTransactionHistoryDialog(
     transactions: List<StockTransactionEntity>,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Close")
-            }
-        },
-        title = {
-            Text(
-                text = "Stock Activity Audit (${transactions.size})",
-                fontWeight = FontWeight.Bold
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                width = 44.dp,
+                height = 5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
             )
-        },
-        text = {
-            Box(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Stock Activity Audit (${transactions.size})",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Close")
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 440.dp)
+                    .consumeBottomSheetNestedDismiss()
+            ) {
                 if (transactions.isEmpty()) {
                     Text(
                         text = "No stock activity recorded yet.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 24.dp)
                     )
                 } else {
                     LazyColumn(
@@ -385,8 +418,15 @@ fun StockTransactionHistoryDialog(
                     }
                 }
             }
+            OutlinedButton(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth().height(46.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Close", fontWeight = FontWeight.SemiBold)
+            }
         }
-    )
+    }
 }
 
 @Composable

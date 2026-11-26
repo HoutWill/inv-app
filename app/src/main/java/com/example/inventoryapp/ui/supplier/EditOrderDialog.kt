@@ -39,7 +39,7 @@ fun EditOrderDialog(
     var qty by remember { mutableStateOf(order.totalQuantity.toString()) }
     var price by remember { mutableStateOf(order.totalAmount.toString()) }
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

@@ -21,21 +21,22 @@ import com.example.inventoryapp.ui.dashboard.FloatingNavItem
 import com.example.inventoryapp.ui.theme.*
 
 /**
- * Modern Floating Bottom Navigation Dock for Supplier Portal,
- * matching Behance "Supply Chain Mastery" reference mockup:
- * - Home (House icon)
- * - Items (Inventory/Box icon)
+ * Modern Floating Bottom Navigation Dock for Supplier Portal:
+ * - Home (Orders)
+ * - Items (Wholesale Catalog)
  * - Center elevated Floating Scanner FAB (Purple gradient with Viewfinder/QR icon)
- * - Stats (Bar chart icon)
- * - Menu (Grid icon for Drawer)
+ * - Report (Issue Reports received from Middlemen, with live open-issue badge)
+ * - Middlemen (Middleman List / Directory)
  */
 @Composable
 fun SupplierBottomBar(
     activeViewTab: Int,
     onTabSelected: (Int) -> Unit,
     onScanClicked: () -> Unit,
-    onOpenMenu: () -> Unit,
     isDarkTheme: Boolean,
+    openIssuesCount: Int = 0,
+    middlemenCount: Int = 0,
+    onOpenMenu: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -79,20 +80,21 @@ fun SupplierBottomBar(
                 // Center placeholder space for the elevated pop-up scan button
                 Spacer(modifier = Modifier.width(52.dp))
 
-                // Tab 2: Stats
+                // Tab 5: Report (Issue Reports from Middlemen)
                 FloatingNavItem(
-                    title = "Stats",
-                    icon = if (activeViewTab == 2) Icons.Default.BarChart else Icons.Outlined.BarChart,
-                    isSelected = activeViewTab == 2,
-                    onClick = { onTabSelected(2) }
+                    title = "Report",
+                    icon = if (activeViewTab == 5) Icons.Default.ReportProblem else Icons.Outlined.ReportProblem,
+                    isSelected = activeViewTab == 5,
+                    badgeCount = openIssuesCount,
+                    onClick = { onTabSelected(5) }
                 )
 
-                // Tab 3: Menu (Opens Drawer)
+                // Tab 4: Middlemen (Middleman Directory List)
                 FloatingNavItem(
-                    title = "Menu",
-                    icon = if (activeViewTab == 3) Icons.Default.GridView else Icons.Outlined.GridView,
-                    isSelected = activeViewTab == 3,
-                    onClick = onOpenMenu
+                    title = "Middlemen",
+                    icon = if (activeViewTab == 4) Icons.Default.Groups else Icons.Outlined.Groups,
+                    isSelected = activeViewTab == 4,
+                    onClick = { onTabSelected(4) }
                 )
             }
         }

@@ -13,6 +13,18 @@ enum class PurchaseOrderStatus {
     CANCELLED
 }
 
+enum class SupplierPaymentMethod(val label: String, val subtitle: String) {
+    COD("Cash on Delivery (COD)", "Pay supplier upon delivery / stock-in"),
+    ABA_KHQR("ABA KHQR / Bank", "Transfer digitally via KHQR or bank"),
+    CASH("Cash Upfront", "Pay supplier cash when placing order"),
+    NET_TERMS("Net Terms", "Pay supplier on agreed credit schedule")
+}
+
+enum class SupplierPaymentStatus(val label: String) {
+    UNPAID("Unpaid"),
+    PAID("Paid")
+}
+
 @Entity(tableName = "purchase_orders")
 data class PurchaseOrderEntity(
     @PrimaryKey
@@ -31,6 +43,9 @@ data class PurchaseOrderEntity(
     val supplierNote: String = "",
     val estArrival: String = "",
     val totalWeight: String = "",
+    val paymentMethod: SupplierPaymentMethod = SupplierPaymentMethod.COD,
+    val paymentStatus: SupplierPaymentStatus = SupplierPaymentStatus.UNPAID,
+    val paidAt: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val confirmedAt: Long? = null,
     val deliveredAt: Long? = null,

@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.ui.theme.*
+import com.example.inventoryapp.util.AppCurrency
+import com.example.inventoryapp.util.CurrencyFormatter
 import java.util.Locale
 
 /**
@@ -47,6 +49,8 @@ fun InventorySummaryScreen(
     totalValue: Double,
     onBack: () -> Unit,
     onProductClick: (ProductEntity) -> Unit = {},
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
     modifier: Modifier = Modifier
 ) {
     var selectedWeek by remember { mutableStateOf("This week, 29 - 04 Jun") }
@@ -293,7 +297,7 @@ fun InventorySummaryScreen(
 
                         val displayVal = totalValue
                         Text(
-                            text = String.format(Locale.US, "$%,.2f", displayVal),
+                            text = CurrencyFormatter.format(displayVal, currency, exchangeRate),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -595,6 +599,8 @@ fun InventorySummaryScreen(
                             filteredProducts.take(15).forEach { item ->
                                 InventorySummaryItemRow(
                                     product = item,
+                                    currency = currency,
+                                    exchangeRate = exchangeRate,
                                     onClick = { onProductClick(item) }
                                 )
                             }
@@ -664,6 +670,8 @@ private fun DonutLegendItem(
 @Composable
 private fun InventorySummaryItemRow(
     product: ProductEntity,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
     onClick: () -> Unit
 ) {
     Surface(
@@ -726,7 +734,7 @@ private fun InventorySummaryItemRow(
                 Spacer(modifier = Modifier.height(3.dp))
                 val totalLineVal = product.quantity * product.sellingPrice
                 Text(
-                    text = String.format(Locale.US, "$%,.2f", totalLineVal),
+                    text = CurrencyFormatter.format(totalLineVal, currency, exchangeRate),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.ExtraBold,
                     color = NawanoPrimary200

@@ -45,7 +45,7 @@ fun UpcomingItemsBottomSheet(
     onProductClick: (ProductEntity) -> Unit,
     onRequestSupply: ((ProductEntity) -> Unit)? = null
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Items that need attention: quantity <= reorderLevel or quantity <= 5
     val upcomingItems = remember(products) {
@@ -216,7 +216,9 @@ fun UpcomingItemsBottomSheet(
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .consumeBottomSheetNestedDismiss(),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(filteredList, key = { it.id }) { item ->

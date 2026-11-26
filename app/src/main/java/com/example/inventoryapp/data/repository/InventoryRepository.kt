@@ -45,29 +45,37 @@ class InventoryRepository(
         }
     }
 
-    suspend fun addProduct(product: ProductEntity): Boolean = withContext(Dispatchers.IO) {
+    suspend fun addProduct(product: ProductEntity): Boolean = addProductResult(product).isSuccess
+
+    suspend fun addProductResult(product: ProductEntity): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            productDao.insertProduct(product)
+            val cleanSku = product.sku.trim()
+            val existing = productDao.getProductBySku(cleanSku)
+            if (existing != null) {
+                return@withContext Result.failure(IllegalStateException("SKU '$cleanSku' already exists (${existing.name})."))
+            }
+            val normalized = product.copy(sku = cleanSku, name = product.name.trim())
+            productDao.insertProduct(normalized)
             try {
                 transactionDao.insertTransaction(
                     StockTransactionEntity(
-                        productId = product.id,
-                        sku = product.sku,
-                        productName = product.name,
+                        productId = normalized.id,
+                        sku = normalized.sku,
+                        productName = normalized.name,
                         transactionType = "NEW_ITEM",
-                        quantityDelta = product.quantity,
+                        quantityDelta = normalized.quantity,
                         previousQuantity = 0,
-                        newQuantity = product.quantity,
+                        newQuantity = normalized.quantity,
                         note = "New product registered into system"
                     )
                 )
             } catch (te: Exception) {
                 Log.w("InventoryRepository", "Could not record transaction log", te)
             }
-            true
+            Result.success(Unit)
         } catch (e: Exception) {
             Log.e("InventoryRepository", "Error adding product to database", e)
-            false
+            Result.failure(e)
         }
     }
 
@@ -120,6 +128,22 @@ class InventoryRepository(
 
     suspend fun deleteProduct(product: ProductEntity): Boolean = withContext(Dispatchers.IO) {
         try {
+            try {
+                transactionDao.insertTransaction(
+                    StockTransactionEntity(
+                        productId = product.id,
+                        sku = product.sku,
+                        productName = product.name,
+                        transactionType = "PRODUCT_DELETED",
+                        quantityDelta = -product.quantity,
+                        previousQuantity = product.quantity,
+                        newQuantity = 0,
+                        note = "Product '${product.name}' (#${product.sku}) removed from inventory"
+                    )
+                )
+            } catch (te: Exception) {
+                Log.w("InventoryRepository", "Could not record delete audit log", te)
+            }
             productDao.deleteProduct(product)
             true
         } catch (e: Exception) {

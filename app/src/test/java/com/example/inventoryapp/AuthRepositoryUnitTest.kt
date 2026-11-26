@@ -43,14 +43,47 @@ class FakeUserDao : UserDao {
         val user = users[id] ?: return
         users[id] = user.copy(passwordHash = passwordHash, updatedAt = updatedAt)
     }
+
+    override suspend fun findByUniqueCode(uniqueCode: String): UserEntity? {
+        return users.values.firstOrNull { it.uniqueCode.equals(uniqueCode, ignoreCase = true) }
+    }
+
+    override suspend fun findByPhoneNumber(phone: String, cleanPhone: String): UserEntity? {
+        return users.values.firstOrNull { it.phoneNumber == phone || it.phoneNumber == cleanPhone }
+    }
+
+    override suspend fun searchUsersByCodeOrPhone(query: String, expectedRole: UserRole): List<UserEntity> {
+        return users.values.filter {
+            (it.uniqueCode.contains(query, ignoreCase = true) || it.phoneNumber.contains(query)) && it.role == expectedRole
+        }
+    }
+
+    override suspend fun updateProfile(id: String, fullName: String, phoneNumber: String, uniqueCode: String, updatedAt: Long) {
+        val user = users[id] ?: return
+        users[id] = user.copy(fullName = fullName, phoneNumber = phoneNumber, uniqueCode = uniqueCode, updatedAt = updatedAt)
+    }
+
+    override fun observeUsersByRole(role: UserRole): Flow<List<UserEntity>> {
+        return MutableStateFlow(users.values.filter { it.role == role })
+    }
 }
 
 class FakeSessionStore : AppSessionStore {
     private val introFlow = MutableStateFlow(false)
     val loggedInUserIdFlow = MutableStateFlow<String?>(null)
+    private val currencyFlow = MutableStateFlow("USD")
+    private val exchangeRateFlow = MutableStateFlow(4000.0)
+    private val paywayMerchantIdFlow = MutableStateFlow("ec000002")
+    private val paywayApiKeyFlow = MutableStateFlow("")
+    private val paywayIsSandboxFlow = MutableStateFlow(true)
 
     override val hasSeenIntro: Flow<Boolean> = introFlow
     override val loggedInUserId: Flow<String?> = loggedInUserIdFlow
+    override val selectedCurrency: Flow<String> = currencyFlow
+    override val exchangeRateUsdToKhr: Flow<Double> = exchangeRateFlow
+    override val paywayMerchantId: Flow<String> = paywayMerchantIdFlow
+    override val paywayApiKey: Flow<String> = paywayApiKeyFlow
+    override val paywayIsSandbox: Flow<Boolean> = paywayIsSandboxFlow
 
     override suspend fun setHasSeenIntro(seen: Boolean) {
         introFlow.value = seen
@@ -58,6 +91,20 @@ class FakeSessionStore : AppSessionStore {
 
     override suspend fun setLoggedInUserId(userId: String?) {
         loggedInUserIdFlow.value = userId
+    }
+
+    override suspend fun setSelectedCurrency(currency: String) {
+        currencyFlow.value = currency
+    }
+
+    override suspend fun setExchangeRateUsdToKhr(rate: Double) {
+        exchangeRateFlow.value = rate
+    }
+
+    override suspend fun setPaywayConfig(merchantId: String, apiKey: String, isSandbox: Boolean) {
+        paywayMerchantIdFlow.value = merchantId
+        paywayApiKeyFlow.value = apiKey
+        paywayIsSandboxFlow.value = isSandbox
     }
 
     override suspend fun clearSession() {

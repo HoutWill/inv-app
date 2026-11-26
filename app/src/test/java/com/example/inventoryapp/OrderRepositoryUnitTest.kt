@@ -8,6 +8,8 @@ import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderItemEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
+import com.example.inventoryapp.data.local.entity.SupplierPaymentMethod
+import com.example.inventoryapp.data.local.entity.SupplierPaymentStatus
 import com.example.inventoryapp.data.repository.OrderRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -165,5 +167,37 @@ class OrderRepositoryUnitTest {
         assertEquals(15, tx?.quantityDelta)
         assertEquals(10, tx?.previousQuantity)
         assertEquals(25, tx?.newQuantity)
+    }
+
+    @Test
+    fun testSupplierCodPaymentLifecycle() = runBlocking {
+        val items = listOf(
+            PurchaseOrderItemEntity(
+                orderId = "",
+                productId = null,
+                sku = "BEEF-01",
+                productName = "Wagyu Beef",
+                quantity = 5,
+                unitCost = 40.0
+            )
+        )
+        val created = repository.createOrder(
+            supplierId = "sup_foodie",
+            supplierName = "Foodie Supplier Co.",
+            title = "COD Restock",
+            picSender = "Sam",
+            items = items,
+            paymentMethod = SupplierPaymentMethod.COD
+        ).getOrThrow()
+
+        assertEquals(SupplierPaymentMethod.COD, created.paymentMethod)
+        assertEquals(SupplierPaymentStatus.UNPAID, created.paymentStatus)
+
+        val receiveRes = repository.receiveOrder(created.id, markPaymentPaidOnReceive = true)
+        assertTrue(receiveRes.isSuccess)
+        val updated = orderDao.getOrderById(created.id)
+        assertEquals(PurchaseOrderStatus.RECEIVED, updated?.status)
+        assertEquals(SupplierPaymentStatus.PAID, updated?.paymentStatus)
+        assertNotNull(updated?.paidAt)
     }
 }

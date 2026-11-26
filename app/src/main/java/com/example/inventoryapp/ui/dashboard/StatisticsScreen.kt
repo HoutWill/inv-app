@@ -35,7 +35,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
 import com.example.inventoryapp.ui.theme.*
@@ -1007,7 +1006,7 @@ private fun NawanoDatePickerBottomSheet(
     onDateSelected: (Calendar) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
     var currentViewMonth by remember {
         mutableStateOf((selectedDate.clone() as Calendar).apply { set(Calendar.DAY_OF_MONTH, 1) })
     }
@@ -1329,89 +1328,108 @@ private fun MinimalExpenseRowItem(expense: ExpenseReportItem) {
 // TARGET SETTING DIALOG
 // =========================================================================
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SetTargetDialog(
     currentTarget: Double,
     onDismiss: () -> Unit,
     onTargetSaved: (Double) -> Unit
 ) {
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
     var targetInput by remember { mutableStateOf(currentTarget.toInt().toString()) }
     val quickPresets = listOf(5000, 7500, 10000, 15000, 20000)
 
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp,
-            modifier = Modifier.fillMaxWidth()
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                width = 44.dp,
+                height = 5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp)
         ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                Text(
-                    text = "Sales Target",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+            Text(
+                text = "Sales Target",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
 
-                Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-                OutlinedTextField(
-                    value = targetInput,
-                    onValueChange = { targetInput = it.filter { char -> char.isDigit() } },
-                    label = { Text("Target Amount ($)") },
-                    prefix = { Text("$ ", fontWeight = FontWeight.Bold, color = NawanoPrimary200) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
+            OutlinedTextField(
+                value = targetInput,
+                onValueChange = { targetInput = it.filter { char -> char.isDigit() } },
+                label = { Text("Target Amount ($)") },
+                prefix = { Text("$ ", fontWeight = FontWeight.Bold, color = NawanoPrimary200) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
 
-                Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    quickPresets.forEach { preset ->
-                        val isSelected = targetInput == preset.toString()
-                        Surface(
-                            onClick = { targetInput = preset.toString() },
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (isSelected) NawanoPrimary200 else MaterialTheme.colorScheme.surfaceVariant
-                        ) {
-                            Text(
-                                text = "$${String.format(Locale.US, "%,d", preset)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
-                            )
-                        }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                quickPresets.forEach { preset ->
+                    val isSelected = targetInput == preset.toString()
+                    Surface(
+                        onClick = { targetInput = preset.toString() },
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isSelected) NawanoPrimary200 else MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        Text(
+                            text = "$${String.format(Locale.US, "%,d", preset)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
+                        )
                     }
                 }
+            }
 
-                Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f).height(46.dp),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    TextButton(onClick = onDismiss) {
-                        Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Button(
-                        onClick = {
-                            val parsed = targetInput.toDoubleOrNull() ?: currentTarget
-                            onTargetSaved(parsed)
-                        },
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200)
-                    ) {
-                        Text("Save", fontWeight = FontWeight.Bold)
-                    }
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Button(
+                    onClick = {
+                        val parsed = targetInput.toDoubleOrNull() ?: currentTarget
+                        onTargetSaved(parsed)
+                    },
+                    modifier = Modifier.weight(1.3f).height(46.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200)
+                ) {
+                    Text("Save", fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -1419,73 +1437,86 @@ private fun SetTargetDialog(
 }
 
 // =========================================================================
-// ABC ANALYSIS GUIDE DIALOG
+// ABC ANALYSIS GUIDE SHEET
 // =========================================================================
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AbcAnalysisGuideDialog(onDismiss: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(22.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp,
-            modifier = Modifier.fillMaxWidth()
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                width = 44.dp,
+                height = 5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp)
+                .consumeBottomSheetNestedDismiss()
+                .verticalScroll(rememberScrollState())
         ) {
-            Column(
-                modifier = Modifier
-                    .padding(18.dp)
-                    .verticalScroll(rememberScrollState())
+            Text(
+                text = "ABC Inventory Guide",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "80/20 Pareto Rule categorization",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            AbcGuideClassCard(
+                tier = "Class A",
+                badgeColor = NawanoPrimary200,
+                percentage = "~80% Value • 20% Items",
+                description = "High value, essential revenue drivers. Requires strict tracking and priority restocking."
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            AbcGuideClassCard(
+                tier = "Class B",
+                badgeColor = NawanoAmber,
+                percentage = "~15% Value • 30% Items",
+                description = "Moderate value items with predictable demand. Managed with automated reorders."
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            AbcGuideClassCard(
+                tier = "Class C",
+                badgeColor = Color(0xFF06B6D4),
+                percentage = "~5% Value • 50% Items",
+                description = "Low value consumables. Managed with bulk ordering and safe buffer stock."
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200),
+                modifier = Modifier.fillMaxWidth().height(46.dp)
             ) {
-                Text(
-                    text = "ABC Inventory Guide",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "80/20 Pareto Rule categorization",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
-                Spacer(modifier = Modifier.height(10.dp))
-
-                AbcGuideClassCard(
-                    tier = "Class A",
-                    badgeColor = NawanoPrimary200,
-                    percentage = "~80% Value • 20% Items",
-                    description = "High value, essential revenue drivers. Requires strict tracking and priority restocking."
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                AbcGuideClassCard(
-                    tier = "Class B",
-                    badgeColor = NawanoAmber,
-                    percentage = "~15% Value • 30% Items",
-                    description = "Moderate value items with predictable demand. Managed with automated reorders."
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                AbcGuideClassCard(
-                    tier = "Class C",
-                    badgeColor = Color(0xFF06B6D4),
-                    percentage = "~5% Value • 50% Items",
-                    description = "Low value consumables. Managed with bulk ordering and safe buffer stock."
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Button(
-                    onClick = onDismiss,
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Got It", fontWeight = FontWeight.Bold)
-                }
+                Text("Got It", fontWeight = FontWeight.Bold)
             }
         }
     }

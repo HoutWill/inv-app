@@ -65,11 +65,13 @@ class AuthViewModel(
         fullName: String,
         email: String,
         password: String,
+        role: UserRole = UserRole.OWNER,
+        phoneNumber: String = "",
         onSuccess: (UserEntity) -> Unit
     ) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            val result = authRepository.signUp(fullName, email, password)
+            val result = authRepository.signUp(fullName, email, password, role, phoneNumber)
             result.fold(
                 onSuccess = { user ->
                     _uiState.value = _uiState.value.copy(isLoading = false)
@@ -139,6 +141,22 @@ class AuthViewModel(
         viewModelScope.launch {
             authRepository.logout()
             onSuccess()
+        }
+    }
+
+    fun updateProfile(
+        userId: String,
+        fullName: String,
+        phoneNumber: String,
+        uniqueCode: String,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            val result = authRepository.updateProfile(userId, fullName, phoneNumber, uniqueCode)
+            result.fold(
+                onSuccess = { onComplete?.invoke(true, null) },
+                onFailure = { error -> onComplete?.invoke(false, error.message ?: "Failed to update profile") }
+            )
         }
     }
 }

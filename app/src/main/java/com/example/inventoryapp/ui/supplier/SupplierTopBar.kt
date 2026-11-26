@@ -13,7 +13,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -49,8 +49,10 @@ fun SupplierTopBar(
     onToggleTheme: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenScanner: () -> Unit = {},
-    onQuickAdd: () -> Unit = {},
+    onQuickAdd: (() -> Unit)? = null,
     showTitleAndLogo: Boolean = false,
+    pendingPartnerRequestsCount: Int = 0,
+    onOpenPartnerNetwork: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
@@ -71,10 +73,11 @@ fun SupplierTopBar(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left Group: Hamburger + Title ("Nawano") & Subtitle ("Wholesale • X SKUs")
+            // Left Group: Hamburger (and optional Title & Subtitle if showTitleAndLogo is true)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = if (showTitleAndLogo) Modifier.weight(1f, fill = false) else Modifier
             ) {
                 IconButton(
                     onClick = onOpenDrawer,
@@ -87,24 +90,25 @@ fun SupplierTopBar(
                     )
                 }
 
-                Column {
-                    Text(
-                        text = "Nawano",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(1.dp))
-                    Text(
-                        text = "Wholesale • $catalogCount SKUs",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = textSecondary,
-                        fontSize = 11.5.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                if (showTitleAndLogo) {
+                    Column(modifier = Modifier.weight(1f, fill = false)) {
+                        Text(
+                            text = "Nawano",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(1.dp))
+                        Text(
+                            text = "Wholesale • $catalogCount SKUs",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
 
@@ -156,17 +160,51 @@ fun SupplierTopBar(
                     }
                 }
 
-                // "+ Add" Button
-                TextButton(
-                    onClick = onQuickAdd,
-                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = "+ Add",
-                        color = NawanoPrimary200,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
+                // Partner Connections Button with Request Badge
+                if (onOpenPartnerNetwork != null) {
+                    IconButton(
+                        onClick = onOpenPartnerNetwork,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        BadgedBox(
+                            badge = {
+                                if (pendingPartnerRequestsCount > 0) {
+                                    Badge(
+                                        containerColor = Color(0xFFEF4444)
+                                    ) {
+                                        Text(
+                                            text = if (pendingPartnerRequestsCount > 99) "99+" else "$pendingPartnerRequestsCount",
+                                            color = Color.White,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = if (pendingPartnerRequestsCount > 0) Icons.Default.PersonAdd else Icons.Outlined.PersonAdd,
+                                contentDescription = "Partner Connections",
+                                tint = if (pendingPartnerRequestsCount > 0) NawanoPrimary200 else textSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Optional "+ Add" Button
+                if (onQuickAdd != null) {
+                    TextButton(
+                        onClick = onQuickAdd,
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "+ Add",
+                            color = NawanoPrimary200,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
                 }
             }
         }

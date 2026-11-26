@@ -44,6 +44,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.R
@@ -68,6 +69,8 @@ fun SignUpScreen(
 
     var fullName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
+    var phoneNumber by remember { mutableStateOf("") }
+    var selectedRole by remember { mutableStateOf(com.example.inventoryapp.data.local.entity.UserRole.OWNER) }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var isTermsAccepted by remember { mutableStateOf(false) }
@@ -115,6 +118,87 @@ fun SignUpScreen(
 
             Spacer(Modifier.height(28.dp))
 
+            // Role selection: Middle Man vs Supplier
+            Text(
+                text = "Account Type",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = NawanoTextPrimaryLight
+            )
+            Spacer(Modifier.height(8.dp))
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                val isMiddleman = selectedRole == com.example.inventoryapp.data.local.entity.UserRole.OWNER
+                androidx.compose.material3.Surface(
+                    onClick = { selectedRole = com.example.inventoryapp.data.local.entity.UserRole.OWNER },
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                    color = if (isMiddleman) NawanoPrimary200 else Color.White,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (isMiddleman) NawanoPrimary200 else Color(0xFFE2E8F0)
+                    ),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Middle Man",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = if (isMiddleman) Color.White else NawanoTextPrimaryLight,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "Buyer / Retailer",
+                            fontSize = 11.sp,
+                            color = if (isMiddleman) Color.White.copy(alpha = 0.85f) else NawanoTextSecondaryLight,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                val isSupplier = selectedRole == com.example.inventoryapp.data.local.entity.UserRole.SUPPLIER
+                androidx.compose.material3.Surface(
+                    onClick = { selectedRole = com.example.inventoryapp.data.local.entity.UserRole.SUPPLIER },
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                    color = if (isSupplier) NawanoPrimary200 else Color.White,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (isSupplier) NawanoPrimary200 else Color(0xFFE2E8F0)
+                    ),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Supplier",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = if (isSupplier) Color.White else NawanoTextPrimaryLight,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "Vendor / Distributor",
+                            fontSize = 11.sp,
+                            color = if (isSupplier) Color.White.copy(alpha = 0.85f) else NawanoTextSecondaryLight,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
             AuthTextField(
                 value = fullName,
                 onValueChange = { fullName = it },
@@ -148,6 +232,22 @@ fun SignUpScreen(
             Spacer(Modifier.height(16.dp))
 
             AuthTextField(
+                value = phoneNumber,
+                onValueChange = { phoneNumber = it },
+                label = "Phone Number",
+                placeholder = "+1 (555) 019-2831",
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Phone,
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                )
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            AuthTextField(
                 value = password,
                 onValueChange = { password = it },
                 label = "Password",
@@ -163,7 +263,14 @@ fun SignUpScreen(
                     onDone = {
                         focusManager.clearFocus()
                         if (fullName.isNotBlank() && email.isNotBlank() && password.length >= 6) {
-                            viewModel.signUp(fullName, email, password, onSignUpSuccess)
+                            viewModel.signUp(
+                                fullName = fullName,
+                                email = email,
+                                password = password,
+                                role = selectedRole,
+                                phoneNumber = phoneNumber,
+                                onSuccess = onSignUpSuccess
+                            )
                         }
                     }
                 )
@@ -216,7 +323,14 @@ fun SignUpScreen(
                 isLoading = uiState.isLoading,
                 onClick = {
                     focusManager.clearFocus()
-                    viewModel.signUp(fullName, email, password, onSignUpSuccess)
+                    viewModel.signUp(
+                        fullName = fullName,
+                        email = email,
+                        password = password,
+                        role = selectedRole,
+                        phoneNumber = phoneNumber,
+                        onSuccess = onSignUpSuccess
+                    )
                 }
             )
 

@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
+import com.example.inventoryapp.data.local.entity.SupplierIssueEntity
+import com.example.inventoryapp.data.local.entity.SupplierIssueStatus
 import com.example.inventoryapp.ui.theme.*
 
 /**
@@ -28,18 +30,23 @@ import com.example.inventoryapp.ui.theme.*
 @Composable
 fun SupplierNotificationsSheet(
     orders: List<PurchaseOrderEntity>,
+    issues: List<SupplierIssueEntity> = emptyList(),
     isDarkTheme: Boolean = false,
+    onOpenIssues: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val cardBg = if (isDarkTheme) NawanoDark200 else Color.White
     val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
     val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
 
+    val openIssues = issues.filter {
+        it.status == SupplierIssueStatus.OPEN || it.status == SupplierIssueStatus.ACKNOWLEDGED
+    }
     val pendingOrders = orders.filter { it.status == PurchaseOrderStatus.PENDING }
     val deliveredOrders = orders.filter { it.status == PurchaseOrderStatus.DELIVERED }
     val receivedOrders = orders.filter { it.status == PurchaseOrderStatus.RECEIVED }
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -79,7 +86,7 @@ fun SupplierNotificationsSheet(
                     color = NawanoPrimary200.copy(alpha = 0.15f)
                 ) {
                     Text(
-                        text = "${pendingOrders.size} Actionable",
+                        text = "${pendingOrders.size + openIssues.size} Actionable",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = NawanoPrimary200,
@@ -89,20 +96,80 @@ fun SupplierNotificationsSheet(
             }
 
             Text(
-                text = "Real-time purchase order updates, receipt acknowledgements, and HQ requests.",
+                text = "Real-time purchase order updates, Middleman issue reports, and HQ requests.",
                 fontSize = 12.sp,
                 color = textSecondary
             )
 
             Spacer(Modifier.height(4.dp))
 
-            if (pendingOrders.isEmpty() && deliveredOrders.isEmpty() && receivedOrders.isEmpty()) {
+            if (openIssues.isEmpty() && pendingOrders.isEmpty() && deliveredOrders.isEmpty() && receivedOrders.isEmpty()) {
                 EmptyZeroState(
                     title = "No New Alerts",
-                    subtitle = "All orders are up to date.",
+                    subtitle = "All orders and issue reports are up to date.",
                     icon = Icons.Default.NotificationsNone,
                     isDarkTheme = isDarkTheme
                 )
+            }
+
+            // Middleman Issue Alerts
+            openIssues.forEach { issue ->
+                Surface(
+                    onClick = {
+                        onDismiss()
+                        onOpenIssues()
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color(0xFFEF4444).copy(alpha = 0.08f),
+                    border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.3f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFFEF4444).copy(alpha = 0.16f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.ReportProblem,
+                                    contentDescription = null,
+                                    tint = Color(0xFFEF4444),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "${issue.issueCode} • ${issue.issueType}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = textPrimary
+                                )
+                                Text(
+                                    text = issue.severity.name,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFEF4444)
+                                )
+                            }
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = "From ${issue.middlemanName}: ${issue.description}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = textSecondary
+                            )
+                        }
+                    }
+                }
             }
 
             // Pending Orders Alerts

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -21,10 +22,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
 import com.example.inventoryapp.ui.theme.*
 import java.text.SimpleDateFormat
@@ -64,6 +67,8 @@ enum class MovementStatus(val label: String, val bg: Color, val fg: Color) {
 @Composable
 fun MovementListScreen(
     stockTransactions: List<StockTransactionEntity> = emptyList(),
+    products: List<ProductEntity> = emptyList(),
+    onLogMovement: (product: ProductEntity, delta: Int, type: String, note: String) -> Unit = { _, _, _, _ -> },
     onBack: () -> Unit,
     onScanClicked: () -> Unit,
     modifier: Modifier = Modifier
@@ -306,8 +311,12 @@ fun MovementListScreen(
 
     if (showCreateDialog) {
         CreateMovementDialog(
+            products = products,
             onDismiss = { showCreateDialog = false },
-            onCreate = { showCreateDialog = false }
+            onCreate = { product, delta, type, note ->
+                onLogMovement(product, delta, type, note)
+                showCreateDialog = false
+            }
         )
     }
 }
@@ -461,64 +470,199 @@ private fun MovementCard(item: MovementActivityItem) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CreateMovementDialog(
+    products: List<ProductEntity>,
     onDismiss: () -> Unit,
-    onCreate: () -> Unit
+    onCreate: (product: ProductEntity, delta: Int, type: String, note: String) -> Unit
 ) {
-    var title by remember { mutableStateOf("") }
-    var location by remember { mutableStateOf("") }
-    var movementType by remember { mutableStateOf(MovementType.INBOUND) }
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
+    var selectedProduct by remember(products) { mutableStateOf(products.firstOrNull()) }
+    var productMenuExpanded by remember { mutableStateOf(false) }
+    var isInbound by remember { mutableStateOf(true) }
+    var qtyText by remember { mutableStateOf("1") }
+    var locationOrReason by remember { mutableStateOf("") }
+    var validationError by remember { mutableStateOf<String?>(null) }
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = {
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                width = 44.dp,
+                height = 5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             Text(
-                text = "Add New Movement Activity",
+                text = "Log Stock Movement",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = "Log a logistics request, inbound shipment, or branch transfer.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Text(
+                text = "Record an inbound restock or outbound dispatch against inventory.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Activity Title / Purpose") },
-                    placeholder = { Text("e.g. Supplier Inbound Restock") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                OutlinedTextField(
-                    value = location,
-                    onValueChange = { location = it },
-                    label = { Text("Location / Partner") },
-                    placeholder = { Text("e.g. Warehouse Bay 3") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = onCreate,
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200)
+            // Movement Type Toggle (Inbound vs Outbound)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Log Activity")
+                Surface(
+                    onClick = { isInbound = true; validationError = null },
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isInbound) NawanoPrimary200.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                    border = BorderStroke(1.dp, if (isInbound) NawanoPrimary200 else Color.Transparent),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "Inbound (+ Stock)",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isInbound) NawanoPrimary200 else MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(vertical = 10.dp)
+                    )
+                }
+                Surface(
+                    onClick = { isInbound = false; validationError = null },
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (!isInbound) Color(0xFF06B6D4).copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                    border = BorderStroke(1.dp, if (!isInbound) Color(0xFF06B6D4) else Color.Transparent),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "Outbound (- Stock)",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (!isInbound) Color(0xFF0891B2) else MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(vertical = 10.dp)
+                    )
+                }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
+
+            // Product Dropdown
+            ExposedDropdownMenuBox(
+                expanded = productMenuExpanded,
+                onExpandedChange = { if (products.isNotEmpty()) productMenuExpanded = !productMenuExpanded }
+            ) {
+                OutlinedTextField(
+                    value = selectedProduct?.let { "${it.name} (${it.quantity} ${it.unit})" } ?: "No products in inventory",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Select Product *") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = productMenuExpanded) },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = productMenuExpanded,
+                    onDismissRequest = { productMenuExpanded = false }
+                ) {
+                    products.forEach { prod ->
+                        DropdownMenuItem(
+                            text = { Text("${prod.name} (${prod.quantity} ${prod.unit})", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            onClick = {
+                                selectedProduct = prod
+                                productMenuExpanded = false
+                                validationError = null
+                            }
+                        )
+                    }
+                }
+            }
+
+            OutlinedTextField(
+                value = qtyText,
+                onValueChange = { qtyText = it.filter { ch -> ch.isDigit() }; validationError = null },
+                label = { Text("Quantity *") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            OutlinedTextField(
+                value = locationOrReason,
+                onValueChange = { locationOrReason = it },
+                label = { Text("Location / Reason") },
+                placeholder = { Text(if (isInbound) "e.g. Warehouse Bay 3 restock" else "e.g. Branch transfer to Outlet B") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            if (validationError != null) {
+                Text(
+                    text = validationError!!,
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Spacer(Modifier.height(4.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f).height(46.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Cancel")
+                }
+                Button(
+                    onClick = {
+                        val prod = selectedProduct
+                        if (prod == null) {
+                            validationError = "Please add a product first."
+                            return@Button
+                        }
+                        val qty = qtyText.toIntOrNull()
+                        if (qty == null || qty <= 0) {
+                            validationError = "Enter a valid quantity greater than 0."
+                            return@Button
+                        }
+                        if (!isInbound && qty > prod.quantity) {
+                            validationError = "Cannot dispatch $qty ${prod.unit}; only ${prod.quantity} available."
+                            return@Button
+                        }
+                        val delta = if (isInbound) qty else -qty
+                        val type = if (isInbound) "RESTOCK" else "DISPATCH"
+                        val note = locationOrReason.trim().ifBlank {
+                            if (isInbound) "Manual inbound restock" else "Manual outbound dispatch"
+                        }
+                        onCreate(prod, delta, type, note)
+                    },
+                    modifier = Modifier.weight(1.3f).height(46.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200)
+                ) {
+                    Text("Log Activity", fontWeight = FontWeight.Bold)
+                }
             }
         }
-    )
+    }
 }
