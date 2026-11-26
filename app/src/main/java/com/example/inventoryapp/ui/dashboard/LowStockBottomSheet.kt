@@ -43,7 +43,7 @@ fun LowStockBottomSheet(
     onRestockProduct: (ProductEntity, Int) -> Unit,
     onRequestSupply: ((ProductEntity) -> Unit)? = null
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Filter strictly to low stock products (quantity <= reorderLevel or quantity <= 5)
     val lowStockItems = remember(products) {
@@ -238,7 +238,8 @@ fun LowStockBottomSheet(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 520.dp),
+                        .heightIn(max = 520.dp)
+                        .consumeBottomSheetNestedDismiss(),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(filteredList, key = { it.id }) { product ->

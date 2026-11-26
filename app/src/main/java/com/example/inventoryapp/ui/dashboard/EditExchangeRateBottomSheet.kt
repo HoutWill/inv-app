@@ -37,7 +37,7 @@ fun EditExchangeRateBottomSheet(
     onSaveRate: (Double) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
     var rateInputText by remember {
         mutableStateOf(if (currentRate % 1.0 == 0.0) currentRate.toLong().toString() else currentRate.toString())
     }

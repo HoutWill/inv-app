@@ -58,6 +58,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
+import java.util.UUID
 
 /**
  * Sequential Checkout Steps:
@@ -90,37 +91,117 @@ fun PosCheckoutBottomSheet(
         customerName: String,
         customerPhone: String,
         dueDate: Long?,
-        note: String
+        note: String,
+        subtotalUsd: Double,
+        discountType: String,
+        discountValue: Double,
+        discountAmountUsd: Double,
+        taxRate: Double,
+        taxAmountUsd: Double,
+        splitDetails: String
     ) -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var isProcessing by remember { mutableStateOf(false) }
-
     var currentStep by remember { mutableStateOf(PosCheckoutStep.ITEM_SUMMARY) }
     var selectedMethod by remember { mutableStateOf<PosPaymentMethod?>(null) }
+
+    val sheetState = rememberSafeModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        extraConfirmValueChange = { targetValue ->
+            if (targetValue == SheetValue.Hidden) {
+                // Prevent accidental swipe-down dismiss on payment selection & payment processing screens.
+                // Make it stay!
+                !isProcessing && currentStep == PosCheckoutStep.ITEM_SUMMARY
+            } else {
+                true
+            }
+        }
+    )
 
     var customerName by remember { mutableStateOf("") }
     var customerPhone by remember { mutableStateOf("") }
     var dueDaysOption by remember { mutableIntStateOf(14) }
     var note by remember { mutableStateOf("") }
-    val defaultTender = if (currency == AppCurrency.USD) {
-        String.format(Locale.US, "%.2f", totalAmountUsd)
+
+    // Tax & Discount Engine Calculations
+    val computedSubtotalUsd = if (cartItems.isNotEmpty()) {
+        cartItems.sumOf { it.first.sellingPrice * it.second }
     } else {
-        "${CurrencyFormatter.toKhr(totalAmountUsd, exchangeRate)}"
+        totalAmountUsd
     }
-    var cashTenderedText by remember(totalAmountUsd, currency) { mutableStateOf(defaultTender) }
+
+    var discountType by remember { mutableStateOf("NONE") } // "NONE", "PERCENT_5", "PERCENT_10", "PERCENT_15", "PERCENT_20", "PERCENT_CUSTOM", "FIXED"
+    var customDiscountValueText by remember { mutableStateOf("") }
+    var isVatEnabled by remember { mutableStateOf(false) }
+
+    val discountAmountUsd = remember(computedSubtotalUsd, discountType, customDiscountValueText) {
+        when (discountType) {
+            "PERCENT_5" -> computedSubtotalUsd * 0.05
+            "PERCENT_10" -> computedSubtotalUsd * 0.10
+            "PERCENT_15" -> computedSubtotalUsd * 0.15
+            "PERCENT_20" -> computedSubtotalUsd * 0.20
+            "PERCENT_CUSTOM" -> {
+                val pct = (customDiscountValueText.toDoubleOrNull() ?: 0.0).coerceIn(0.0, 100.0)
+                computedSubtotalUsd * (pct / 100.0)
+            }
+            "FIXED" -> {
+                val fixed = customDiscountValueText.toDoubleOrNull() ?: 0.0
+                fixed.coerceIn(0.0, computedSubtotalUsd)
+            }
+            else -> 0.0
+        }
+    }
+
+    val discountValue = when (discountType) {
+        "PERCENT_5" -> 5.0
+        "PERCENT_10" -> 10.0
+        "PERCENT_15" -> 15.0
+        "PERCENT_20" -> 20.0
+        "PERCENT_CUSTOM", "FIXED" -> customDiscountValueText.toDoubleOrNull() ?: 0.0
+        else -> 0.0
+    }
+
+    val taxableAmount = (computedSubtotalUsd - discountAmountUsd).coerceAtLeast(0.0)
+    val taxRate = if (isVatEnabled) 0.10 else 0.0
+    val taxAmountUsd = if (isVatEnabled) taxableAmount * taxRate else 0.0
+    val finalTotalUsd = (taxableAmount + taxAmountUsd).coerceAtLeast(0.0)
+
+    val defaultTender = if (currency == AppCurrency.USD) {
+        String.format(Locale.US, "%.2f", finalTotalUsd)
+    } else {
+        "${CurrencyFormatter.toKhr(finalTotalUsd, exchangeRate)}"
+    }
+    var cashTenderedText by remember(finalTotalUsd, currency) { mutableStateOf(defaultTender) }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            // Tapping outside scrim or backdrop will NOT dismiss during payment method selection or processing!
+            // Make it stay! Only allow dismissal from Item Summary.
+            if (!isProcessing && currentStep == PosCheckoutStep.ITEM_SUMMARY) {
+                onDismiss()
+            }
+        },
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         dragHandle = {
-            BottomSheetDefaults.DragHandle(
-                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-                width = 44.dp,
-                height = 5.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-            )
+            if (currentStep == PosCheckoutStep.ITEM_SUMMARY) {
+                BottomSheetDefaults.DragHandle(
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    width = 44.dp,
+                    height = 5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                )
+            } else {
+                // Fixed static indicator on payment method & processing to indicate locked stay mode
+                Box(
+                    modifier = Modifier
+                        .padding(top = 10.dp, bottom = 4.dp)
+                        .width(36.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                )
+            }
         },
         containerColor = MaterialTheme.colorScheme.surface,
         modifier = Modifier
@@ -240,6 +321,7 @@ fun PosCheckoutBottomSheet(
                                         PosPaymentMethod.WECHAT -> "WeChat Pay"
                                         PosPaymentMethod.CASH -> "Cash Payment"
                                         PosPaymentMethod.COD -> "Cash on Delivery"
+                                        PosPaymentMethod.SPLIT -> "Split Payment"
                                         else -> "Payment"
                                     },
                                     fontSize = 17.5.sp,
@@ -267,7 +349,7 @@ fun PosCheckoutBottomSheet(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate),
+                            text = CurrencyFormatter.format(finalTotalUsd, currency, exchangeRate),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = NawanoPrimary200
@@ -290,6 +372,7 @@ fun PosCheckoutBottomSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
+                    .consumeBottomSheetNestedDismiss()
             ) { step ->
                 when (step) {
                     // ==========================================
@@ -298,7 +381,16 @@ fun PosCheckoutBottomSheet(
                     PosCheckoutStep.ITEM_SUMMARY -> {
                         ItemSummaryView(
                             cartItems = cartItems,
-                            totalAmountUsd = totalAmountUsd,
+                            subtotalUsd = computedSubtotalUsd,
+                            discountType = discountType,
+                            onDiscountTypeChange = { discountType = it },
+                            customDiscountText = customDiscountValueText,
+                            onCustomDiscountTextChange = { customDiscountValueText = it },
+                            isVatEnabled = isVatEnabled,
+                            onToggleVat = { isVatEnabled = it },
+                            discountAmountUsd = discountAmountUsd,
+                            taxAmountUsd = taxAmountUsd,
+                            finalTotalUsd = finalTotalUsd,
                             currency = currency,
                             exchangeRate = exchangeRate,
                             onUpdateQuantity = onUpdateQuantity,
@@ -313,7 +405,7 @@ fun PosCheckoutBottomSheet(
                     // ==========================================
                     PosCheckoutStep.PAYMENT_SELECTION -> {
                         PaymentSelectionView(
-                            totalAmountUsd = totalAmountUsd,
+                            totalAmountUsd = finalTotalUsd,
                             currency = currency,
                             exchangeRate = exchangeRate,
                             itemCount = itemCount,
@@ -325,13 +417,13 @@ fun PosCheckoutBottomSheet(
                     }
 
                     // ==========================================
-                    // STEP 3: PAYMENT PROCESSING (ABA / CASH / COD)
+                    // STEP 3: PAYMENT PROCESSING (ABA / CASH / COD / SPLIT)
                     // ==========================================
                     PosCheckoutStep.PAYMENT_PROCESSING -> {
                         when (selectedMethod) {
                             PosPaymentMethod.ABA_KHQR -> {
                                 AbaKhqrPaymentView(
-                                    totalAmountUsd = totalAmountUsd,
+                                    totalAmountUsd = finalTotalUsd,
                                     currency = currency,
                                     exchangeRate = exchangeRate,
                                     merchantId = paywayMerchantId,
@@ -347,7 +439,14 @@ fun PosCheckoutBottomSheet(
                                                 "Walk-in Customer",
                                                 "",
                                                 null,
-                                                note
+                                                note,
+                                                computedSubtotalUsd,
+                                                discountType,
+                                                discountValue,
+                                                discountAmountUsd,
+                                                taxRate,
+                                                taxAmountUsd,
+                                                ""
                                             )
                                         }
                                     }
@@ -355,7 +454,7 @@ fun PosCheckoutBottomSheet(
                             }
                             PosPaymentMethod.CARD -> {
                                 CreditDebitCardPaymentView(
-                                    totalAmountUsd = totalAmountUsd,
+                                    totalAmountUsd = finalTotalUsd,
                                     currency = currency,
                                     exchangeRate = exchangeRate,
                                     isProcessing = isProcessing,
@@ -367,7 +466,14 @@ fun PosCheckoutBottomSheet(
                                                 "Walk-in Customer",
                                                 "",
                                                 null,
-                                                note
+                                                note,
+                                                computedSubtotalUsd,
+                                                discountType,
+                                                discountValue,
+                                                discountAmountUsd,
+                                                taxRate,
+                                                taxAmountUsd,
+                                                ""
                                             )
                                         }
                                     }
@@ -375,7 +481,7 @@ fun PosCheckoutBottomSheet(
                             }
                             PosPaymentMethod.ALIPAY -> {
                                 AlipayPaymentView(
-                                    totalAmountUsd = totalAmountUsd,
+                                    totalAmountUsd = finalTotalUsd,
                                     currency = currency,
                                     exchangeRate = exchangeRate,
                                     isProcessing = isProcessing,
@@ -387,7 +493,14 @@ fun PosCheckoutBottomSheet(
                                                 "Walk-in Customer",
                                                 "",
                                                 null,
-                                                note
+                                                note,
+                                                computedSubtotalUsd,
+                                                discountType,
+                                                discountValue,
+                                                discountAmountUsd,
+                                                taxRate,
+                                                taxAmountUsd,
+                                                ""
                                             )
                                         }
                                     }
@@ -395,7 +508,7 @@ fun PosCheckoutBottomSheet(
                             }
                             PosPaymentMethod.WECHAT -> {
                                 WeChatPaymentView(
-                                    totalAmountUsd = totalAmountUsd,
+                                    totalAmountUsd = finalTotalUsd,
                                     currency = currency,
                                     exchangeRate = exchangeRate,
                                     isProcessing = isProcessing,
@@ -407,7 +520,14 @@ fun PosCheckoutBottomSheet(
                                                 "Walk-in Customer",
                                                 "",
                                                 null,
-                                                note
+                                                note,
+                                                computedSubtotalUsd,
+                                                discountType,
+                                                discountValue,
+                                                discountAmountUsd,
+                                                taxRate,
+                                                taxAmountUsd,
+                                                ""
                                             )
                                         }
                                     }
@@ -415,7 +535,7 @@ fun PosCheckoutBottomSheet(
                             }
                             PosPaymentMethod.CASH -> {
                                 CashPaymentView(
-                                    totalAmountUsd = totalAmountUsd,
+                                    totalAmountUsd = finalTotalUsd,
                                     cashTenderedText = cashTenderedText,
                                     onTenderChange = { cashTenderedText = it },
                                     isProcessing = isProcessing,
@@ -429,7 +549,14 @@ fun PosCheckoutBottomSheet(
                                                 "Walk-in Customer",
                                                 "",
                                                 null,
-                                                note
+                                                note,
+                                                computedSubtotalUsd,
+                                                discountType,
+                                                discountValue,
+                                                discountAmountUsd,
+                                                taxRate,
+                                                taxAmountUsd,
+                                                ""
                                             )
                                         }
                                     }
@@ -437,7 +564,7 @@ fun PosCheckoutBottomSheet(
                             }
                             PosPaymentMethod.COD -> {
                                 CodPaymentView(
-                                    totalAmountUsd = totalAmountUsd,
+                                    totalAmountUsd = finalTotalUsd,
                                     currency = currency,
                                     exchangeRate = exchangeRate,
                                     customerName = customerName,
@@ -458,7 +585,41 @@ fun PosCheckoutBottomSheet(
                                                 customerName,
                                                 customerPhone,
                                                 dueTimestamp,
-                                                note
+                                                note,
+                                                computedSubtotalUsd,
+                                                discountType,
+                                                discountValue,
+                                                discountAmountUsd,
+                                                taxRate,
+                                                taxAmountUsd,
+                                                ""
+                                            )
+                                        }
+                                    }
+                                )
+                            }
+                            PosPaymentMethod.SPLIT -> {
+                                SplitPaymentView(
+                                    totalAmountUsd = finalTotalUsd,
+                                    currency = currency,
+                                    exchangeRate = exchangeRate,
+                                    isProcessing = isProcessing,
+                                    onConfirmSplit = { splitDetails ->
+                                        if (!isProcessing) {
+                                            isProcessing = true
+                                            onConfirmSale(
+                                                PosPaymentMethod.SPLIT,
+                                                "Walk-in Customer",
+                                                "",
+                                                null,
+                                                note,
+                                                computedSubtotalUsd,
+                                                discountType,
+                                                discountValue,
+                                                discountAmountUsd,
+                                                taxRate,
+                                                taxAmountUsd,
+                                                splitDetails
                                             )
                                         }
                                     }
@@ -488,7 +649,16 @@ fun PosCheckoutBottomSheet(
 @Composable
 private fun ItemSummaryView(
     cartItems: List<Pair<ProductEntity, Int>>,
-    totalAmountUsd: Double,
+    subtotalUsd: Double,
+    discountType: String,
+    onDiscountTypeChange: (String) -> Unit,
+    customDiscountText: String,
+    onCustomDiscountTextChange: (String) -> Unit,
+    isVatEnabled: Boolean,
+    onToggleVat: (Boolean) -> Unit,
+    discountAmountUsd: Double,
+    taxAmountUsd: Double,
+    finalTotalUsd: Double,
     currency: AppCurrency = AppCurrency.USD,
     exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
     onUpdateQuantity: (ProductEntity, Int) -> Unit,
@@ -525,7 +695,7 @@ private fun ItemSummaryView(
                 }
             }
         } else {
-            // Scrollable Item List
+            // Scrollable Item List & Financial Engine
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -658,30 +828,247 @@ private fun ItemSummaryView(
                     }
                 }
 
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
 
-                // Breakdown Calculation Box
+                // -----------------------------------------------------------
+                // TAX & DISCOUNT ENGINE
+                // -----------------------------------------------------------
+
+                // 1. Discount Selector Card
                 Surface(
                     shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Outlined.LocalOffer,
+                                    contentDescription = null,
+                                    tint = NawanoPrimary200,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = "DISCOUNT & PROMOTION",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = NawanoPrimary200,
+                                    letterSpacing = 0.8.sp
+                                )
+                            }
+                            if (discountAmountUsd > 0.0) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFF10B981).copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = "-${CurrencyFormatter.format(discountAmountUsd, currency, exchangeRate)}",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF059669),
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        // Preset chips row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            val discountPresets = listOf(
+                                "NONE" to "None",
+                                "PERCENT_5" to "5%",
+                                "PERCENT_10" to "10%",
+                                "PERCENT_15" to "15%",
+                                "PERCENT_20" to "20%",
+                                "PERCENT_CUSTOM" to "Custom %",
+                                "FIXED" to "Flat $"
+                            )
+
+                            discountPresets.forEach { (typeKey, label) ->
+                                val isSelected = discountType == typeKey
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isSelected) NawanoPrimary200 else MaterialTheme.colorScheme.surface,
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (isSelected) NawanoPrimary200 else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                    ),
+                                    modifier = Modifier.clickable { onDiscountTypeChange(typeKey) }
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Custom discount input when Custom % or Fixed $ is selected
+                        if (discountType == "PERCENT_CUSTOM" || discountType == "FIXED") {
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = customDiscountText,
+                                onValueChange = { onCustomDiscountTextChange(it.filter { c -> c.isDigit() || c == '.' }) },
+                                label = { Text(if (discountType == "PERCENT_CUSTOM") "Enter Discount Percentage (%)" else "Enter Discount Amount ($)") },
+                                leadingIcon = {
+                                    Text(
+                                        text = if (discountType == "PERCENT_CUSTOM") "%" else "$",
+                                        fontWeight = FontWeight.Bold,
+                                        color = NawanoPrimary200
+                                    )
+                                },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+
+                // 2. Tax / VAT Toggle Card
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = NawanoPrimary200.copy(alpha = 0.12f),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.ReceiptLong,
+                                        contentDescription = null,
+                                        tint = NawanoPrimary200,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Cambodia VAT (10%)",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (isVatEnabled) "+${CurrencyFormatter.format(taxAmountUsd, currency, exchangeRate)} tax added"
+                                           else "Standard Value Added Tax",
+                                    fontSize = 11.sp,
+                                    color = if (isVatEnabled) NawanoPrimary200 else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = isVatEnabled,
+                            onCheckedChange = onToggleVat,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = NawanoPrimary200
+                            )
+                        )
+                    }
+                }
+
+                // 3. Breakdown Calculation Box
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
                         modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        // Subtotal
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text("Subtotal", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(
-                                text = CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate),
+                                text = CurrencyFormatter.format(subtotalUsd, currency, exchangeRate),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
+
+                        // Discount (if any)
+                        if (discountAmountUsd > 0.0) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "Discount ($discountType)",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF059669)
+                                )
+                                Text(
+                                    text = "-${CurrencyFormatter.format(discountAmountUsd, currency, exchangeRate)}",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF059669)
+                                )
+                            }
+                        }
+
+                        // VAT Tax (if enabled)
+                        if (isVatEnabled && taxAmountUsd > 0.0) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "VAT (10%)",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "+${CurrencyFormatter.format(taxAmountUsd, currency, exchangeRate)}",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = NawanoPrimary200
+                                )
+                            }
+                        }
+
+                        // Items Count
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
@@ -693,20 +1080,33 @@ private fun ItemSummaryView(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+
                         HorizontalDivider(
                             modifier = Modifier.padding(vertical = 4.dp),
                             thickness = 1.dp,
                             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
                         )
+
+                        // Grand Total
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Total Payable", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Column {
+                                Text("Total Payable", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                val equiv = CurrencyFormatter.formatEquivalentOnly(finalTotalUsd, currency, exchangeRate)
+                                if (equiv.isNotBlank()) {
+                                    Text(
+                                        text = "≈ $equiv",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                             Text(
-                                text = CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate),
-                                fontSize = 18.sp,
+                                text = CurrencyFormatter.format(finalTotalUsd, currency, exchangeRate),
+                                fontSize = 19.sp,
                                 fontWeight = FontWeight.Black,
                                 color = NawanoPrimary200
                             )
@@ -747,7 +1147,7 @@ private fun ItemSummaryView(
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                text = CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate),
+                                text = CurrencyFormatter.format(finalTotalUsd, currency, exchangeRate),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White
@@ -804,31 +1204,7 @@ private fun PaymentSelectionView(
             onClick = { onSelectMethod(PosPaymentMethod.ABA_KHQR) }
         )
 
-        // 2. Credit/Debit Card (Visa, Mastercard, UnionPay, JCB)
-        PaymentMethodCard(
-            title = "Credit/Debit Card",
-            subtitleContent = { CardBrandsRow() },
-            logoContent = { CreditCardLogoBadge() },
-            onClick = { onSelectMethod(PosPaymentMethod.CARD) }
-        )
-
-        // 3. Alipay
-        PaymentMethodCard(
-            title = "Alipay",
-            subtitle = "Scan to pay with Alipay",
-            logoContent = { AlipayLogoBadge() },
-            onClick = { onSelectMethod(PosPaymentMethod.ALIPAY) }
-        )
-
-        // 4. WeChat
-        PaymentMethodCard(
-            title = "WeChat",
-            subtitle = "Scan to pay with WeChat",
-            logoContent = { WeChatLogoBadge() },
-            onClick = { onSelectMethod(PosPaymentMethod.WECHAT) }
-        )
-
-        // 5. Cash
+        // 2. Cash
         PaymentMethodCard(
             title = "Cash",
             subtitle = "Pay directly at register with USD or KHR",
@@ -851,27 +1227,27 @@ private fun PaymentSelectionView(
             onClick = { onSelectMethod(PosPaymentMethod.CASH) }
         )
 
-        // 6. Cash on Delivery (COD)
+        // 3. Split Payment
         PaymentMethodCard(
-            title = "Cash on Delivery (COD)",
-            subtitle = "Pay upon delivery or record customer debt",
+            title = "Split Payment",
+            subtitle = "Split bill across multiple tenders (Cash, KHQR)",
             logoContent = {
                 Box(
                     modifier = Modifier
                         .size(46.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFFF59E0B)),
+                        .background(Brush.linearGradient(listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9)))),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.LocalShipping,
-                        contentDescription = "COD",
+                        imageVector = Icons.Default.CallSplit,
+                        contentDescription = "Split",
                         tint = Color.White,
                         modifier = Modifier.size(24.dp)
                     )
                 }
             },
-            onClick = { onSelectMethod(PosPaymentMethod.COD) }
+            onClick = { onSelectMethod(PosPaymentMethod.SPLIT) }
         )
 
         Spacer(Modifier.height(6.dp))
@@ -912,6 +1288,323 @@ private fun PaymentSelectionView(
                     color = NawanoPrimary200
                 )
             }
+        }
+    }
+}
+
+/**
+ * Step 3: Split Payment View
+ * Allows dividing the total payable bill across multiple tenders (Cash, KHQR, Card, etc.)
+ */
+private data class SplitTenderEntry(
+    val id: String = UUID.randomUUID().toString(),
+    val method: PosPaymentMethod,
+    val amountUsd: Double
+)
+
+@Composable
+private fun SplitPaymentView(
+    totalAmountUsd: Double,
+    currency: AppCurrency = AppCurrency.USD,
+    exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
+    isProcessing: Boolean = false,
+    onConfirmSplit: (splitDetails: String) -> Unit
+) {
+    val tenders = remember { mutableStateListOf<SplitTenderEntry>() }
+    var selectedMethodForNewTender by remember { mutableStateOf(PosPaymentMethod.CASH) }
+
+    val totalPaidUsd = tenders.sumOf { it.amountUsd }
+    val remainingDueUsd = (totalAmountUsd - totalPaidUsd).coerceAtLeast(0.0)
+    var tenderAmountInput by remember(remainingDueUsd) {
+        mutableStateOf(if (remainingDueUsd > 0.0) String.format(Locale.US, "%.2f", remainingDueUsd) else "0.00")
+    }
+
+    val isFullyPaid = remainingDueUsd <= 0.005
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // Balance Overview Card
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "TOTAL BILL DUE",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            letterSpacing = 0.8.sp
+                        )
+                        Text(
+                            text = CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate),
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isFullyPaid) Color(0xFF10B981).copy(alpha = 0.15f) else NawanoPrimary200.copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = if (isFullyPaid) "FULLY TENDERED" else "PARTIALLY PAID",
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isFullyPaid) Color(0xFF059669) else NawanoPrimary200,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // Progress Bar
+                val progress = if (totalAmountUsd > 0) (totalPaidUsd / totalAmountUsd).toFloat().coerceIn(0f, 1f) else 1f
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    color = if (isFullyPaid) Color(0xFF10B981) else NawanoPrimary200,
+                    trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Paid: ${CurrencyFormatter.format(totalPaidUsd, currency, exchangeRate)}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF059669)
+                    )
+                    Text(
+                        text = "Remaining: ${CurrencyFormatter.format(remainingDueUsd, currency, exchangeRate)}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (remainingDueUsd > 0.005) Color(0xFFEF4444) else Color(0xFF059669)
+                    )
+                }
+            }
+        }
+
+        // List of Added Split Tenders
+        if (tenders.isNotEmpty()) {
+            Text(
+                text = "APPLIED TENDERS (${tenders.size})",
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                letterSpacing = 0.8.sp
+            )
+
+            tenders.forEachIndexed { index, tender ->
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = CircleShape,
+                                color = when (tender.method) {
+                                    PosPaymentMethod.CASH -> Color(0xFF10B981)
+                                    PosPaymentMethod.ABA_KHQR -> Color(0xFF005E7B)
+                                    PosPaymentMethod.CARD -> Color(0xFF0E5268)
+                                    PosPaymentMethod.ALIPAY -> Color(0xFF1677FF)
+                                    PosPaymentMethod.WECHAT -> Color(0xFF07C160)
+                                    else -> NawanoPrimary200
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = when (tender.method) {
+                                            PosPaymentMethod.CASH -> Icons.Outlined.Payments
+                                            PosPaymentMethod.ABA_KHQR -> Icons.Default.QrCode2
+                                            PosPaymentMethod.CARD -> Icons.Outlined.CreditCard
+                                            else -> Icons.Outlined.AccountBalanceWallet
+                                        },
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Tender #${index + 1}: ${tender.method.name.replace('_', ' ')}",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = CurrencyFormatter.format(tender.amountUsd, currency, exchangeRate),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = { tenders.removeAt(index) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteOutline,
+                                contentDescription = "Remove tender",
+                                tint = Color(0xFFEF4444),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Add Tender Form (only if remaining balance > 0)
+        if (!isFullyPaid) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.25f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "ADD SPLIT TENDER",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = NawanoPrimary200,
+                        letterSpacing = 0.8.sp
+                    )
+
+                    // Method Selector Chips
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val availableSplitMethods = listOf(
+                            PosPaymentMethod.CASH to "Cash",
+                            PosPaymentMethod.ABA_KHQR to "KHQR",
+                            PosPaymentMethod.CARD to "Card",
+                            PosPaymentMethod.ALIPAY to "Alipay",
+                            PosPaymentMethod.WECHAT to "WeChat"
+                        )
+                        availableSplitMethods.forEach { (m, label) ->
+                            val isSelected = selectedMethodForNewTender == m
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isSelected) NawanoPrimary200 else MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) NawanoPrimary200 else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                ),
+                                modifier = Modifier.clickable { selectedMethodForNewTender = m }
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Tender Amount Input
+                    OutlinedTextField(
+                        value = tenderAmountInput,
+                        onValueChange = { tenderAmountInput = it.filter { c -> c.isDigit() || c == '.' } },
+                        label = { Text("Tender Amount ($)") },
+                        leadingIcon = { Text("$", fontWeight = FontWeight.Bold, color = NawanoPrimary200) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Add Tender Button
+                    val inputVal = tenderAmountInput.toDoubleOrNull() ?: 0.0
+                    Button(
+                        onClick = {
+                            val validAmt = inputVal.coerceIn(0.01, remainingDueUsd)
+                            tenders.add(SplitTenderEntry(method = selectedMethodForNewTender, amountUsd = validAmt))
+                        },
+                        enabled = inputVal > 0.0 && remainingDueUsd > 0.0,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Add ${selectedMethodForNewTender.name.replace('_', ' ')} Tender ($${String.format(Locale.US, "%.2f", inputVal.coerceIn(0.0, remainingDueUsd))})",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
+        // Finalize Split Payment CTA
+        Button(
+            onClick = {
+                val details = tenders.joinToString(", ") { "${it.method.name}: \$${String.format(Locale.US, "%.2f", it.amountUsd)}" }
+                onConfirmSplit(details)
+            },
+            enabled = isFullyPaid && !isProcessing,
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+        ) {
+            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.White)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = if (isFullyPaid) "Complete Split Sale (${CurrencyFormatter.format(totalAmountUsd, currency, exchangeRate)})"
+                else "Pay Remaining ${CurrencyFormatter.format(remainingDueUsd, currency, exchangeRate)} to Complete",
+                fontSize = 14.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
         }
     }
 }

@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.sp
 import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderItemEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
+import com.example.inventoryapp.data.local.entity.SupplierPaymentMethod
+import com.example.inventoryapp.data.local.entity.SupplierPaymentStatus
 import com.example.inventoryapp.data.repository.OrderWithItems
 import com.example.inventoryapp.ui.theme.*
 import com.example.inventoryapp.util.ProductThumbnail
@@ -48,9 +50,11 @@ fun StockInDetailBottomSheet(
     isDarkTheme: Boolean = false,
     onDismiss: () -> Unit,
     onAcceptOrder: (String) -> Unit,
-    onReceiveOrder: (String) -> Unit
+    onReceiveOrder: (String) -> Unit,
+    onPaySupplier: ((String, SupplierPaymentMethod) -> Unit)? = null,
+    onReportIssue: (() -> Unit)? = null
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val order = orderWithItems.order
@@ -307,6 +311,45 @@ fun StockInDetailBottomSheet(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    val isOrderPaid = order.paymentStatus == SupplierPaymentStatus.PAID
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "SUPPLIER PAYMENT",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                fontSize = 10.5.sp
+                            )
+                            Text(
+                                text = order.paymentMethod.label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isOrderPaid) Color(0xFF10B981).copy(alpha = 0.14f) else Color(0xFFF59E0B).copy(alpha = 0.14f)
+                        ) {
+                            Text(
+                                text = if (isOrderPaid) "PAID" else "DUE ON DELIVERY",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = if (isOrderPaid) Color(0xFF059669) else Color(0xFFD97706),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -468,8 +511,13 @@ fun StockInDetailBottomSheet(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
+                        val isCodOrder = order.paymentMethod == SupplierPaymentMethod.COD && order.paymentStatus == SupplierPaymentStatus.UNPAID
                         Text(
-                            text = "Receive & Stock In (+${order.totalQuantity} units)",
+                            text = if (isCodOrder) {
+                                "Pay COD & Receive (+${order.totalQuantity} units)"
+                            } else {
+                                "Receive & Stock In (+${order.totalQuantity} units)"
+                            },
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -513,6 +561,74 @@ fun StockInDetailBottomSheet(
                     ) {
                         Text("Close", fontWeight = FontWeight.Bold)
                     }
+                }
+            }
+
+            if (onPaySupplier != null &&
+                order.paymentStatus == SupplierPaymentStatus.UNPAID &&
+                order.status != PurchaseOrderStatus.CANCELLED &&
+                order.status != PurchaseOrderStatus.REJECTED
+            ) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            onPaySupplier(order.id, SupplierPaymentMethod.COD)
+                            animateDismiss()
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.6f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFD97706)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp)
+                    ) {
+                        Icon(Icons.Outlined.LocalShipping, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Pay COD", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            onPaySupplier(order.id, SupplierPaymentMethod.ABA_KHQR)
+                            animateDismiss()
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.55f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = NawanoPrimary200),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp)
+                    ) {
+                        Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Pay KHQR", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+            }
+
+            if (onReportIssue != null && order.status != PurchaseOrderStatus.CANCELLED) {
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = {
+                        onReportIssue()
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.55f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ReportProblem,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Report Issue to Supplier", fontWeight = FontWeight.Bold)
                 }
             }
         }

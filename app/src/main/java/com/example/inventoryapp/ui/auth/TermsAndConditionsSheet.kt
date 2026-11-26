@@ -38,6 +38,7 @@ import com.example.inventoryapp.ui.theme.NawanoPrimary50
 import com.example.inventoryapp.ui.theme.NawanoPrimary200
 import com.example.inventoryapp.ui.theme.NawanoTextPrimaryLight
 import com.example.inventoryapp.ui.theme.NawanoTextSecondaryLight
+import com.example.inventoryapp.ui.theme.rememberSafeModalBottomSheetState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,7 +46,7 @@ fun TermsAndConditionsSheet(
     onDismiss: () -> Unit,
     onAccept: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

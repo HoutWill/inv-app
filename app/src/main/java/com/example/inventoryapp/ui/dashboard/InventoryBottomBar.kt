@@ -71,16 +71,16 @@ fun InventoryBottomBar(
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(32.dp),
+            shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp,
-            shadowElevation = 8.dp,
-            border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.20f))
+            shadowElevation = 10.dp,
+            border = BorderStroke(1.dp, NawanoPrimary200.copy(alpha = 0.22f))
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .padding(horizontal = 6.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceAround,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -101,7 +101,7 @@ fun InventoryBottomBar(
                 )
 
                 // Center placeholder space for the elevated pop-up scan button
-                Spacer(modifier = Modifier.width(56.dp))
+                Spacer(modifier = Modifier.width(64.dp))
 
                 // Tab 2: Stats
                 FloatingNavItem(

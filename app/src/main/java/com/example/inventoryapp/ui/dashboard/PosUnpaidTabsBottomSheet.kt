@@ -37,7 +37,7 @@ fun PosUnpaidTabsBottomSheet(
     onDismiss: () -> Unit,
     onSettleOrder: (orderId: String, method: PosPaymentMethod) -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
     val totalDebtUsd = unpaidOrders.sumOf { it.remainingAmountUsd }
     val totalDebtKhr = (totalDebtUsd * exchangeRate).toLong()
     val khrFormatted = NumberFormat.getNumberInstance(Locale.US).format(totalDebtKhr)

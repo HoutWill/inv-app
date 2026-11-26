@@ -453,38 +453,72 @@ fun MovementDetailScreen(
     }
 
     if (showRejectConfirmDialog) {
-        AlertDialog(
+        val rejectSheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
             onDismissRequest = { showRejectConfirmDialog = false },
-            title = { Text(text = "Reject Inbound Delivery", fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    Text(text = "Please enter reason for rejecting this inbound shipment:")
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = rejectReason,
-                        onValueChange = { rejectReason = it },
-                        placeholder = { Text("Damaged goods / wrong manifest / expired") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showRejectConfirmDialog = false
-                        onRejectOrder(order.id)
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
+            sheetState = rejectSheetState,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            dragHandle = {
+                BottomSheetDefaults.DragHandle(
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    width = 44.dp,
+                    height = 5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                )
+            }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Reject Inbound Delivery",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Please enter reason for rejecting this inbound shipment:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = rejectReason,
+                    onValueChange = { rejectReason = it },
+                    placeholder = { Text("Damaged goods / wrong manifest / expired") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("Reject Shipment", color = Color.White)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRejectConfirmDialog = false }) {
-                    Text("Cancel")
+                    OutlinedButton(
+                        onClick = { showRejectConfirmDialog = false },
+                        modifier = Modifier.weight(1f).height(46.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Cancel")
+                    }
+                    Button(
+                        onClick = {
+                            showRejectConfirmDialog = false
+                            onRejectOrder(order.id)
+                        },
+                        modifier = Modifier.weight(1.3f).height(46.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
+                    ) {
+                        Text("Reject Shipment", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
-        )
+        }
     }
 }
 

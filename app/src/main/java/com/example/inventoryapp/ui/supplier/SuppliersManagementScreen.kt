@@ -36,7 +36,9 @@ fun SuppliersManagementScreen(
     onBack: () -> Unit,
     onSaveSupplier: (SupplierEntity) -> Unit,
     onToggleSupplierActive: (String, Boolean) -> Unit,
+    onDeleteSupplier: ((SupplierEntity) -> Unit)? = null,
     onNewPurchaseOrder: (SupplierEntity) -> Unit,
+    onReportIssue: ((SupplierEntity) -> Unit)? = null,
     isDarkTheme: Boolean = isSystemInDarkTheme(),
     onOpenConnectPartner: (() -> Unit)? = null,
     pendingPartnerRequestsCount: Int = 0,
@@ -51,6 +53,7 @@ fun SuppliersManagementScreen(
     var searchQuery by remember { mutableStateOf("") }
     var showAddEditDialog by remember { mutableStateOf(false) }
     var editingSupplier by remember { mutableStateOf<SupplierEntity?>(null) }
+    var supplierToDelete by remember { mutableStateOf<SupplierEntity?>(null) }
 
     val filteredSuppliers = remember(suppliers, searchQuery) {
         suppliers.filter { s ->
@@ -281,7 +284,9 @@ fun SuppliersManagementScreen(
                                 showAddEditDialog = true
                             },
                             onToggleActive = { onToggleSupplierActive(supplier.id, !supplier.isActive) },
-                            onNewOrder = { onNewPurchaseOrder(supplier) }
+                            onDelete = onDeleteSupplier?.let { { supplierToDelete = supplier } },
+                            onNewOrder = { onNewPurchaseOrder(supplier) },
+                            onReportIssue = onReportIssue?.let { handler -> { handler(supplier) } }
                         )
                     }
                 }
@@ -300,6 +305,71 @@ fun SuppliersManagementScreen(
             }
         )
     }
+
+    // Delete Supplier Confirmation Modal Bottom Sheet
+    if (supplierToDelete != null) {
+        val target = supplierToDelete!!
+        val deleteSheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { supplierToDelete = null },
+            sheetState = deleteSheetState,
+            containerColor = if (isDarkTheme) NawanoDark200 else Color.White,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            dragHandle = {
+                BottomSheetDefaults.DragHandle(
+                    color = if (isDarkTheme) NawanoDarkOutline else Color(0xFFCBD5E1)
+                )
+            }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Delete '${target.name}'?",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textPrimary
+                )
+                Text(
+                    text = "This removes the supplier from your directory. Existing purchase orders will keep their recorded supplier name.",
+                    fontSize = 13.5.sp,
+                    color = textSecondary
+                )
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { supplierToDelete = null },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f).height(48.dp)
+                    ) {
+                        Text("Cancel", color = textSecondary)
+                    }
+                    Button(
+                        onClick = {
+                            onDeleteSupplier?.invoke(target)
+                            supplierToDelete = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1.3f).height(48.dp)
+                    ) {
+                        Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Delete Supplier", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -308,7 +378,9 @@ private fun SupplierCard(
     isDarkTheme: Boolean = false,
     onEdit: () -> Unit,
     onToggleActive: () -> Unit,
-    onNewOrder: () -> Unit
+    onDelete: (() -> Unit)? = null,
+    onNewOrder: () -> Unit,
+    onReportIssue: (() -> Unit)? = null
 ) {
     val textPrimary = if (isDarkTheme) NawanoTextPrimaryDark else NawanoTextPrimaryLight
     val textSecondary = if (isDarkTheme) NawanoTextSecondaryDark else NawanoTextSecondaryLight
@@ -422,6 +494,34 @@ private fun SupplierCard(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                if (onReportIssue != null) {
+                    TextButton(onClick = onReportIssue) {
+                        Icon(
+                            imageVector = Icons.Outlined.ReportProblem,
+                            contentDescription = null,
+                            tint = Color(0xFFEF4444),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(text = "Report", fontSize = 13.sp, color = Color(0xFFEF4444), fontWeight = FontWeight.SemiBold)
+                    }
+                    Spacer(Modifier.width(4.dp))
+                }
+
+                if (onDelete != null) {
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteOutline,
+                            contentDescription = "Delete Supplier",
+                            tint = Color(0xFFEF4444),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
                 TextButton(onClick = onEdit) {
                     Icon(imageVector = Icons.Outlined.Edit, contentDescription = null, tint = textSecondary, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
@@ -465,6 +565,7 @@ fun SupplierAddEditDialog(
     var email by remember { mutableStateOf(supplier?.email ?: "") }
     var address by remember { mutableStateOf(supplier?.address ?: "") }
     var note by remember { mutableStateOf(supplier?.note ?: "") }
+    var validationError by remember { mutableStateOf<String?>(null) }
 
     val tfColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = textPrimary,
@@ -477,7 +578,7 @@ fun SupplierAddEditDialog(
         unfocusedLabelColor = textSecondary
     )
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -498,6 +599,7 @@ fun SupplierAddEditDialog(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp)
                 .verticalScroll(rememberScrollState()),
@@ -578,6 +680,15 @@ fun SupplierAddEditDialog(
                 shape = RoundedCornerShape(12.dp)
             )
 
+            if (validationError != null) {
+                Text(
+                    text = validationError!!,
+                    color = Color(0xFFEF4444),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
             Spacer(modifier = Modifier.height(6.dp))
 
             Row(
@@ -596,24 +707,33 @@ fun SupplierAddEditDialog(
 
                 Button(
                     onClick = {
-                        if (name.isNotBlank()) {
-                            val toSave = supplier?.copy(
-                                name = name.trim(),
-                                contactName = contactName.trim(),
-                                phone = phone.trim(),
-                                email = email.trim(),
-                                address = address.trim(),
-                                note = note.trim()
-                            ) ?: SupplierEntity(
-                                name = name.trim(),
-                                contactName = contactName.trim(),
-                                phone = phone.trim(),
-                                email = email.trim(),
-                                address = address.trim(),
-                                note = note.trim()
-                            )
-                            onConfirm(toSave)
+                        val cleanName = name.trim()
+                        val cleanEmail = email.trim()
+                        if (cleanName.isBlank()) {
+                            validationError = "Company name is required."
+                            return@Button
                         }
+                        if (cleanEmail.isNotBlank() && !cleanEmail.contains("@")) {
+                            validationError = "Please enter a valid email address."
+                            return@Button
+                        }
+                        validationError = null
+                        val toSave = supplier?.copy(
+                            name = cleanName,
+                            contactName = contactName.trim(),
+                            phone = phone.trim(),
+                            email = cleanEmail,
+                            address = address.trim(),
+                            note = note.trim()
+                        ) ?: SupplierEntity(
+                            name = cleanName,
+                            contactName = contactName.trim(),
+                            phone = phone.trim(),
+                            email = cleanEmail,
+                            address = address.trim(),
+                            note = note.trim()
+                        )
+                        onConfirm(toSave)
                     },
                     enabled = name.isNotBlank(),
                     shape = RoundedCornerShape(12.dp),

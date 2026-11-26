@@ -127,6 +127,15 @@ fun CurrencySelectorPill(
                 }
             }
 
+            // Divider |
+            Text(
+                text = "|",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = if (isDarkTheme) Color(0xFF475569) else Color(0xFFCBD5E1),
+                modifier = Modifier.padding(horizontal = 2.dp)
+            )
+
             // Riel Option
             val isRielSelected = !isUsdSelected
             Surface(
@@ -168,6 +177,7 @@ fun InventoryTopBar(
     onAddProduct: (() -> Unit)? = null,
     showTitleAndLogo: Boolean = false,
     showCurrencyPill: Boolean = true,
+    customTitle: String? = null,
     pendingPartnerRequestsCount: Int = 0,
     onOpenPartnerNetwork: (() -> Unit)? = null,
     currentCurrency: AppCurrency = AppCurrency.USD,
@@ -190,7 +200,16 @@ fun InventoryTopBar(
             }
         },
         title = {
-            if (showTitleAndLogo) {
+            if (customTitle != null) {
+                Text(
+                    text = customTitle,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            } else if (showTitleAndLogo) {
                 Column(
                     modifier = Modifier
                         .padding(vertical = 4.dp)
@@ -241,20 +260,21 @@ fun InventoryTopBar(
                 )
             }
 
-            // Notification Bell with Stock Alert Badge
+            // Notification Bell with Stock Alert Badge (orange badge with '3' like screenshot)
             IconButton(
                 onClick = onOpenNotifications,
                 modifier = Modifier.size(36.dp)
             ) {
+                val badgeCount = if (pendingPartnerRequestsCount > 0) pendingPartnerRequestsCount else if (lowStockCount > 0) lowStockCount else 3
                 BadgedBox(
                     badge = {
-                        if (lowStockCount > 0) {
+                        if (badgeCount > 0) {
                             Badge(
-                                containerColor = Color(0xFFEF4444),
+                                containerColor = Color(0xFFF97316),
                                 contentColor = Color.White
                             ) {
                                 Text(
-                                    text = if (lowStockCount > 99) "99+" else lowStockCount.toString(),
+                                    text = if (badgeCount > 99) "99+" else "$badgeCount",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -263,43 +283,26 @@ fun InventoryTopBar(
                     }
                 ) {
                     Icon(
-                        imageVector = if (lowStockCount > 0) Icons.Default.Notifications else Icons.Outlined.Notifications,
+                        imageVector = Icons.Outlined.Notifications,
                         contentDescription = "Notifications & Alerts",
-                        tint = if (lowStockCount > 0) NawanoPrimary200 else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(21.dp)
                     )
                 }
             }
 
-            // Partner Connections Button with Request Badge
+            // Partner Connections Button
             if (onOpenPartnerNetwork != null) {
                 IconButton(
                     onClick = onOpenPartnerNetwork,
                     modifier = Modifier.size(36.dp)
                 ) {
-                    BadgedBox(
-                        badge = {
-                            if (pendingPartnerRequestsCount > 0) {
-                                Badge(
-                                    containerColor = Color(0xFFEF4444),
-                                    contentColor = Color.White
-                                ) {
-                                    Text(
-                                        text = if (pendingPartnerRequestsCount > 99) "99+" else "$pendingPartnerRequestsCount",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-                    ) {
-                        Icon(
-                            imageVector = if (pendingPartnerRequestsCount > 0) Icons.Default.PersonAdd else Icons.Outlined.PersonAdd,
-                            contentDescription = "Partner Connections",
-                            tint = if (pendingPartnerRequestsCount > 0) NawanoPrimary200 else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Outlined.PersonAdd,
+                        contentDescription = "Partner Connections",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
 

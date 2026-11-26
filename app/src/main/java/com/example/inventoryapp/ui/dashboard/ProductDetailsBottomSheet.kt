@@ -73,7 +73,7 @@ fun ProductDetailsBottomSheet(
     currency: AppCurrency = AppCurrency.USD,
     exchangeRate: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -108,7 +108,11 @@ fun ProductDetailsBottomSheet(
     var customAdjustmentNote by remember { mutableStateOf("") }
     var showCustomAdjustmentDialog by remember { mutableStateOf(false) }
 
-    val categoryOptions = listOf("Electronics", "Accessories", "Furniture", "Hardware", "Grocery", "Other")
+    val categoryOptions = listOf(
+        "Beverages", "Meat", "Seafood", "Produce", "Dairy",
+        "Pantry", "Snacks", "Packaging", "Electronics",
+        "Accessories", "Furniture", "Hardware", "Grocery", "Other"
+    )
 
     // Camera launcher for updating product photo
     val takePictureLauncher = rememberLauncherForActivityResult(
@@ -133,15 +137,23 @@ fun ProductDetailsBottomSheet(
         }
     }
 
-    // Gallery launcher
+    // Gallery launcher (copies image locally into filesDir so URI stays valid across restarts)
     val pickGalleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            val uriStr = uri.toString()
-            editImageUri = uriStr
+            val savedUri = try {
+                val file = File(context.filesDir, "prod_${UUID.randomUUID()}.jpg")
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(file).use { output -> input.copyTo(output) }
+                }
+                file.toURI().toString()
+            } catch (_: Exception) {
+                uri.toString()
+            }
+            editImageUri = savedUri
             if (!isEditMode) {
-                onProductUpdated(product.copy(imageUri = uriStr))
+                onProductUpdated(product.copy(imageUri = savedUri, updatedAt = System.currentTimeMillis()))
                 Toast.makeText(context, "Product photo updated!", Toast.LENGTH_SHORT).show()
             }
         }
@@ -171,6 +183,7 @@ fun ProductDetailsBottomSheet(
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp)
+                .consumeBottomSheetNestedDismiss()
                 .verticalScroll(rememberScrollState())
         ) {
             // Top Navigation & Action Header
@@ -484,18 +497,26 @@ fun ProductDetailsBottomSheet(
 
                     Button(
                         onClick = {
-                            val parsedSelling = editSellingPriceText.toDoubleOrNull() ?: product.sellingPrice
-                            val parsedCost = editCostPriceText.toDoubleOrNull() ?: product.costPrice
-                            val parsedReorder = editReorderLevelText.toIntOrNull() ?: product.reorderLevel
+                            if (editName.trim().isBlank()) {
+                                Toast.makeText(context, "Product name cannot be empty", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            val parsedSelling = editSellingPriceText.toDoubleOrNull()
+                            if (parsedSelling == null || parsedSelling <= 0.0) {
+                                Toast.makeText(context, "Selling price must be greater than 0", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            val parsedCost = (editCostPriceText.toDoubleOrNull() ?: product.costPrice).coerceAtLeast(0.0)
+                            val parsedReorder = (editReorderLevelText.toIntOrNull() ?: product.reorderLevel).coerceAtLeast(0)
 
                             val updated = product.copy(
-                                name = editName.trim().ifBlank { product.name },
+                                name = editName.trim(),
                                 brand = editBrand.trim(),
                                 category = editCategory,
                                 subcategory = editSubcategory,
                                 sellingPrice = parsedSelling,
                                 costPrice = parsedCost,
-                                location = editLocation.trim(),
+                                location = editLocation.trim().ifBlank { "Warehouse A" },
                                 reorderLevel = parsedReorder,
                                 imageUri = editImageUri,
                                 updatedAt = System.currentTimeMillis()
@@ -1002,8 +1023,9 @@ fun ProductDetailsBottomSheet(
         }
     }
 
-    // Custom Adjustment & Reconciliation Modal Dialog
+    // Custom Adjustment & Reconciliation Modal Bottom Sheet
     if (showCustomAdjustmentDialog) {
+        val adjustSheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
         val reconciliationPresets = listOf(
             Triple("Shrinkage / Theft", -1, Color(0xFFEF4444)),
             Triple("Damaged Goods", -1, Color(0xFFF97316)),
@@ -1013,125 +1035,191 @@ fun ProductDetailsBottomSheet(
             Triple("Supplier Restock", 10, NawanoPrimary200)
         )
 
-        AlertDialog(
+        ModalBottomSheet(
             onDismissRequest = { showCustomAdjustmentDialog = false },
-            title = {
+            sheetState = adjustSheetState,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            dragHandle = {
+                BottomSheetDefaults.DragHandle(
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    width = 44.dp,
+                    height = 5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                )
+            }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Tune, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.Tune, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Stock Reconciliation & Audit", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Stock Reconciliation & Audit", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "1-Tap Quick Reason Preset:",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        reconciliationPresets.forEach { (reason, defaultDelta, color) ->
-                            val isSelected = customAdjustmentNote == reason
-                            Surface(
-                                onClick = {
-                                    customAdjustmentNote = reason
-                                    if (customAdjustmentText.isBlank() || customAdjustmentText == "0") {
-                                        customAdjustmentText = if (defaultDelta > 0) "+$defaultDelta" else "$defaultDelta"
-                                    } else if (defaultDelta < 0 && !customAdjustmentText.startsWith("-")) {
-                                        customAdjustmentText = "-$customAdjustmentText"
-                                    }
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isSelected) color.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                border = BorderStroke(1.dp, if (isSelected) color else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                            ) {
-                                Text(
-                                    text = reason,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) color else MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
-                                )
-                            }
-                        }
-                    }
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-
-                    OutlinedTextField(
-                        value = customAdjustmentText,
-                        onValueChange = { customAdjustmentText = it },
-                        label = { Text("Quantity Delta (e.g. -3 or +25)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = customAdjustmentNote,
-                        onValueChange = { customAdjustmentNote = it },
-                        label = { Text("Note / Audit Reason") },
-                        placeholder = { Text("e.g. Broken in transit, weekly audit") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val delta = customAdjustmentText.trim().toIntOrNull()
-                        if (delta != null && delta != 0) {
-                            val finalType = if (delta < 0) "STOCK_OUT" else "STOCK_IN"
-                            onQuantityAdjust(delta, customAdjustmentNote.ifBlank { "Reconciliation adjustment" })
-                            showCustomAdjustmentDialog = false
-                            customAdjustmentText = ""
-                            customAdjustmentNote = ""
-                            Toast.makeText(context, "Stock adjusted by $delta", Toast.LENGTH_SHORT).show()
-                        } else {
-                            Toast.makeText(context, "Please enter a valid non-zero integer", Toast.LENGTH_SHORT).show()
-                        }
-                    }
+                Text(
+                    text = "1-Tap Quick Reason Preset:",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text("Apply")
+                    reconciliationPresets.forEach { (reason, defaultDelta, color) ->
+                        val isSelected = customAdjustmentNote == reason
+                        Surface(
+                            onClick = {
+                                customAdjustmentNote = reason
+                                if (customAdjustmentText.isBlank() || customAdjustmentText == "0") {
+                                    customAdjustmentText = if (defaultDelta > 0) "+$defaultDelta" else "$defaultDelta"
+                                } else if (defaultDelta < 0 && !customAdjustmentText.startsWith("-")) {
+                                    customAdjustmentText = "-$customAdjustmentText"
+                                }
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSelected) color.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = BorderStroke(1.dp, if (isSelected) color else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        ) {
+                            Text(
+                                text = reason,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) color else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCustomAdjustmentDialog = false }) {
-                    Text("Cancel")
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+                OutlinedTextField(
+                    value = customAdjustmentText,
+                    onValueChange = { customAdjustmentText = it },
+                    label = { Text("Quantity Delta (e.g. -3 or +25)") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = customAdjustmentNote,
+                    onValueChange = { customAdjustmentNote = it },
+                    label = { Text("Note / Audit Reason") },
+                    placeholder = { Text("e.g. Broken in transit, weekly audit") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { showCustomAdjustmentDialog = false },
+                        modifier = Modifier.weight(1f).height(46.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Cancel")
+                    }
+                    Button(
+                        onClick = {
+                            val delta = customAdjustmentText.trim().toIntOrNull()
+                            if (delta != null && delta != 0) {
+                                onQuantityAdjust(delta, customAdjustmentNote.ifBlank { "Reconciliation adjustment" })
+                                showCustomAdjustmentDialog = false
+                                customAdjustmentText = ""
+                                customAdjustmentNote = ""
+                                Toast.makeText(context, "Stock adjusted by $delta", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "Please enter a valid non-zero integer", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.weight(1.3f).height(46.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = NawanoPrimary200)
+                    ) {
+                        Text("Apply", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
-        )
+        }
     }
 
-    // Delete Confirmation Dialog
+    // Delete Confirmation Sheet
     if (showDeleteConfirmDialog) {
-        AlertDialog(
+        val deleteSheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
             onDismissRequest = { showDeleteConfirmDialog = false },
-            title = { Text("Delete '${product.name}'?") },
-            text = { Text("This will permanently remove this SKU and its stock history from your inventory.") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showDeleteConfirmDialog = false
-                        onDeleteProduct()
-                        onDismiss()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            sheetState = deleteSheetState,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            dragHandle = {
+                BottomSheetDefaults.DragHandle(
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    width = 44.dp,
+                    height = 5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                )
+            }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Delete '${product.name}'?",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "This will permanently remove this SKU and its stock history from your inventory.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("Delete")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirmDialog = false }) {
-                    Text("Cancel")
+                    OutlinedButton(
+                        onClick = { showDeleteConfirmDialog = false },
+                        modifier = Modifier.weight(1f).height(46.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Cancel")
+                    }
+                    Button(
+                        onClick = {
+                            showDeleteConfirmDialog = false
+                            onDeleteProduct()
+                            onDismiss()
+                        },
+                        modifier = Modifier.weight(1.3f).height(46.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Delete", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
-        )
+        }
     }
 }
 

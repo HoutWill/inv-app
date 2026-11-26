@@ -62,6 +62,10 @@ class FakeUserDao : UserDao {
         val user = users[id] ?: return
         users[id] = user.copy(fullName = fullName, phoneNumber = phoneNumber, uniqueCode = uniqueCode, updatedAt = updatedAt)
     }
+
+    override fun observeUsersByRole(role: UserRole): Flow<List<UserEntity>> {
+        return MutableStateFlow(users.values.filter { it.role == role })
+    }
 }
 
 class FakeSessionStore : AppSessionStore {

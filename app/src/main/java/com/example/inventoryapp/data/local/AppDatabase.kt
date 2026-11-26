@@ -7,13 +7,18 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.inventoryapp.data.local.dao.ParkedCartDao
 import com.example.inventoryapp.data.local.dao.PartnerConnectionDao
 import com.example.inventoryapp.data.local.dao.ProductDao
 import com.example.inventoryapp.data.local.dao.PurchaseOrderDao
 import com.example.inventoryapp.data.local.dao.SalesOrderDao
 import com.example.inventoryapp.data.local.dao.StockTransactionDao
 import com.example.inventoryapp.data.local.dao.SupplierDao
+import com.example.inventoryapp.data.local.dao.SupplierIssueDao
 import com.example.inventoryapp.data.local.dao.UserDao
+import com.example.inventoryapp.data.local.entity.ConnectionStatus
+import com.example.inventoryapp.data.local.entity.IssueSeverity
+import com.example.inventoryapp.data.local.entity.ParkedCartEntity
 import com.example.inventoryapp.data.local.entity.PartnerConnectionEntity
 import com.example.inventoryapp.data.local.entity.PosPaymentMethod
 import com.example.inventoryapp.data.local.entity.PosPaymentStatus
@@ -24,6 +29,8 @@ import com.example.inventoryapp.data.local.entity.PurchaseOrderStatus
 import com.example.inventoryapp.data.local.entity.SalesOrderEntity
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
 import com.example.inventoryapp.data.local.entity.SupplierEntity
+import com.example.inventoryapp.data.local.entity.SupplierIssueEntity
+import com.example.inventoryapp.data.local.entity.SupplierIssueStatus
 import com.example.inventoryapp.data.local.entity.UserEntity
 import com.example.inventoryapp.data.local.entity.UserRole
 import com.example.inventoryapp.util.PasswordHasher
@@ -40,9 +47,11 @@ import kotlinx.coroutines.launch
         PurchaseOrderEntity::class,
         PurchaseOrderItemEntity::class,
         PartnerConnectionEntity::class,
-        SalesOrderEntity::class
+        SalesOrderEntity::class,
+        ParkedCartEntity::class,
+        SupplierIssueEntity::class
     ],
-    version = 10,
+    version = 14,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -53,6 +62,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun purchaseOrderDao(): PurchaseOrderDao
     abstract fun partnerConnectionDao(): PartnerConnectionDao
     abstract fun salesOrderDao(): SalesOrderDao
+    abstract fun parkedCartDao(): ParkedCartDao
+    abstract fun supplierIssueDao(): SupplierIssueDao
 
     companion object {
         @Volatile
@@ -214,6 +225,94 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `itemsJson` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `subtotalUsd` REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `discountType` TEXT NOT NULL DEFAULT 'NONE'")
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `discountValue` REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `discountAmountUsd` REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `taxRate` REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `taxAmountUsd` REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `splitDetails` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `cancelReason` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `cancelledAt` INTEGER")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `parked_carts` (
+                        `id` TEXT NOT NULL,
+                        `label` TEXT NOT NULL,
+                        `note` TEXT NOT NULL DEFAULT '',
+                        `itemsJson` TEXT NOT NULL,
+                        `totalAmountUsd` REAL NOT NULL,
+                        `itemCount` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `refundedAmountUsd` REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `refundIssueType` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `refundConditionAnswer` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `refundReason` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `refundRestockAction` TEXT NOT NULL DEFAULT 'RESTOCK'")
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `refundMethod` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `refundProofImageUri` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `returnedItemsJson` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `sales_orders` ADD COLUMN `refundedAt` INTEGER")
+            }
+        }
+
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `supplier_issues` (
+                        `id` TEXT NOT NULL,
+                        `issue_code` TEXT NOT NULL,
+                        `order_id` TEXT,
+                        `order_number` TEXT NOT NULL DEFAULT '',
+                        `supplier_id` TEXT NOT NULL,
+                        `supplier_name` TEXT NOT NULL,
+                        `middleman_id` TEXT NOT NULL DEFAULT 'user_middleman',
+                        `middleman_name` TEXT NOT NULL,
+                        `middleman_code` TEXT NOT NULL DEFAULT 'MID-1001',
+                        `issue_type` TEXT NOT NULL,
+                        `severity` TEXT NOT NULL DEFAULT 'HIGH',
+                        `affected_item_name` TEXT NOT NULL DEFAULT '',
+                        `affected_quantity` INTEGER NOT NULL DEFAULT 0,
+                        `description` TEXT NOT NULL,
+                        `proof_image_uri` TEXT NOT NULL DEFAULT '',
+                        `status` TEXT NOT NULL DEFAULT 'OPEN',
+                        `supplier_response` TEXT NOT NULL DEFAULT '',
+                        `created_at` INTEGER NOT NULL,
+                        `resolved_at` INTEGER,
+                        `updated_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_supplier_issues_supplier_id` ON `supplier_issues` (`supplier_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_supplier_issues_middleman_id` ON `supplier_issues` (`middleman_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_supplier_issues_order_id` ON `supplier_issues` (`order_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_supplier_issues_status` ON `supplier_issues` (`status`)")
+            }
+        }
+
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `purchase_orders` ADD COLUMN `paymentMethod` TEXT NOT NULL DEFAULT 'COD'")
+                db.execSQL("ALTER TABLE `purchase_orders` ADD COLUMN `paymentStatus` TEXT NOT NULL DEFAULT 'UNPAID'")
+                db.execSQL("ALTER TABLE `purchase_orders` ADD COLUMN `paidAt` INTEGER")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = try {
@@ -222,7 +321,7 @@ abstract class AppDatabase : RoomDatabase() {
                         AppDatabase::class.java,
                         "inventory_database"
                     )
-                        .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_6_8, MIGRATION_8_9, MIGRATION_9_10)
+                        .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_6_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
                         .fallbackToDestructiveMigration(true)
                         .addCallback(DatabaseSeederCallback())
                         .build()
@@ -288,6 +387,42 @@ abstract class AppDatabase : RoomDatabase() {
                     }
                 } catch (e: Exception) {
                     Log.w("AppDatabase", "Middleman user exists: ${e.message}")
+                }
+                try {
+                    val existingDavid = userDao.findByEmail("david@nawano.com")
+                    if (existingDavid == null) {
+                        userDao.insert(
+                            UserEntity(
+                                id = "user_middleman_david",
+                                fullName = "David Kim (Middle Man)",
+                                email = "david@nawano.com",
+                                passwordHash = PasswordHasher.hash("password123"),
+                                role = UserRole.OWNER,
+                                uniqueCode = "MID-1002",
+                                phoneNumber = "+1 (555) 012-4480"
+                            )
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.w("AppDatabase", "David middleman exists: ${e.message}")
+                }
+                try {
+                    val existingBrandon = userDao.findByEmail("brandon@nawano.com")
+                    if (existingBrandon == null) {
+                        userDao.insert(
+                            UserEntity(
+                                id = "user_middleman_brandon",
+                                fullName = "Brandon Vaccaro (Middle Man)",
+                                email = "brandon@nawano.com",
+                                passwordHash = PasswordHasher.hash("password123"),
+                                role = UserRole.OWNER,
+                                uniqueCode = "MID-1003",
+                                phoneNumber = "+1 (555) 017-6620"
+                            )
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.w("AppDatabase", "Brandon middleman exists: ${e.message}")
                 }
                 try {
                     val existingSup = userDao.findByEmail("supplier@nawano.com")
@@ -802,6 +937,114 @@ abstract class AppDatabase : RoomDatabase() {
                     } catch (e: Exception) {
                         Log.w("AppDatabase", "Error seeding sample unpaid tabs: ${e.message}")
                     }
+                }
+
+                // Seed active Middleman-Supplier connections & sample Middleman issue reports independently of PO seed
+                try {
+                    val partnerDao = database.partnerConnectionDao()
+                    val existingConn1 = partnerDao.findExistingConnection("user_middleman", "user_supplier_pacific")
+                    if (existingConn1 == null) {
+                        partnerDao.insert(
+                            PartnerConnectionEntity(
+                                id = "conn_anthony_pacific",
+                                requesterId = "user_middleman",
+                                receiverId = "user_supplier_pacific",
+                                requesterRole = UserRole.OWNER,
+                                receiverRole = UserRole.SUPPLIER,
+                                status = ConnectionStatus.ACCEPTED,
+                                requestNote = "Primary Nawano HQ cold-chain wholesale account"
+                            )
+                        )
+                    }
+                    val existingConn2 = partnerDao.findExistingConnection("user_middleman_david", "user_supplier_pacific")
+                    if (existingConn2 == null) {
+                        partnerDao.insert(
+                            PartnerConnectionEntity(
+                                id = "conn_david_pacific",
+                                requesterId = "user_middleman_david",
+                                receiverId = "user_supplier_pacific",
+                                requesterRole = UserRole.OWNER,
+                                receiverRole = UserRole.SUPPLIER,
+                                status = ConnectionStatus.ACCEPTED,
+                                requestNote = "Gourmet & Downtown Branch Procurement"
+                            )
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.w("AppDatabase", "Error seeding partner connections: ${e.message}")
+                }
+
+                try {
+                    val issueDao = database.supplierIssueDao()
+                    if (issueDao.getIssueById("iss_seed_001") == null) {
+                        val now = System.currentTimeMillis()
+                        val sampleIssues = listOf(
+                            SupplierIssueEntity(
+                                id = "iss_seed_001",
+                                issueCode = "ISS-2026-041",
+                                orderId = "po_real_002",
+                                orderNumber = "PO-2026-0843",
+                                supplierId = "sup_foodie",
+                                supplierName = "Foodie Supplier Co.",
+                                middlemanId = "user_middleman_david",
+                                middlemanName = "David Kim",
+                                middlemanCode = "MID-1002",
+                                issueType = "Damaged Goods",
+                                severity = IssueSeverity.HIGH,
+                                affectedItemName = "Nutella Hazelnut Spread (400g)",
+                                affectedQuantity = 4,
+                                description = "4 jars arrived with cracked lids due to loose pallet strapping during DHL freight transit.",
+                                status = SupplierIssueStatus.OPEN,
+                                supplierResponse = "",
+                                createdAt = now - 3600_000L * 2,
+                                updatedAt = now - 3600_000L * 2
+                            ),
+                            SupplierIssueEntity(
+                                id = "iss_seed_002",
+                                issueCode = "ISS-2026-040",
+                                orderId = "po_real_001",
+                                orderNumber = "PO-2026-0842",
+                                supplierId = "sup_pacific_seafood",
+                                supplierName = "Pacific Seafood Supply",
+                                middlemanId = "user_middleman",
+                                middlemanName = "Anthony (Middle Man)",
+                                middlemanCode = "MID-1001",
+                                issueType = "Missing / Short Quantity",
+                                severity = IssueSeverity.MEDIUM,
+                                affectedItemName = "Red Bull Energy Drink (250ml)",
+                                affectedQuantity = 6,
+                                description = "Packing manifest listed 40 cans, but only 34 cans were counted at Nawano HQ receiving dock.",
+                                status = SupplierIssueStatus.ACKNOWLEDGED,
+                                supplierResponse = "Warehouse supervisor verified dock camera; 6 replacement cans queued for next courier.",
+                                createdAt = now - 3600_000L * 14,
+                                updatedAt = now - 3600_000L * 5
+                            ),
+                            SupplierIssueEntity(
+                                id = "iss_seed_003",
+                                issueCode = "ISS-2026-038",
+                                orderId = null,
+                                orderNumber = "PO-2026-0839",
+                                supplierId = "sup_pacific_seafood",
+                                supplierName = "Pacific Seafood Supply",
+                                middlemanId = "user_middleman_brandon",
+                                middlemanName = "Brandon Vaccaro",
+                                middlemanCode = "MID-1003",
+                                issueType = "Temperature / Quality Alert",
+                                severity = IssueSeverity.LOW,
+                                affectedItemName = "Atlantic Salmon Fillet (Fresh Cut)",
+                                affectedQuantity = 2,
+                                description = "Outer thermal liner had minor condensation; product quality confirmed good after inspection.",
+                                status = SupplierIssueStatus.RESOLVED,
+                                supplierResponse = "Upgraded insulated gel-pack spec for all afternoon deliveries.",
+                                createdAt = now - 86400_000L * 2,
+                                resolvedAt = now - 86400_000L * 1,
+                                updatedAt = now - 86400_000L * 1
+                            )
+                        )
+                        sampleIssues.forEach { issueDao.insertIssue(it) }
+                    }
+                } catch (e: Exception) {
+                    Log.w("AppDatabase", "Error seeding sample supplier issues: ${e.message}")
                 }
             } catch (e: Exception) {
                 Log.e("AppDatabase", "Error seeding default suppliers", e)

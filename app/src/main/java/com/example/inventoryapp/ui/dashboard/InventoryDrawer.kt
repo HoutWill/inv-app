@@ -40,8 +40,10 @@ enum class DrawerDestination {
     DASHBOARD,
     ITEMS,
     STATISTICS,
+    POS_ORDERS,
     INVENTORY_SUMMARY,
     MOVEMENT_LIST,
+    TRACKING,
     SUPPLIERS,
     AUDIT_LOGS,
     SETTINGS
@@ -101,6 +103,7 @@ fun InventoryNavigationDrawer(
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
     totalSkus: Int,
+    activeTrackingCount: Int = 0,
     userName: String = "Anthony",
     userRole: String = "Middle Man • Nawano HQ",
     onLogout: (() -> Unit)? = null,
@@ -122,6 +125,7 @@ fun InventoryNavigationDrawer(
                 isDarkTheme = isDarkTheme,
                 onToggleTheme = onToggleTheme,
                 totalSkus = totalSkus,
+                activeTrackingCount = activeTrackingCount,
                 userName = userName,
                 userRole = userRole,
                 onLogout = onLogout,
@@ -158,6 +162,7 @@ fun InventoryDrawerSheet(
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
     totalSkus: Int,
+    activeTrackingCount: Int = 0,
     userName: String = "Anthony",
     userRole: String = "Middle Man • Nawano HQ",
     onLogout: (() -> Unit)? = null,
@@ -358,6 +363,14 @@ fun InventoryDrawerSheet(
                 onClick = { onDestinationSelected(DrawerDestination.STATISTICS) }
             )
 
+            DrawerNavRow(
+                icon = Icons.Outlined.ReceiptLong,
+                label = "POS Orders & Tabs",
+                isSelected = currentDestination == DrawerDestination.POS_ORDERS,
+                badge = null,
+                onClick = { onDestinationSelected(DrawerDestination.POS_ORDERS) }
+            )
+
             Spacer(modifier = Modifier.height(14.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
             Spacer(modifier = Modifier.height(14.dp))
@@ -377,6 +390,14 @@ fun InventoryDrawerSheet(
                 isSelected = currentDestination == DrawerDestination.MOVEMENT_LIST || currentDestination == DrawerDestination.AUDIT_LOGS,
                 badge = null,
                 onClick = { onDestinationSelected(DrawerDestination.MOVEMENT_LIST) }
+            )
+
+            DrawerNavRow(
+                icon = Icons.Default.TrackChanges,
+                label = "Tracking",
+                isSelected = currentDestination == DrawerDestination.TRACKING,
+                badge = if (activeTrackingCount > 0) "$activeTrackingCount" else null,
+                onClick = { onDestinationSelected(DrawerDestination.TRACKING) }
             )
 
             DrawerNavRow(
@@ -473,6 +494,7 @@ fun NawanoDrawerSheet(
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
     totalSkus: Int,
+    activeTrackingCount: Int = 0,
     userName: String = "Anthony",
     userRole: String = "Middle Man • Nawano HQ",
     onLogout: (() -> Unit)? = null,

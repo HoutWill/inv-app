@@ -43,7 +43,7 @@ fun EditProfileBottomSheet(
     onSave: (fullName: String, phoneNumber: String, uniqueCode: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
     val focusManager = LocalFocusManager.current
 
     var fullName by remember(user.fullName) { mutableStateOf(user.fullName) }

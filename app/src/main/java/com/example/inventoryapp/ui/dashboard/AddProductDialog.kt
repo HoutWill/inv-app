@@ -66,6 +66,7 @@ data class AddProductDraft(
 fun AddProductDialog(
     initialDraft: AddProductDraft = AddProductDraft(),
     suppliers: List<SupplierEntity> = emptyList(),
+    existingSkus: Set<String> = emptySet(),
     onDismiss: () -> Unit,
     onRequestScanSku: (AddProductDraft) -> Unit,
     onProductAdded: (ProductEntity) -> Unit
@@ -93,7 +94,7 @@ fun AddProductDialog(
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Camera launcher for taking product photos
     val takePicturePreviewLauncher = rememberLauncherForActivityResult(
@@ -112,17 +113,29 @@ fun AddProductDialog(
         }
     }
 
-    // Gallery picker launcher
+    // Gallery picker launcher (copies image locally into filesDir so URI stays valid across restarts)
     val pickImageLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            imageUri = uri.toString()
+            imageUri = try {
+                val file = File(context.filesDir, "prod_${UUID.randomUUID()}.jpg")
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(file).use { output -> input.copyTo(output) }
+                }
+                file.toURI().toString()
+            } catch (_: Exception) {
+                uri.toString()
+            }
         }
     }
 
-    val categoryOptions = listOf("Electronics", "Accessories", "Furniture", "Hardware", "Grocery", "Other")
-    val unitOptions = listOf("Pcs", "Box", "Carton", "Kg", "Liter", "Set")
+    val categoryOptions = listOf(
+        "Beverages", "Meat", "Seafood", "Produce", "Dairy",
+        "Pantry", "Snacks", "Packaging", "Electronics",
+        "Accessories", "Furniture", "Hardware", "Grocery", "Other"
+    )
+    val unitOptions = listOf("Pcs", "Box", "Carton", "Pack", "Can", "Kg", "Liter", "Set")
 
     var categoryExpanded by remember { mutableStateOf(false) }
     var subcategoryExpanded by remember { mutableStateOf(false) }
@@ -215,8 +228,11 @@ fun AddProductDialog(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp)
+                .padding(bottom = 28.dp)
+                .consumeBottomSheetNestedDismiss()
                 .verticalScroll(rememberScrollState())
         ) {
             // Header Row (Nawano Behance UI Kit: Slide 5)
@@ -936,24 +952,32 @@ fun AddProductDialog(
                 Button(
                     onClick = {
                         hasAttemptedSubmit = true
-                        if (sku.isBlank()) {
+                        val cleanSku = sku.trim()
+                        if (cleanSku.isBlank()) {
                             errorMessage = "Please enter or scan a valid SKU barcode."
+                            return@Button
+                        }
+                        if (existingSkus.any { it.equals(cleanSku, ignoreCase = true) }) {
+                            errorMessage = "SKU '$cleanSku' already exists in inventory."
                             return@Button
                         }
                         if (name.isBlank()) {
                             errorMessage = "Please enter or scan a product name."
                             return@Button
                         }
-                        val sellingPrice = sellingPriceText.toDoubleOrNull() ?: 0.0
-                        val costPrice = costPriceText.toDoubleOrNull() ?: 0.0
-                        val qty = quantityText.toIntOrNull() ?: 1
-                        val reorderLevel = reorderLevelText.toIntOrNull() ?: 5
-
-                        val reorderQty = reorderQtyText.toIntOrNull() ?: 10
+                        val sellingPrice = sellingPriceText.toDoubleOrNull()
+                        if (sellingPrice == null || sellingPrice <= 0.0) {
+                            errorMessage = "Selling price must be greater than 0."
+                            return@Button
+                        }
+                        val costPrice = (costPriceText.toDoubleOrNull() ?: 0.0).coerceAtLeast(0.0)
+                        val qty = (quantityText.toIntOrNull() ?: 0).coerceAtLeast(0)
+                        val reorderLevel = (reorderLevelText.toIntOrNull() ?: 5).coerceAtLeast(0)
+                        val reorderQty = (reorderQtyText.toIntOrNull() ?: 10).coerceAtLeast(1)
 
                         val newItem = ProductEntity(
                             id = UUID.randomUUID().toString(),
-                            sku = sku.trim(),
+                            sku = cleanSku,
                             name = name.trim(),
                             category = category,
                             subcategory = subcategory,

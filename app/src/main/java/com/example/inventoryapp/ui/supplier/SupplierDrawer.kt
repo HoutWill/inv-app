@@ -37,6 +37,8 @@ fun SupplierDrawerSheet(
     ordersCount: Int,
     catalogCount: Int,
     shipmentsCount: Int,
+    middlemenCount: Int = 0,
+    openIssuesCount: Int = 0,
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
     onCloseDrawer: () -> Unit,
@@ -257,6 +259,28 @@ fun SupplierDrawerSheet(
                 onClick = { onTabSelected(2) }
             )
 
+            // Item 4: Middleman List
+            SupplierDrawerItem(
+                label = "Middlemen",
+                icon = Icons.Default.Groups,
+                badge = if (middlemenCount > 0) "$middlemenCount" else null,
+                badgeColor = NawanoPrimary200,
+                isSelected = activeViewTab == 4,
+                isDarkTheme = isDarkTheme,
+                onClick = { onTabSelected(4) }
+            )
+
+            // Item 5: Issue Reports from Middleman
+            SupplierDrawerItem(
+                label = "Issues",
+                icon = Icons.Outlined.ReportProblem,
+                badge = if (openIssuesCount > 0) "$openIssuesCount" else null,
+                badgeColor = Color(0xFFEF4444),
+                isSelected = activeViewTab == 5,
+                isDarkTheme = isDarkTheme,
+                onClick = { onTabSelected(5) }
+            )
+
             Spacer(modifier = Modifier.height(14.dp))
             HorizontalDivider(color = if (isDarkTheme) NawanoDarkOutline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
             Spacer(modifier = Modifier.height(14.dp))
@@ -272,11 +296,11 @@ fun SupplierDrawerSheet(
             )
 
             SupplierDrawerItem(
-                label = "Shipments",
+                label = "Tracking",
                 icon = Icons.Default.LocalShipping,
                 badge = if (shipmentsCount > 0) "$shipmentsCount" else null,
                 badgeColor = Color(0xFF6366F1),
-                isSelected = false,
+                isSelected = activeViewTab == 6,
                 isDarkTheme = isDarkTheme,
                 onClick = onOpenShipments
             )

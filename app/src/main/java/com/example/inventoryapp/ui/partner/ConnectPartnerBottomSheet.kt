@@ -48,7 +48,7 @@ fun ConnectPartnerBottomSheet(
     isDarkTheme: Boolean = false,
     pendingRequestsCount: Int = 0
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val focusManager = LocalFocusManager.current

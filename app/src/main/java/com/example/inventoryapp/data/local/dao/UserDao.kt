@@ -42,4 +42,7 @@ interface UserDao {
 
     @Query("UPDATE users SET full_name = :fullName, phone_number = :phoneNumber, unique_code = :uniqueCode, updated_at = :updatedAt WHERE id = :id")
     suspend fun updateProfile(id: String, fullName: String, phoneNumber: String, uniqueCode: String, updatedAt: Long = System.currentTimeMillis())
+
+    @Query("SELECT * FROM users WHERE role = :role ORDER BY full_name ASC")
+    fun observeUsersByRole(role: com.example.inventoryapp.data.local.entity.UserRole): Flow<List<UserEntity>>
 }

@@ -1,5 +1,12 @@
 package com.example.inventoryapp.ui.partner
 
+import android.widget.Toast
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -16,7 +23,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -41,8 +53,11 @@ fun PartnerRequestsBottomSheet(
     onDismiss: () -> Unit,
     isDarkTheme: Boolean = false
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var selectedTab by remember { mutableStateOf(0) } // 0: Incoming, 1: Sent, 2: Connected
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
+    var selectedTab by remember { mutableIntStateOf(0) } // 0: Incoming, 1: Sent, 2: Connected
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+    val myPartnerCode = currentUser.uniqueCode.ifBlank { currentUser.id.take(8).uppercase() }
 
     val bgCard = if (isDarkTheme) NawanoDark200 else Color.White
     val bgInner = if (isDarkTheme) NawanoDark400 else NawanoNeutral50
@@ -55,13 +70,25 @@ fun PartnerRequestsBottomSheet(
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         containerColor = bgCard,
-        dragHandle = { BottomSheetDefaults.DragHandle(color = textSecondary.copy(alpha = 0.4f)) },
-        modifier = Modifier.navigationBarsPadding().imePadding()
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
+                width = 44.dp,
+                height = 5.dp,
+                color = textSecondary.copy(alpha = 0.4f)
+            )
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(top = 20.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.85f)
+                .fillMaxHeight(0.86f)
+                .navigationBarsPadding()
+                .imePadding()
                 .padding(horizontal = 20.dp)
         ) {
             // Header
@@ -70,23 +97,45 @@ fun PartnerRequestsBottomSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f, fill = false)) {
-                    Text(
-                        text = "Partner Network",
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "Manage connections & requests",
-                        fontSize = 12.sp,
-                        color = textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = NawanoPrimary200.copy(alpha = 0.14f),
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Outlined.Hub,
+                                contentDescription = null,
+                                tint = NawanoPrimary200,
+                                modifier = Modifier.size(21.dp)
+                            )
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Partner Network",
+                            fontSize = 18.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "Manage connections & requests",
+                            fontSize = 11.5.sp,
+                            color = textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
+
+                Spacer(Modifier.width(8.dp))
 
                 FilledTonalButton(
                     onClick = {
@@ -98,24 +147,93 @@ fun PartnerRequestsBottomSheet(
                         contentColor = Color.White
                     ),
                     shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(15.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text(text = "Connect", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text(text = "Connect", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
             }
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(12.dp))
+
+            // Your Partner ID Gradient Card
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = Color.Transparent,
+                shadowElevation = if (isDarkTheme) 0.dp else 3.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(NawanoGradientStart, NawanoPrimary200, NawanoGradientEnd)
+                            )
+                        )
+                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "YOUR PARTNER ID",
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White.copy(alpha = 0.78f),
+                            letterSpacing = 0.7.sp
+                        )
+                        Text(
+                            text = myPartnerCode,
+                            fontSize = 16.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White
+                        )
+                    }
+
+                    Surface(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(myPartnerCode))
+                            Toast.makeText(context, "Copied Partner ID: $myPartnerCode", Toast.LENGTH_SHORT).show()
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color.White.copy(alpha = 0.22f),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ContentCopy,
+                                contentDescription = "Copy Partner ID",
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "Copy ID",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
 
             // Tab Selector
             Surface(
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = bgInner,
                 border = BorderStroke(1.dp, borderCol),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(modifier = Modifier.padding(3.dp)) {
+                Row(modifier = Modifier.padding(4.dp)) {
                     val tabs = listOf(
                         "Incoming (${incomingRequests.size})",
                         "Sent (${sentRequests.size})",
@@ -125,18 +243,19 @@ fun PartnerRequestsBottomSheet(
                         val isSelected = selectedTab == index
                         Surface(
                             onClick = { selectedTab = index },
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             color = if (isSelected) NawanoPrimary200 else Color.Transparent,
+                            shadowElevation = if (isSelected) 2.dp else 0.dp,
                             modifier = Modifier.weight(1f)
                         ) {
                             Box(
-                                modifier = Modifier.padding(vertical = 7.dp, horizontal = 2.dp),
+                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = title,
-                                    fontSize = 10.5.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
                                     color = if (isSelected) Color.White else textSecondary,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -147,107 +266,122 @@ fun PartnerRequestsBottomSheet(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
 
             // Tab Content
-            when (selectedTab) {
-                0 -> {
-                    // Incoming Requests
-                    if (incomingRequests.isEmpty()) {
-                        EmptyStateView(
-                            icon = Icons.Outlined.MailOutline,
-                            title = "No Incoming Requests",
-                            subtitle = "When a partner adds you by ID or Phone, their invitation will appear here.",
-                            buttonText = "Share My ID",
-                            onButtonClick = {
-                                onDismiss()
-                                onOpenAddPartner()
-                            },
-                            textPrimary = textPrimary,
-                            textSecondary = textSecondary
-                        )
-                    } else {
-                        LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            items(incomingRequests, key = { it.connection.id }) { item ->
-                                IncomingRequestCard(
-                                    item = item,
-                                    onAccept = { onAccept(item.connection.id) },
-                                    onDecline = { onDecline(item.connection.id) },
-                                    bgInner = bgInner,
-                                    bgCard = bgCard,
-                                    borderCol = borderCol,
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .consumeBottomSheetNestedDismiss()
+            ) {
+                AnimatedContent(
+                    targetState = selectedTab,
+                    transitionSpec = {
+                        if (targetState > initialState) {
+                            (slideInHorizontally { it / 4 } + fadeIn()) togetherWith (slideOutHorizontally { -it / 4 } + fadeOut())
+                        } else {
+                            (slideInHorizontally { -it / 4 } + fadeIn()) togetherWith (slideOutHorizontally { it / 4 } + fadeOut())
+                        }
+                    },
+                    label = "PartnerNetworkTabTransition"
+                ) { tab ->
+                    when (tab) {
+                        0 -> {
+                            if (incomingRequests.isEmpty()) {
+                                EmptyStateView(
+                                    icon = Icons.Outlined.MailOutline,
+                                    title = "No Incoming Requests",
+                                    subtitle = "When a partner adds you by ID ($myPartnerCode) or Phone, their invitation will appear here.",
+                                    buttonText = "Copy My ID ($myPartnerCode)",
+                                    onButtonClick = {
+                                        clipboardManager.setText(AnnotatedString(myPartnerCode))
+                                        Toast.makeText(context, "Copied Partner ID: $myPartnerCode", Toast.LENGTH_SHORT).show()
+                                    },
                                     textPrimary = textPrimary,
                                     textSecondary = textSecondary
                                 )
+                            } else {
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    items(incomingRequests, key = { it.connection.id }) { item ->
+                                        IncomingRequestCard(
+                                            item = item,
+                                            onAccept = { onAccept(item.connection.id) },
+                                            onDecline = { onDecline(item.connection.id) },
+                                            bgInner = bgInner,
+                                            bgCard = bgCard,
+                                            borderCol = borderCol,
+                                            textPrimary = textPrimary,
+                                            textSecondary = textSecondary
+                                        )
+                                    }
+                                }
                             }
                         }
-                    }
-                }
-                1 -> {
-                    // Sent Requests
-                    if (sentRequests.isEmpty()) {
-                        EmptyStateView(
-                            icon = Icons.AutoMirrored.Outlined.Send,
-                            title = "No Pending Sent Requests",
-                            subtitle = "You haven't sent any pending invites.",
-                            buttonText = "Add New Partner",
-                            onButtonClick = {
-                                onDismiss()
-                                onOpenAddPartner()
-                            },
-                            textPrimary = textPrimary,
-                            textSecondary = textSecondary
-                        )
-                    } else {
-                        LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            items(sentRequests, key = { it.connection.id }) { item ->
-                                SentRequestCard(
-                                    item = item,
-                                    onCancel = { onCancelSent(item.connection.id) },
-                                    bgInner = bgInner,
-                                    borderCol = borderCol,
+                        1 -> {
+                            if (sentRequests.isEmpty()) {
+                                EmptyStateView(
+                                    icon = Icons.AutoMirrored.Outlined.Send,
+                                    title = "No Pending Sent Requests",
+                                    subtitle = "You haven't sent any pending invites.",
+                                    buttonText = "Add New Partner",
+                                    onButtonClick = {
+                                        onDismiss()
+                                        onOpenAddPartner()
+                                    },
                                     textPrimary = textPrimary,
                                     textSecondary = textSecondary
                                 )
+                            } else {
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    items(sentRequests, key = { it.connection.id }) { item ->
+                                        SentRequestCard(
+                                            item = item,
+                                            onCancel = { onCancelSent(item.connection.id) },
+                                            bgInner = bgInner,
+                                            borderCol = borderCol,
+                                            textPrimary = textPrimary,
+                                            textSecondary = textSecondary
+                                        )
+                                    }
+                                }
                             }
                         }
-                    }
-                }
-                2 -> {
-                    // Active Connections
-                    if (activeConnections.isEmpty()) {
-                        EmptyStateView(
-                            icon = Icons.Outlined.People,
-                            title = "No Connected Partners Yet",
-                            subtitle = "Connect with partners to unlock direct ordering and catalog sharing.",
-                            buttonText = "Find Partners",
-                            onButtonClick = {
-                                onDismiss()
-                                onOpenAddPartner()
-                            },
-                            textPrimary = textPrimary,
-                            textSecondary = textSecondary
-                        )
-                    } else {
-                        LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            items(activeConnections, key = { it.connection.id }) { item ->
-                                ConnectedPartnerCard(
-                                    item = item,
-                                    onDisconnect = { onDisconnect(item.connection.id) },
-                                    bgInner = bgInner,
-                                    borderCol = borderCol,
+                        else -> {
+                            if (activeConnections.isEmpty()) {
+                                EmptyStateView(
+                                    icon = Icons.Outlined.People,
+                                    title = "No Connected Partners Yet",
+                                    subtitle = "Connect with partners to unlock direct ordering and catalog sharing.",
+                                    buttonText = "Find Partners",
+                                    onButtonClick = {
+                                        onDismiss()
+                                        onOpenAddPartner()
+                                    },
                                     textPrimary = textPrimary,
                                     textSecondary = textSecondary
                                 )
+                            } else {
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    items(activeConnections, key = { it.connection.id }) { item ->
+                                        ConnectedPartnerCard(
+                                            item = item,
+                                            onDisconnect = { onDisconnect(item.connection.id) },
+                                            bgInner = bgInner,
+                                            borderCol = borderCol,
+                                            textPrimary = textPrimary,
+                                            textSecondary = textSecondary
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

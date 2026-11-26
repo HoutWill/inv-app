@@ -7,16 +7,21 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.inventoryapp.data.local.AppDatabase
+import com.example.inventoryapp.data.local.entity.ParkedCartEntity
 import com.example.inventoryapp.data.local.entity.PartnerConnectionEntity
 import com.example.inventoryapp.data.local.entity.PartnerConnectionWithUser
 import com.example.inventoryapp.data.local.entity.ProductEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderEntity
 import com.example.inventoryapp.data.local.entity.PurchaseOrderItemEntity
+import com.example.inventoryapp.data.local.entity.SupplierPaymentMethod
 import com.example.inventoryapp.data.local.entity.PosPaymentMethod
 import com.example.inventoryapp.data.local.entity.PosPaymentStatus
 import com.example.inventoryapp.data.local.entity.SalesOrderEntity
 import com.example.inventoryapp.data.local.entity.StockTransactionEntity
 import com.example.inventoryapp.data.local.entity.SupplierEntity
+import com.example.inventoryapp.data.local.entity.IssueSeverity
+import com.example.inventoryapp.data.local.entity.SupplierIssueEntity
+import com.example.inventoryapp.data.local.entity.SupplierIssueStatus
 import com.example.inventoryapp.data.local.entity.UserEntity
 import com.example.inventoryapp.data.local.entity.UserRole
 import com.example.inventoryapp.data.remote.BarcodeLookupService
@@ -25,6 +30,7 @@ import com.example.inventoryapp.data.repository.InventoryRepository
 import com.example.inventoryapp.data.repository.OrderRepository
 import com.example.inventoryapp.data.repository.OrderWithItems
 import com.example.inventoryapp.data.repository.PartnerConnectionRepository
+import com.example.inventoryapp.data.repository.SupplierIssueRepository
 import com.example.inventoryapp.data.repository.SupplierRepository
 import com.example.inventoryapp.data.prefs.SessionStore
 import com.example.inventoryapp.util.AppCurrency
@@ -99,7 +105,7 @@ data class DashboardUiState(
     val totalItemsCount: Int = 0,
     val totalInventoryValue: Double = 0.0,
     val lowStockCount: Int = 0,
-    val selectedCurrency: AppCurrency = AppCurrency.USD,
+    val selectedCurrency: AppCurrency = AppCurrency.KHR,
     val exchangeRateUsdToKhr: Double = CurrencyFormatter.DEFAULT_EXCHANGE_RATE,
     val paywayMerchantId: String = "ec000002",
     val paywayApiKey: String = "",
@@ -121,14 +127,33 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
     val supplierRepository = SupplierRepository(database.supplierDao())
     val orderRepository = OrderRepository(database, database.purchaseOrderDao(), database.productDao(), database.stockTransactionDao())
     val partnerConnectionRepository = PartnerConnectionRepository(database.partnerConnectionDao(), database.userDao(), database.supplierDao())
+    val supplierIssueRepository = SupplierIssueRepository(database.supplierIssueDao())
 
     private val _partnerUiState = MutableStateFlow(PartnerConnectionUiState())
     val partnerUiState: StateFlow<PartnerConnectionUiState> = _partnerUiState.asStateFlow()
+
+    val supplierIssues: StateFlow<List<SupplierIssueEntity>> = supplierIssueRepository.allIssues
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val openSupplierIssuesCount: StateFlow<Int> = supplierIssueRepository.openIssuesCount
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val middlemanUsers: StateFlow<List<UserEntity>> = database.userDao().observeUsersByRole(UserRole.OWNER)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val unpaidSalesOrders: StateFlow<List<SalesOrderEntity>> = database.salesOrderDao().getUnpaidOrders()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val unpaidSalesOrdersCount: StateFlow<Int> = database.salesOrderDao().getUnpaidOrdersCount()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val allSalesOrders: StateFlow<List<SalesOrderEntity>> = database.salesOrderDao().getAllOrders()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val parkedCarts: StateFlow<List<ParkedCartEntity>> = database.parkedCartDao().getAllParkedCarts()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val parkedCartsCount: StateFlow<Int> = database.parkedCartDao().getParkedCartsCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     init {
@@ -199,14 +224,33 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         customerPhone: String = "",
         dueDate: Long? = null,
         note: String = "",
+        subtotalUsd: Double = items.sumOf { it.first.sellingPrice * it.second },
+        discountType: String = "NONE",
+        discountValue: Double = 0.0,
+        discountAmountUsd: Double = 0.0,
+        taxRate: Double = 0.0,
+        taxAmountUsd: Double = 0.0,
+        splitDetails: String = "",
         onSuccess: (SalesOrderEntity) -> Unit = {}
     ) {
         viewModelScope.launch(Dispatchers.IO) {
-            val totalUsd = items.sumOf { it.first.sellingPrice * it.second }
+            val totalUsd = (subtotalUsd - discountAmountUsd + taxAmountUsd).coerceAtLeast(0.0)
             val totalKhr = (totalUsd * 4050.0).toLong()
             val itemCount = items.sumOf { it.second }
             val itemsSummary = items.joinToString(", ") { "${it.second}x ${it.first.name}" }
             val invoiceNo = "INV-${SimpleDateFormat("MMdd", Locale.getDefault()).format(Date())}-${(System.currentTimeMillis() % 10000).toString().padStart(4, '0')}"
+
+            val jsonArray = org.json.JSONArray()
+            for ((prod, qty) in items) {
+                val itemObj = org.json.JSONObject().apply {
+                    put("productId", prod.id)
+                    put("sku", prod.sku)
+                    put("name", prod.name)
+                    put("quantity", qty)
+                    put("unitPrice", prod.sellingPrice)
+                }
+                jsonArray.put(itemObj)
+            }
 
             val isPayLater = paymentMethod == PosPaymentMethod.PAY_LATER || paymentMethod == PosPaymentMethod.COD
             val order = SalesOrderEntity(
@@ -222,7 +266,15 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 dueDate = dueDate,
                 note = note,
                 itemsSummary = itemsSummary,
+                itemsJson = jsonArray.toString(),
                 itemCount = itemCount,
+                subtotalUsd = subtotalUsd,
+                discountType = discountType,
+                discountValue = discountValue,
+                discountAmountUsd = discountAmountUsd,
+                taxRate = taxRate,
+                taxAmountUsd = taxAmountUsd,
+                splitDetails = splitDetails,
                 createdAt = System.currentTimeMillis(),
                 settledAt = if (isPayLater) null else System.currentTimeMillis()
             )
@@ -250,6 +302,262 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
             withContext(Dispatchers.Main) {
                 onSuccess(order)
+            }
+        }
+    }
+
+    fun voidSalesOrder(orderId: String, reason: String, onComplete: () -> Unit = {}) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val order = database.salesOrderDao().getOrderById(orderId) ?: return@launch
+            if (order.paymentStatus == PosPaymentStatus.CANCELLED) return@launch
+
+            val cancelledOrder = order.copy(
+                paymentStatus = PosPaymentStatus.CANCELLED,
+                cancelReason = reason,
+                cancelledAt = System.currentTimeMillis()
+            )
+            database.salesOrderDao().updateOrder(cancelledOrder)
+
+            // Restock inventory
+            if (order.itemsJson.isNotBlank()) {
+                try {
+                    val jsonArray = org.json.JSONArray(order.itemsJson)
+                    for (i in 0 until jsonArray.length()) {
+                        val itemObj = jsonArray.getJSONObject(i)
+                        val prodId = itemObj.optString("productId")
+                        val sku = itemObj.optString("sku")
+                        val qty = itemObj.optInt("quantity", 0)
+                        if (qty > 0) {
+                            val product = if (prodId.isNotBlank()) database.productDao().getProductById(prodId) else null
+                                ?: database.productDao().getProductBySku(sku)
+                            if (product != null) {
+                                val restoredQty = product.quantity + qty
+                                database.productDao().updateProduct(
+                                    product.copy(quantity = restoredQty, updatedAt = System.currentTimeMillis())
+                                )
+                                database.stockTransactionDao().insertTransaction(
+                                    StockTransactionEntity(
+                                        productId = product.id,
+                                        sku = product.sku,
+                                        productName = product.name,
+                                        transactionType = "POS_VOID_RESTOCK",
+                                        quantityDelta = qty,
+                                        previousQuantity = product.quantity,
+                                        newQuantity = restoredQty,
+                                        note = "Restock: Void sale ${order.invoiceNumber} ($reason)"
+                                    )
+                                )
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("InventoryViewModel", "Failed to restock items for voided order", e)
+                }
+            }
+
+            withContext(Dispatchers.Main) {
+                onComplete()
+            }
+        }
+    }
+
+    /**
+     * Processes a full or partial item-level refund/return with issue reporting & proof evidence.
+     */
+    fun processPosRefund(
+        orderId: String,
+        returnedItems: List<com.example.inventoryapp.data.local.entity.SalesOrderLineItem>,
+        issueType: String,
+        conditionAnswer: String,
+        reason: String,
+        restockItems: Boolean,
+        refundMethod: String,
+        proofImageUri: String,
+        onComplete: (SalesOrderEntity) -> Unit = {}
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val order = database.salesOrderDao().getOrderById(orderId) ?: return@launch
+            if (order.paymentStatus == PosPaymentStatus.CANCELLED || order.paymentStatus == PosPaymentStatus.REFUNDED) {
+                return@launch
+            }
+            val validReturns = returnedItems.filter { it.quantity > 0 }
+            if (validReturns.isEmpty()) return@launch
+
+            val allLineItems = com.example.inventoryapp.data.local.entity.parseSalesOrderLineItems(order)
+            val existingReturnedMap = com.example.inventoryapp.data.local.entity.parseReturnedQuantitiesMap(order.returnedItemsJson)
+            val newReturnedMap = existingReturnedMap.toMutableMap()
+            validReturns.forEach { item ->
+                val key = item.productId.ifBlank { item.name }
+                newReturnedMap[key] = (newReturnedMap[key] ?: 0) + item.quantity
+            }
+
+            // Determine whether every item from the original order has now been returned
+            val totalPurchasedQty = allLineItems.sumOf { it.quantity }.coerceAtLeast(order.itemCount.coerceAtLeast(1))
+            val totalReturnedQty = allLineItems.sumOf { line ->
+                val key = line.productId.ifBlank { line.name }
+                (newReturnedMap[key] ?: 0).coerceAtMost(line.quantity)
+            }
+            val isFullReturn = totalReturnedQty >= totalPurchasedQty
+
+            // Calculate proportional refund amount against order subtotal -> net total (discount & VAT aware)
+            val rawReturnedSubtotalUsd = validReturns.sumOf { it.lineTotalUsd }
+            val effectiveSubtotal = order.subtotalUsd.takeIf { it > 0.0 } ?: order.totalAmountUsd.coerceAtLeast(0.01)
+            val ratioToGrandTotal = (order.totalAmountUsd / effectiveSubtotal).coerceAtLeast(0.0)
+            val computedRefundUsd = (rawReturnedSubtotalUsd * ratioToGrandTotal)
+
+            val maxRefundablePaid = (order.paidAmountUsd - order.refundedAmountUsd).coerceAtLeast(0.0)
+            val actualRefundUsd = if (order.paymentStatus == PosPaymentStatus.PAID || order.paymentStatus == PosPaymentStatus.PARTIALLY_REFUNDED) {
+                if (isFullReturn) maxRefundablePaid else computedRefundUsd.coerceIn(0.0, maxRefundablePaid)
+            } else {
+                0.0 // Unpaid/COD tab: reduce remaining balance instead of cash payout
+            }
+
+            // Merge returnedItemsJson array for full audit history
+            val mergedArr = org.json.JSONArray()
+            if (order.returnedItemsJson.isNotBlank()) {
+                try {
+                    val oldArr = org.json.JSONArray(order.returnedItemsJson)
+                    for (i in 0 until oldArr.length()) mergedArr.put(oldArr.getJSONObject(i))
+                } catch (_: Exception) { }
+            }
+            validReturns.forEach { item ->
+                mergedArr.put(
+                    org.json.JSONObject().apply {
+                        put("productId", item.productId)
+                        put("sku", item.sku)
+                        put("name", item.name)
+                        put("quantity", item.quantity)
+                        put("unitPrice", item.unitPriceUsd)
+                        put("issueType", issueType)
+                        put("restocked", restockItems)
+                    }
+                )
+            }
+
+            val updatedRefundedTotal = order.refundedAmountUsd + actualRefundUsd
+            val updatedRemainingUsd = if (order.paymentStatus == PosPaymentStatus.UNPAID || order.paymentStatus == PosPaymentStatus.PARTIAL) {
+                if (isFullReturn) 0.0 else (order.remainingAmountUsd - computedRefundUsd).coerceAtLeast(0.0)
+            } else {
+                order.remainingAmountUsd
+            }
+
+            val newStatus = when {
+                isFullReturn && (order.paymentStatus == PosPaymentStatus.UNPAID && actualRefundUsd == 0.0) -> PosPaymentStatus.CANCELLED
+                isFullReturn || (maxRefundablePaid > 0.0 && updatedRefundedTotal >= order.paidAmountUsd - 0.005) -> PosPaymentStatus.REFUNDED
+                else -> PosPaymentStatus.PARTIALLY_REFUNDED
+            }
+
+            val updatedOrder = order.copy(
+                paymentStatus = newStatus,
+                refundedAmountUsd = updatedRefundedTotal,
+                remainingAmountUsd = updatedRemainingUsd,
+                refundIssueType = issueType,
+                refundConditionAnswer = conditionAnswer,
+                refundReason = reason,
+                refundRestockAction = if (restockItems) "RESTOCK" else "DAMAGED",
+                refundMethod = refundMethod,
+                refundProofImageUri = proofImageUri.ifBlank { order.refundProofImageUri },
+                returnedItemsJson = mergedArr.toString(),
+                refundedAt = System.currentTimeMillis(),
+                cancelReason = if (newStatus == PosPaymentStatus.CANCELLED) "$issueType: $reason" else order.cancelReason,
+                cancelledAt = if (newStatus == PosPaymentStatus.CANCELLED) System.currentTimeMillis() else order.cancelledAt
+            )
+            database.salesOrderDao().updateOrder(updatedOrder)
+
+            // Update inventory & write StockTransaction audit trail
+            for (ret in validReturns) {
+                val product = (if (ret.productId.isNotBlank()) database.productDao().getProductById(ret.productId) else null)
+                    ?: (if (ret.sku.isNotBlank()) database.productDao().getProductBySku(ret.sku) else null)
+                    ?: database.productDao().getAllProducts().first().find { it.name.equals(ret.name, ignoreCase = true) }
+
+                if (product != null) {
+                    if (restockItems) {
+                        val restoredQty = product.quantity + ret.quantity
+                        database.productDao().updateProduct(
+                            product.copy(quantity = restoredQty, updatedAt = System.currentTimeMillis())
+                        )
+                        database.stockTransactionDao().insertTransaction(
+                            StockTransactionEntity(
+                                productId = product.id,
+                                sku = product.sku,
+                                productName = product.name,
+                                transactionType = "POS_RETURN_RESTOCK",
+                                quantityDelta = ret.quantity,
+                                previousQuantity = product.quantity,
+                                newQuantity = restoredQty,
+                                note = "Return restock (${order.invoiceNumber}): $issueType - $reason"
+                            )
+                        )
+                    } else {
+                        database.stockTransactionDao().insertTransaction(
+                            StockTransactionEntity(
+                                productId = product.id,
+                                sku = product.sku,
+                                productName = product.name,
+                                transactionType = "POS_RETURN_DAMAGED",
+                                quantityDelta = 0,
+                                previousQuantity = product.quantity,
+                                newQuantity = product.quantity,
+                                note = "Return write-off (${order.invoiceNumber}, ${ret.quantity}x): $issueType ($conditionAnswer) - $reason"
+                            )
+                        )
+                    }
+                }
+            }
+
+            withContext(Dispatchers.Main) {
+                onComplete(updatedOrder)
+            }
+        }
+    }
+
+    fun parkCart(
+        label: String,
+        note: String,
+        cart: Map<String, Int>,
+        products: List<ProductEntity>,
+        onComplete: () -> Unit = {}
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val jsonArray = org.json.JSONArray()
+            var totalAmount = 0.0
+            var totalCount = 0
+            cart.forEach { (prodId, qty) ->
+                val product = products.find { it.id == prodId }
+                if (product != null && qty > 0) {
+                    val itemObj = org.json.JSONObject().apply {
+                        put("productId", product.id)
+                        put("sku", product.sku)
+                        put("name", product.name)
+                        put("quantity", qty)
+                        put("unitPrice", product.sellingPrice)
+                    }
+                    jsonArray.put(itemObj)
+                    totalAmount += product.sellingPrice * qty
+                    totalCount += qty
+                }
+            }
+
+            val parkedCart = ParkedCartEntity(
+                label = label.ifBlank { "Parked Order #${System.currentTimeMillis() % 1000}" },
+                note = note,
+                itemsJson = jsonArray.toString(),
+                totalAmountUsd = totalAmount,
+                itemCount = totalCount
+            )
+            database.parkedCartDao().insertParkedCart(parkedCart)
+
+            withContext(Dispatchers.Main) {
+                onComplete()
+            }
+        }
+    }
+
+    fun deleteParkedCart(id: String, onComplete: () -> Unit = {}) {
+        viewModelScope.launch(Dispatchers.IO) {
+            database.parkedCartDao().deleteParkedCartById(id)
+            withContext(Dispatchers.Main) {
+                onComplete()
             }
         }
     }
@@ -431,7 +739,7 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private val _selectedCurrency = MutableStateFlow(
-        AppCurrency.fromCode(prefs.getString("selected_currency", AppCurrency.USD.name))
+        AppCurrency.fromCode(prefs.getString("selected_currency", AppCurrency.KHR.name))
     )
     val selectedCurrency: StateFlow<AppCurrency> = _selectedCurrency.asStateFlow()
 
@@ -722,18 +1030,22 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         _isFetchingOnline.value = false
     }
 
-    fun addProduct(product: ProductEntity) {
+    fun addProduct(product: ProductEntity, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
             try {
-                val success = repository.addProduct(product)
-                if (success) {
+                val result = repository.addProductResult(product)
+                if (result.isSuccess) {
                     _scannedSku.value = product.sku
                     _onlineProduct.value = null
                     _searchQuery.value = ""
                     _selectedCategory.value = "All"
+                    onResult(true, null)
+                } else {
+                    onResult(false, result.exceptionOrNull()?.message ?: "Failed to add product")
                 }
             } catch (e: Exception) {
                 Log.e("InventoryViewModel", "Error in addProduct", e)
+                onResult(false, e.message ?: "Failed to add product")
             }
         }
     }
@@ -827,6 +1139,13 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun deleteSupplier(supplier: SupplierEntity, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val result = supplierRepository.deleteSupplier(supplier)
+            onComplete(result.isSuccess)
+        }
+    }
+
     fun createPurchaseOrder(
         supplier: SupplierEntity,
         title: String,
@@ -834,6 +1153,8 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         items: List<PurchaseOrderItemEntity>,
         ownerNote: String,
         estArrival: String,
+        paymentMethod: SupplierPaymentMethod = SupplierPaymentMethod.COD,
+        isPaidUpfront: Boolean = false,
         onComplete: (PurchaseOrderEntity?) -> Unit = {}
     ) {
         viewModelScope.launch {
@@ -844,9 +1165,22 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 picSender = picSender,
                 items = items,
                 ownerNote = ownerNote,
-                estArrival = estArrival
+                estArrival = estArrival,
+                paymentMethod = paymentMethod,
+                isPaidUpfront = isPaidUpfront
             )
             onComplete(result.getOrNull())
+        }
+    }
+
+    fun paySupplierOrder(
+        orderId: String,
+        paymentMethod: SupplierPaymentMethod = SupplierPaymentMethod.COD,
+        onComplete: (Boolean) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val result = orderRepository.paySupplierOrder(orderId, paymentMethod)
+            onComplete(result.isSuccess)
         }
     }
 
@@ -877,9 +1211,13 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun receiveOrder(orderId: String, onComplete: (Boolean) -> Unit = {}) {
+    fun receiveOrder(
+        orderId: String,
+        markPaymentPaidOnReceive: Boolean = false,
+        onComplete: (Boolean) -> Unit = {}
+    ) {
         viewModelScope.launch {
-            val result = orderRepository.receiveOrder(orderId)
+            val result = orderRepository.receiveOrder(orderId, markPaymentPaidOnReceive)
             onComplete(result.isSuccess)
         }
     }
@@ -899,6 +1237,60 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             orderRepository.updateOrderDetails(orderId, title, totalQuantity, totalAmount)
             onComplete()
+        }
+    }
+
+    // --- Middleman Issue Reporting & Supplier Resolution ---
+
+    fun reportSupplierIssue(
+        supplierId: String,
+        supplierName: String,
+        middlemanId: String,
+        middlemanName: String,
+        middlemanCode: String,
+        orderId: String? = null,
+        orderNumber: String = "",
+        issueType: String,
+        severity: IssueSeverity,
+        affectedItemName: String,
+        affectedQuantity: Int,
+        description: String,
+        proofImageUri: String = "",
+        onComplete: (Result<SupplierIssueEntity>) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val result = supplierIssueRepository.reportIssue(
+                supplierId = supplierId,
+                supplierName = supplierName,
+                middlemanId = middlemanId,
+                middlemanName = middlemanName,
+                middlemanCode = middlemanCode,
+                orderId = orderId,
+                orderNumber = orderNumber,
+                issueType = issueType,
+                severity = severity,
+                affectedItemName = affectedItemName,
+                affectedQuantity = affectedQuantity,
+                description = description,
+                proofImageUri = proofImageUri
+            )
+            withContext(Dispatchers.Main) {
+                onComplete(result)
+            }
+        }
+    }
+
+    fun updateSupplierIssueStatus(
+        issueId: String,
+        newStatus: SupplierIssueStatus,
+        supplierResponse: String,
+        onComplete: (Boolean) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val result = supplierIssueRepository.updateIssueStatus(issueId, newStatus, supplierResponse)
+            withContext(Dispatchers.Main) {
+                onComplete(result.isSuccess)
+            }
         }
     }
 

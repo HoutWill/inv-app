@@ -71,6 +71,7 @@ import com.example.inventoryapp.ui.partner.ConnectPartnerBottomSheet
 import com.example.inventoryapp.ui.partner.PartnerRequestsBottomSheet
 import com.example.inventoryapp.ui.scanner.BarcodeScannerScreen
 import com.example.inventoryapp.ui.supplier.NewPurchaseOrderDialog
+import com.example.inventoryapp.ui.supplier.ReportSupplierIssueBottomSheet
 import com.example.inventoryapp.util.AppCurrency
 import com.example.inventoryapp.util.CurrencyFormatter
 import com.example.inventoryapp.util.ProductImageHelper
@@ -89,7 +90,8 @@ import java.util.Locale
 enum class ScannerTarget {
     NONE,
     DASHBOARD_SCAN,
-    ADD_PRODUCT_SKU
+    ADD_PRODUCT_SKU,
+    POS_SCAN
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -156,14 +158,21 @@ fun InventoryDashboardScreen(
     var showAddSupplierDialog by remember { mutableStateOf(false) }
     var selectedSupplierForPo by remember { mutableStateOf<SupplierEntity?>(null) }
     var selectedProductForPo by remember { mutableStateOf<ProductEntity?>(null) }
+    var reportingIssueTarget by remember { mutableStateOf<Triple<String, String, OrderWithItems?>?>(null) }
 
     // POS State & Cart
     val posCart = remember { mutableStateMapOf<String, Int>() }
     var isPosCheckoutOpen by remember { mutableStateOf(false) }
     var isPosUnpaidTabsOpen by remember { mutableStateOf(false) }
+    var posOrdersInitialTab by remember { mutableIntStateOf(0) }
     var isPosCartMinimized by remember { mutableStateOf(false) }
+    var receiptOrderToShow by remember { mutableStateOf<com.example.inventoryapp.data.local.entity.SalesOrderEntity?>(null) }
     val unpaidOrders by viewModel.unpaidSalesOrders.collectAsState()
     val unpaidOrdersCount by viewModel.unpaidSalesOrdersCount.collectAsState()
+    val allSalesOrders by viewModel.allSalesOrders.collectAsState()
+    val parkedCarts by viewModel.parkedCarts.collectAsState()
+    val parkedCartsCount by viewModel.parkedCartsCount.collectAsState()
+    var isPosHoldCartOpen by remember { mutableStateOf(false) }
 
     val handleRequestSupply: (ProductEntity) -> Unit = { item ->
         val sup = uiState.suppliers.find { it.id == item.supplierId }
@@ -207,12 +216,21 @@ fun InventoryDashboardScreen(
                     drawerDestination = null
                     activeTab = 2
                 }
+                DrawerDestination.POS_ORDERS -> {
+                    drawerDestination = null
+                    activeTab = 3
+                    posOrdersInitialTab = 1
+                    isPosUnpaidTabsOpen = true
+                }
                 DrawerDestination.INVENTORY_SUMMARY -> {
                     drawerDestination = DrawerDestination.INVENTORY_SUMMARY
                 }
                 DrawerDestination.MOVEMENT_LIST -> {
                     drawerDestination = null
                     isStockTransfersSheetOpen = true
+                }
+                DrawerDestination.TRACKING -> {
+                    drawerDestination = DrawerDestination.TRACKING
                 }
                 DrawerDestination.AUDIT_LOGS -> {
                     drawerDestination = null
@@ -229,7 +247,12 @@ fun InventoryDashboardScreen(
         onCloseDrawer = { scope.launch { drawerState.close() } },
         isDarkTheme = isDarkTheme,
         onToggleTheme = onToggleTheme,
-        totalSkus = uiState.totalSkus
+        totalSkus = uiState.totalSkus,
+        activeTrackingCount = uiState.orders.count {
+            it.status == PurchaseOrderStatus.PENDING ||
+            it.status == PurchaseOrderStatus.CONFIRMED ||
+            it.status == PurchaseOrderStatus.DELIVERED
+        }
     ) {
         // Scroll-aware visibility for Top App Bar, Floating Bottom Navigation Bar & FAB
         var isBarsVisible by remember { mutableStateOf(true) }
@@ -275,8 +298,9 @@ fun InventoryDashboardScreen(
                         onOpenNotifications = { isNotificationsOpen = true },
                         onAddProduct = null,
                         showTitleAndLogo = false,
-                        showCurrencyPill = activeTab != 3,
-                        pendingPartnerRequestsCount = pendingPartnerCount,
+                        customTitle = null,
+                        showCurrencyPill = true,
+                        pendingPartnerRequestsCount = if (pendingPartnerCount > 0) pendingPartnerCount else 3,
                         onOpenPartnerNetwork = { isPartnerRequestsOpen = true },
                         currentCurrency = uiState.selectedCurrency,
                         onCurrencySelected = { viewModel.setSelectedCurrency(it) },
@@ -316,19 +340,79 @@ fun InventoryDashboardScreen(
                         DrawerDestination.MOVEMENT_LIST -> {
                             MovementListScreen(
                                 stockTransactions = uiState.transactions,
+                                products = uiState.products,
+                                onLogMovement = { product, delta, type, note ->
+                                    viewModel.adjustStock(product, delta, type, note)
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Logged $type for ${product.name} ($delta ${product.unit})")
+                                    }
+                                },
                                 onBack = { drawerDestination = null },
                                 onScanClicked = { scannerTarget = ScannerTarget.DASHBOARD_SCAN }
+                            )
+                        }
+                        DrawerDestination.TRACKING -> {
+                            MiddlemanTrackingScreen(
+                                orders = uiState.orders,
+                                onBack = { drawerDestination = null },
+                                onScanClicked = { scannerTarget = ScannerTarget.DASHBOARD_SCAN },
+                                onOrderClick = { orderId ->
+                                    scope.launch {
+                                        val loaded = viewModel.getOrderWithItems(orderId)
+                                        viewingOrderWithItems = loaded ?: uiState.orders.find { it.id == orderId }?.let { OrderWithItems(it, emptyList()) }
+                                    }
+                                },
+                                onReceiveOrder = { orderId ->
+                                    viewModel.receiveOrder(orderId) { success ->
+                                        if (success) {
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("Shipment received & inventory stocked!")
+                                            }
+                                        }
+                                    }
+                                },
+                                onReportIssue = { order ->
+                                    scope.launch {
+                                        val loaded = viewModel.getOrderWithItems(order.id)
+                                        reportingIssueTarget = Triple(
+                                            order.supplierId,
+                                            order.supplierName,
+                                            loaded ?: OrderWithItems(order, emptyList())
+                                        )
+                                    }
+                                },
+                                isDarkTheme = isDarkTheme,
+                                currency = uiState.selectedCurrency,
+                                exchangeRate = uiState.exchangeRateUsdToKhr
                             )
                         }
                         DrawerDestination.SUPPLIERS -> {
                             SuppliersManagementScreen(
                                 suppliers = uiState.suppliers,
                                 onBack = { drawerDestination = null },
-                                onSaveSupplier = { supplier -> viewModel.saveSupplier(supplier) },
+                                onSaveSupplier = { supplier ->
+                                    viewModel.saveSupplier(supplier) {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Saved supplier '${supplier.name}'")
+                                        }
+                                    }
+                                },
                                 onToggleSupplierActive = { id, active -> viewModel.toggleSupplierActive(id, active) },
+                                onDeleteSupplier = { supplier ->
+                                    viewModel.deleteSupplier(supplier) { success ->
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                if (success) "Deleted supplier '${supplier.name}'" else "Failed to delete supplier"
+                                            )
+                                        }
+                                    }
+                                },
                                 onNewPurchaseOrder = { supplier ->
                                     selectedSupplierForPo = supplier
                                     showNewPoDialog = true
+                                },
+                                onReportIssue = { supplier ->
+                                    reportingIssueTarget = Triple(supplier.id, supplier.name, null)
                                 },
                                 isDarkTheme = isDarkTheme,
                                 onOpenConnectPartner = { isConnectPartnerOpen = true },
@@ -429,7 +513,7 @@ fun InventoryDashboardScreen(
                             DashboardOverviewTab(
                                 uiState = uiState,
                                 isDarkTheme = isDarkTheme,
-                                onScanClicked = { scannerTarget = ScannerTarget.DASHBOARD_SCAN },
+                                onScanClicked = { scannerTarget = if (activeTab == 3) ScannerTarget.POS_SCAN else ScannerTarget.DASHBOARD_SCAN },
                                 onAddProductClicked = {
                                     addProductDraft = AddProductDraft()
                                     isAddProductOpen = true
@@ -551,7 +635,7 @@ fun InventoryDashboardScreen(
                                 onCategorySelected = { viewModel.onCategorySelected(it) },
                                 onSubcategorySelected = { viewModel.onSubcategorySelected(it) },
                                 onSortChanged = { viewModel.onSortOptionChanged(it) },
-                                onScanClicked = { scannerTarget = ScannerTarget.DASHBOARD_SCAN },
+                                onScanClicked = { scannerTarget = if (activeTab == 3) ScannerTarget.POS_SCAN else ScannerTarget.DASHBOARD_SCAN },
                                 onAddProductClicked = {
                                     addProductDraft = AddProductDraft(sku = uiState.searchQuery)
                                     isAddProductOpen = true
@@ -608,6 +692,8 @@ fun InventoryDashboardScreen(
                             PosRegisterScreen(
                                 products = uiState.products,
                                 unpaidTabsCount = unpaidOrdersCount,
+                                parkedCartsCount = parkedCartsCount,
+                                salesHistoryCount = allSalesOrders.size,
                                 cart = posCart,
                                 onUpdateCartQuantity = { product, newQty ->
                                     if (newQty <= 0) {
@@ -620,8 +706,15 @@ fun InventoryDashboardScreen(
                                     }
                                 },
                                 onOpenDrawer = { scope.launch { drawerState.open() } },
-                                onOpenUnpaidTabs = { isPosUnpaidTabsOpen = true },
-                                onOpenScanner = { scannerTarget = ScannerTarget.DASHBOARD_SCAN },
+                                onOpenUnpaidTabs = {
+                                    posOrdersInitialTab = 0
+                                    isPosUnpaidTabsOpen = true
+                                },
+                                onOpenSalesHistory = {
+                                    posOrdersInitialTab = 1
+                                    isPosUnpaidTabsOpen = true
+                                },
+                                onOpenScanner = { scannerTarget = ScannerTarget.POS_SCAN },
                                 onOpenCheckout = {
                                     isUpcomingSheetOpen = false
                                     isLowStockSheetOpen = false
@@ -632,12 +725,15 @@ fun InventoryDashboardScreen(
                                     viewingProductDetails = null
                                     isPosCheckoutOpen = true
                                 },
+                                onHoldCart = { isPosHoldCartOpen = true },
+                                onOpenPartnerNetwork = { isPartnerRequestsOpen = true },
                                 isDarkTheme = isDarkTheme,
                                 isCartMinimized = isPosCartMinimized,
+                                isBottomBarVisible = isBarsVisible && !isPosCheckoutOpen,
                                 onToggleCartMinimized = { isPosCartMinimized = !isPosCartMinimized },
                                 currency = uiState.selectedCurrency,
                                 exchangeRate = uiState.exchangeRateUsdToKhr,
-                                showSubHeader = true,
+                                showSubHeader = false,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -673,11 +769,9 @@ fun InventoryDashboardScreen(
                     }
                 }
 
-                // Floating Bottom Navigation Bar (handles system bars padding safely)
-                // Disappears when checkout sheet is active or when POS cart bar is shown
-                val isCartBarActive = activeTab == 3 && posCart.isNotEmpty() && !isPosCartMinimized
+                // Floating Bottom Navigation Bar (auto-hides on scroll down, stays accessible on POS when bars are visible)
                 AnimatedVisibility(
-                    visible = isBarsVisible && drawerDestination == null && !isPosCheckoutOpen && !isCartBarActive,
+                    visible = isBarsVisible && drawerDestination == null && !isPosCheckoutOpen,
                     enter = slideInVertically(
                         initialOffsetY = { it },
                         animationSpec = tween(220, easing = FastOutSlowInEasing)
@@ -713,7 +807,7 @@ fun InventoryDashboardScreen(
                                 isBarsVisible = true
                             }
                         },
-                        onScanClicked = { scannerTarget = ScannerTarget.DASHBOARD_SCAN },
+                        onScanClicked = { scannerTarget = if (activeTab == 3) ScannerTarget.POS_SCAN else ScannerTarget.DASHBOARD_SCAN },
                         totalItemCount = uiState.totalSkus,
                         cartItemCount = posCart.values.sum(),
                         modifier = Modifier.fillMaxWidth()
@@ -779,6 +873,34 @@ fun InventoryDashboardScreen(
                                 isAddProductOpen = true
                                 scannerTarget = ScannerTarget.NONE
                             }
+                            ScannerTarget.POS_SCAN -> {
+                                val cleanSku = scannedSku.trim()
+                                val cleanWithoutHash = cleanSku.removePrefix("#").trim()
+                                val cleanNoZeros = cleanWithoutHash.trimStart('0')
+                                scannerTarget = ScannerTarget.NONE
+
+                                val exactMatch = uiState.products.find { it.sku.trim().equals(cleanSku, ignoreCase = true) }
+                                val matchedProd = exactMatch ?: uiState.products.find { prod ->
+                                    val prodSku = prod.sku.trim().removePrefix("#")
+                                    prodSku.equals(cleanWithoutHash, ignoreCase = true) ||
+                                    (cleanNoZeros.isNotBlank() && prodSku.trimStart('0').equals(cleanNoZeros, ignoreCase = true)) ||
+                                    (cleanNoZeros.isNotBlank() && prod.sku.trim().trimStart('0').equals(cleanNoZeros, ignoreCase = true)) ||
+                                    prod.sku.contains(cleanWithoutHash, ignoreCase = true)
+                                }
+
+                                if (matchedProd != null) {
+                                    val currentQty = posCart[matchedProd.id] ?: 0
+                                    posCart[matchedProd.id] = currentQty + 1
+                                    isPosCartMinimized = false
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Added '${matchedProd.name}' to cart (${currentQty + 1} ${matchedProd.unit})")
+                                    }
+                                } else {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Product #$cleanSku not found in inventory")
+                                    }
+                                }
+                            }
                             else -> {
                                 scannerTarget = ScannerTarget.NONE
                             }
@@ -798,6 +920,7 @@ fun InventoryDashboardScreen(
                 AddProductDialog(
                     initialDraft = addProductDraft,
                     suppliers = uiState.suppliers.filter { it.isActive },
+                    existingSkus = uiState.products.map { it.sku }.toSet(),
                     onDismiss = { isAddProductOpen = false },
                     onRequestScanSku = { draft ->
                         addProductDraft = draft
@@ -805,12 +928,16 @@ fun InventoryDashboardScreen(
                         scannerTarget = ScannerTarget.ADD_PRODUCT_SKU
                     },
                     onProductAdded = { newProduct ->
-                        viewModel.addProduct(newProduct)
+                        viewModel.addProduct(newProduct) { success, errMsg ->
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    if (success) "Product '${newProduct.name}' added to inventory!"
+                                    else (errMsg ?: "Could not add product")
+                                )
+                            }
+                        }
                         isAddProductOpen = false
                         activeTab = 0 // Stay on Home tab
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Product '${newProduct.name}' added to inventory!")
-                        }
                     }
                 )
             }
@@ -889,7 +1016,7 @@ fun InventoryDashboardScreen(
                     paywayApiKey = uiState.paywayApiKey,
                     paywayIsSandbox = uiState.paywayIsSandbox,
                     onDismiss = { isPosCheckoutOpen = false },
-                    onConfirmSale = { paymentMethod, customerName, customerPhone, dueDate, note ->
+                    onConfirmSale = { paymentMethod, customerName, customerPhone, dueDate, note, subtotalUsd, discountType, discountValue, discountAmountUsd, taxRate, taxAmountUsd, splitDetails ->
                         val itemsToSell = posCart.mapNotNull { (prodId, qty) ->
                             uiState.products.find { it.id == prodId }?.let { it to qty }
                         }
@@ -900,16 +1027,25 @@ fun InventoryDashboardScreen(
                             customerPhone = customerPhone,
                             dueDate = dueDate,
                             note = note,
+                            subtotalUsd = subtotalUsd,
+                            discountType = discountType,
+                            discountValue = discountValue,
+                            discountAmountUsd = discountAmountUsd,
+                            taxRate = taxRate,
+                            taxAmountUsd = taxAmountUsd,
+                            splitDetails = splitDetails,
                             onSuccess = { order ->
                                 posCart.clear()
                                 isPosCartMinimized = false
                                 isPosCheckoutOpen = false
+                                receiptOrderToShow = order
                                 scope.launch {
                                     snackbarHostState.showSnackbar(
-                                        if (paymentMethod == PosPaymentMethod.COD)
-                                            "Recorded COD Tab for ${order.customerName} (Invoice #${order.invoiceNumber})"
-                                        else
-                                            "Sale completed: Invoice #${order.invoiceNumber}"
+                                        when (paymentMethod) {
+                                            PosPaymentMethod.COD -> "Recorded COD Tab for ${order.customerName} (Invoice #${order.invoiceNumber})"
+                                            PosPaymentMethod.SPLIT -> "Split sale completed: Invoice #${order.invoiceNumber}"
+                                            else -> "Sale completed: Invoice #${order.invoiceNumber}"
+                                        }
                                     )
                                 }
                             }
@@ -918,12 +1054,31 @@ fun InventoryDashboardScreen(
                 )
             }
 
-            // POS Unpaid Tabs Bottom Sheet
+            // Post-Sale Invoice & Digital Receipt Modal Bottom Sheet
+            if (receiptOrderToShow != null) {
+                PosInvoiceReceiptBottomSheet(
+                    order = receiptOrderToShow!!,
+                    currency = uiState.selectedCurrency,
+                    exchangeRate = uiState.exchangeRateUsdToKhr,
+                    onViewHistory = {
+                        receiptOrderToShow = null
+                        posOrdersInitialTab = 1
+                        isPosUnpaidTabsOpen = true
+                    },
+                    onDismiss = { receiptOrderToShow = null }
+                )
+            }
+
+            // POS Orders Management (Unpaid Debt Tabs, Sales History with Refund/Issue/Void/Restock, and Parked Carts)
             if (isPosUnpaidTabsOpen) {
-                PosUnpaidTabsBottomSheet(
+                PosOrdersManagementBottomSheet(
                     unpaidOrders = unpaidOrders,
+                    allOrders = allSalesOrders,
+                    parkedCarts = parkedCarts,
                     exchangeRate = uiState.exchangeRateUsdToKhr,
                     currency = uiState.selectedCurrency,
+                    initialTab = posOrdersInitialTab,
+                    isDarkTheme = isDarkTheme,
                     onDismiss = { isPosUnpaidTabsOpen = false },
                     onSettleOrder = { orderId, method ->
                         viewModel.settleSalesOrder(orderId, method) {
@@ -931,22 +1086,107 @@ fun InventoryDashboardScreen(
                                 snackbarHostState.showSnackbar("Customer tab settled and marked PAID!")
                             }
                         }
+                    },
+                    onVoidOrder = { orderId, reason ->
+                        viewModel.voidSalesOrder(orderId, reason) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Sale voided and inventory automatically restocked!")
+                            }
+                        }
+                    },
+                    onProcessRefund = { orderId, returnedItems, issueType, conditionAnswer, reason, restockItems, refundMethod, proofImageUri, onUpdated ->
+                        viewModel.processPosRefund(
+                            orderId = orderId,
+                            returnedItems = returnedItems,
+                            issueType = issueType,
+                            conditionAnswer = conditionAnswer,
+                            reason = reason,
+                            restockItems = restockItems,
+                            refundMethod = refundMethod,
+                            proofImageUri = proofImageUri
+                        ) { updatedOrder ->
+                            onUpdated(updatedOrder)
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Refund & issue proof recorded for #${updatedOrder.invoiceNumber}")
+                            }
+                        }
+                    },
+                    onResumeParkedCart = { parkedCart ->
+                        try {
+                            val jsonArray = org.json.JSONArray(parkedCart.itemsJson)
+                            for (i in 0 until jsonArray.length()) {
+                                val item = jsonArray.getJSONObject(i)
+                                val prodId = item.optString("productId")
+                                val qty = item.optInt("quantity", 0)
+                                if (prodId.isNotBlank() && qty > 0) {
+                                    posCart[prodId] = (posCart[prodId] ?: 0) + qty
+                                }
+                            }
+                            viewModel.deleteParkedCart(parkedCart.id)
+                            isPosCartMinimized = false
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Resumed parked order '${parkedCart.label}'")
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("InventoryDashboard", "Failed to resume parked cart", e)
+                        }
+                    },
+                    onDeleteParkedCart = { cartId ->
+                        viewModel.deleteParkedCart(cartId) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Parked order removed")
+                            }
+                        }
                     }
                 )
             }
 
-            // In-App Stock Alerts & Activity Notifications Dialog
+            // POS Hold / Park Active Cart Bottom Sheet
+            if (isPosHoldCartOpen) {
+                PosHoldCartBottomSheet(
+                    cart = posCart,
+                    products = uiState.products,
+                    currency = uiState.selectedCurrency,
+                    exchangeRate = uiState.exchangeRateUsdToKhr,
+                    onDismiss = { isPosHoldCartOpen = false },
+                    onConfirmHold = { label, note ->
+                        viewModel.parkCart(label, note, posCart, uiState.products) {
+                            posCart.clear()
+                            isPosCartMinimized = false
+                            isPosHoldCartOpen = false
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Cart held as '$label'")
+                            }
+                        }
+                    }
+                )
+            }
+
+            // In-App Stock Alerts, Supplier & Activity Notifications Sheet
             if (isNotificationsOpen) {
                 val lowStockProducts = uiState.products.filter { it.quantity <= it.reorderLevel }
                 StockNotificationsDialog(
                     lowStockProducts = lowStockProducts,
                     recentTransactions = uiState.transactions,
+                    purchaseOrders = uiState.orders,
+                    suppliers = uiState.suppliers,
+                    isDarkTheme = isDarkTheme,
                     onDismiss = { isNotificationsOpen = false },
                     onRestock = { product, qty ->
                         viewModel.adjustStock(product, qty, "STOCK_IN", "Restocked from alert notification")
                         scope.launch {
                             snackbarHostState.showSnackbar("Restocked +$qty units for '${product.name}'")
                         }
+                    },
+                    onOpenOrder = { order ->
+                        isNotificationsOpen = false
+                        scope.launch {
+                            viewingOrderWithItems = viewModel.getOrderWithItems(order.id)
+                        }
+                    },
+                    onOpenSuppliers = {
+                        isNotificationsOpen = false
+                        drawerDestination = DrawerDestination.SUPPLIERS
                     },
                     onViewAllCatalog = {
                         isNotificationsOpen = false
@@ -1068,14 +1308,69 @@ fun InventoryDashboardScreen(
                         viewingOrderWithItems = null
                     },
                     onReceiveOrder = { orderId ->
-                        viewModel.receiveOrder(orderId) { success ->
+                        val isCodOrder = currentOrderWithItems.order.paymentMethod == com.example.inventoryapp.data.local.entity.SupplierPaymentMethod.COD
+                        viewModel.receiveOrder(orderId, markPaymentPaidOnReceive = isCodOrder) { success ->
                             if (success) {
                                 scope.launch {
-                                    snackbarHostState.showSnackbar("Shipment received & inventory stocked successfully!")
+                                    val msg = if (isCodOrder) {
+                                        "COD paid & inventory stocked successfully!"
+                                    } else {
+                                        "Shipment received & inventory stocked successfully!"
+                                    }
+                                    snackbarHostState.showSnackbar(msg)
                                 }
                             }
                         }
                         viewingOrderWithItems = null
+                    },
+                    onPaySupplier = { orderId, method ->
+                        viewModel.paySupplierOrder(orderId, method) { success ->
+                            if (success) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Supplier payment recorded via ${method.label}")
+                                }
+                            }
+                        }
+                        viewingOrderWithItems = null
+                    },
+                    onReportIssue = {
+                        val order = currentOrderWithItems.order
+                        reportingIssueTarget = Triple(order.supplierId, order.supplierName, currentOrderWithItems)
+                        viewingOrderWithItems = null
+                    }
+                )
+            }
+
+            reportingIssueTarget?.let { (supId, supName, orderData) ->
+                ReportSupplierIssueBottomSheet(
+                    supplierName = supName.ifBlank { "Supplier" },
+                    orderNumber = orderData?.order?.orderNumber ?: "",
+                    orderItems = orderData?.items ?: emptyList(),
+                    isDarkTheme = isDarkTheme,
+                    onDismiss = { reportingIssueTarget = null },
+                    onSubmitIssue = { issueType, severity, itemName, qty, desc ->
+                        viewModel.reportSupplierIssue(
+                            supplierId = supId,
+                            supplierName = supName.ifBlank { "Supplier" },
+                            middlemanId = currentUser?.id ?: "user_middleman",
+                            middlemanName = currentUser?.fullName?.ifBlank { userName } ?: userName,
+                            middlemanCode = currentUser?.uniqueCode?.ifBlank { "MID-1001" } ?: "MID-1001",
+                            orderId = orderData?.order?.id,
+                            orderNumber = orderData?.order?.orderNumber ?: "",
+                            issueType = issueType,
+                            severity = severity,
+                            affectedItemName = itemName,
+                            affectedQuantity = qty,
+                            description = desc
+                        ) { res ->
+                            scope.launch {
+                                if (res.isSuccess) {
+                                    snackbarHostState.showSnackbar("Issue ${res.getOrNull()?.issueCode ?: ""} sent to $supName")
+                                } else {
+                                    snackbarHostState.showSnackbar("Failed to report issue")
+                                }
+                            }
+                        }
                     }
                 )
             }
@@ -1092,12 +1387,20 @@ fun InventoryDashboardScreen(
                         showNewPoDialog = false
                         selectedProductForPo = null
                     },
-                    onSubmit = { sup, title, pic, items, note, estArrival ->
-                        viewModel.createPurchaseOrder(sup, title, pic, items, note, estArrival) { created ->
+                    onSubmit = { sup, title, pic, items, note, estArrival, paymentMethod ->
+                        viewModel.createPurchaseOrder(
+                            supplier = sup,
+                            title = title,
+                            picSender = pic,
+                            items = items,
+                            ownerNote = note,
+                            estArrival = estArrival,
+                            paymentMethod = paymentMethod
+                        ) { created ->
                             showNewPoDialog = false
                             selectedProductForPo = null
                             scope.launch {
-                                snackbarHostState.showSnackbar("Purchase Order ${created?.orderNumber ?: ""} created!")
+                                snackbarHostState.showSnackbar("Purchase Order ${created?.orderNumber ?: ""} (${paymentMethod.label}) created!")
                             }
                         }
                     }
@@ -3169,6 +3472,7 @@ private fun NawanoGoodsReqCard(
  * Interactive Dialog displayed when a scanned barcode does not exist in local inventory.
  * Prompts user to register it and supports one-tap auto-import if online product metadata was found.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProductNotFoundDialog(
     scannedSku: String,
@@ -3178,9 +3482,30 @@ private fun ProductNotFoundDialog(
     onAddProduct: () -> Unit,
     onAutoImport: (OnlineProductData) -> Unit
 ) {
-    AlertDialog(
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        icon = {
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                width = 44.dp,
+                height = 5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Surface(
                 color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
                 shape = CircleShape,
@@ -3195,127 +3520,125 @@ private fun ProductNotFoundDialog(
                     )
                 }
             }
-        },
-        title = {
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             Text(
                 text = "Product Not in Inventory",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.padding(bottom = 8.dp)
             ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.QrCodeScanner,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = scannedSku,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Text(
+                text = "This item does not exist in your inventory database.",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Would you like to register and add this product now?",
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (isFetchingOnline) {
+                Spacer(modifier = Modifier.height(14.dp))
                 Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.QrCodeScanner,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = scannedSku,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
+                            text = "Searching online catalog...",
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-
-                Text(
-                    text = "This item does not exist in your inventory database.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Would you like to register and add this product now?",
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                if (isFetchingOnline) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
+            } else if (onlineProduct != null) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CloudDone,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Online Product Match Found",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "Searching online catalog...",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
-                    }
-                } else if (onlineProduct != null) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.CloudDone,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Online Product Match Found",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = onlineProduct.name,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "${onlineProduct.brand.ifBlank { "General" }} • ${onlineProduct.category} • $${String.format(Locale.US, "%.2f", onlineProduct.suggestedPrice)}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = onlineProduct.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "${onlineProduct.brand.ifBlank { "General" }} • ${onlineProduct.category} • $${String.format(Locale.US, "%.2f", onlineProduct.suggestedPrice)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
-        },
-        confirmButton = {
+
+            Spacer(modifier = Modifier.height(18.dp))
+
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -3323,7 +3646,7 @@ private fun ProductNotFoundDialog(
                 if (onlineProduct != null) {
                     Button(
                         onClick = { onAutoImport(onlineProduct) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(46.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
@@ -3334,7 +3657,7 @@ private fun ProductNotFoundDialog(
 
                     OutlinedButton(
                         onClick = onAddProduct,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(46.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -3344,7 +3667,7 @@ private fun ProductNotFoundDialog(
                 } else {
                     Button(
                         onClick = onAddProduct,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(46.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
@@ -3362,7 +3685,7 @@ private fun ProductNotFoundDialog(
                 }
             }
         }
-    )
+    }
 }
 
 @Composable
@@ -4300,6 +4623,7 @@ private fun InventoryItemGridCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun InventorySettingsScreen(
     totalSkus: Int,
@@ -4687,26 +5011,65 @@ private fun InventorySettingsScreen(
     }
 
     if (showConfirmDialog) {
-        AlertDialog(
+        val clearSheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
             onDismissRequest = { showConfirmDialog = false },
-            title = { Text("Clear All Data?", fontWeight = FontWeight.Bold) },
-            text = { Text("This will permanently delete all inventory items and activity logs from this device. This action cannot be undone.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onClearAllData()
-                        showConfirmDialog = false
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+            sheetState = clearSheetState,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            dragHandle = {
+                BottomSheetDefaults.DragHandle(
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    width = 44.dp,
+                    height = 5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                )
+            }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Clear All Data?",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "This will permanently delete all inventory items and activity logs from this device. This action cannot be undone.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("Clear Everything", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showConfirmDialog = false }) {
-                    Text("Cancel")
+                    OutlinedButton(
+                        onClick = { showConfirmDialog = false },
+                        modifier = Modifier.weight(1f).height(46.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Cancel")
+                    }
+                    Button(
+                        onClick = {
+                            onClearAllData()
+                            showConfirmDialog = false
+                        },
+                        modifier = Modifier.weight(1.3f).height(46.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Clear Everything", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
-        )
+        }
     }
 }

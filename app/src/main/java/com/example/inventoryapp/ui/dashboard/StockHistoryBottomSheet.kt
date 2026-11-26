@@ -60,7 +60,7 @@ fun StockHistoryBottomSheet(
     isDarkTheme: Boolean = false,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberSafeModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedFilter by remember { mutableStateOf("All") }
     var selectedTransaction by remember { mutableStateOf<StockTransactionEntity?>(null) }
 
@@ -229,7 +229,8 @@ fun StockHistoryBottomSheet(
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 520.dp),
+                                .heightIn(max = 520.dp)
+                                .consumeBottomSheetNestedDismiss(),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             items(filteredList, key = { it.id }) { tx ->
